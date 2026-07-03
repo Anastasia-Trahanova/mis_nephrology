@@ -154,10 +154,34 @@
             <div class="row mb-2">
                 <div class="col-md-4">
                     <label class="form-label">Рост (см)</label>
-                    <input type="text" name="height" class="form-control" value="{{ last_appointment.height if last_appointment and last_appointment.height is not none else '' }}">
+                    <input
+                        type="text"
+                        id="heightInput"
+                        name="height"
+                        class="form-control"
+                        value="{{ last_appointment.height if last_appointment and last_appointment.height is not none else '' }}"
+                    >
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Вес (кг)</label>
-                    <input type="text" name="weight" class="form-control" value="{{ last_appointment.weight if last_appointment and last_appointment.weight is not none else '' }}">
+                    <input
+                        type="text"
+                        id="weightInput"
+                        name="weight"
+                        class="form-control"
+                        value="{{ last_appointment.weight if last_appointment and last_appointment.weight is not none else '' }}"
+                    >
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">ИМТ (кг/м²)</label>
+                    <input
+                        type="text"
+                        id="bmiInput"
+                        name="bmi"
+                        class="form-control"
+                        value="{{ last_appointment.bmi if last_appointment and last_appointment.bmi is not none else '' }}"
+                        readonly
+                    >
+                    <div class="form-text">Считается автоматически по росту и весу.</div>
                 </div>
             </div>

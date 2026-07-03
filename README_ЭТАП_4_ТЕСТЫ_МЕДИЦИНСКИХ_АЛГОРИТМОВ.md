@@ -1,4 +1,4 @@
-# Этап 4: тесты медицинских алгоритмов
+
 
 ## Что проверяют эти тесты
 
@@ -15,30 +15,6 @@ app/calculations.py
 ```
 
 Тесты не подключаются к PostgreSQL, не создают пациентов, не создают приемы и не оставляют мусорных записей в базе.
-
-## Куда положить файлы
-
-Положить в корень проекта:
-
-```text
-mis_for_registrations/
-  pytest.ini
-  requirements-dev.txt
-
-  tests/
-    conftest.py
-    test_common.py
-    test_ckd_stage.py
-    test_egfr.py
-    test_cockcroft_gault.py
-    test_albuminuria.py
-    test_prognosis.py
-    test_metrics.py
-    test_calculations_bridge.py
-
-  docs/
-    medical_calculator_manual_checklist.md
-```
 
 ## Установка pytest
 

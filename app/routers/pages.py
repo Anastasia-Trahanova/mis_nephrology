@@ -539,6 +539,7 @@ def export_appointment_docx(appointment_id: int):
     add_field_inline(doc, "ЧСС", appointment.get("heart_rate"))
     add_field_inline(doc, "Рост", appointment.get("height"))
     add_field_inline(doc, "Вес", appointment.get("weight"))
+    add_field_inline(doc, "ИМТ", appointment.get("bmi"))
 
     # =========================
     # ЛАБОРАТОРНЫЕ ИССЛЕДОВАНИЯ

@@ -33,6 +33,12 @@
                     <textarea name="recommendations" class="form-control" rows="3" placeholder="Например: контроль креатинина и ACR через 3 месяца, дневник АД, консультация нефролога при ухудшении СКФ">{{ last_diet_info.recommendations if last_diet_info and last_diet_info.recommendations else '' }}</textarea>
                 </div>
                 
+                <datalist id="medicationsDictionary">
+                    {% for medication_item in medications_dictionary or [] %}
+                    <option value="{{ medication_item.display_name }}"></option>
+                    {% endfor %}
+                </datalist>
+
                 <div class="col-12 mt-3">
                     <label class="form-label fw-bold">Лекарства</label>
                     <div id="medicationsContainer">
@@ -40,7 +46,7 @@
                             {% for med in last_medications %}
                             <div class="row mb-2 medication-row" data-row-id="{{ loop.index }}">
                                 <div class="col-md-4">
-                                    <input type="text" name="medication" class="form-control" value="{{ med.medication or '' }}" placeholder="Название препарата">
+                                    <input type="text" name="medication" class="form-control" value="{{ med.medication or '' }}" list="medicationsDictionary" autocomplete="off" placeholder="Название препарата">
                                 </div>
                                 <div class="col-md-3">
                                     <input type="text" name="dosage" class="form-control" value="{{ med.dosage or '' }}" placeholder="Дозировка">
@@ -58,7 +64,7 @@
                             {% else %}
                                 <div class="row mb-2 medication-row">
                                     <div class="col-md-4">
-                                        <input type="text" name="medication" class="form-control" placeholder="Название препарата">
+                                        <input type="text" name="medication" class="form-control" list="medicationsDictionary" autocomplete="off" placeholder="Название препарата">
                                     </div>
                                     <div class="col-md-3">
                                         <input type="text" name="dosage" class="form-control" placeholder="Дозировка">

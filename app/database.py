@@ -318,7 +318,7 @@ def get_last_appointment_data(patient_id: int):
                     e.skin_condition, e.edema_location,
                     e.systolic_pressure, e.diastolic_pressure,
                     e.bp_note, e.heart_rate,
-                    e.height, e.weight,
+                    e.height, e.weight, e.bmi,
 
                     diag.main_diagnosis, diag.complications,
                     diag.comorbidities AS diag_comorbidities,
@@ -611,6 +611,7 @@ def get_appointment_full_data(appointment_id: int):
                     e.heart_rate,
                     e.height,
                     e.weight,
+                    e.bmi,
 
                     diag.main_diagnosis,
                     diag.complications,
@@ -851,6 +852,7 @@ def _fetch_appointment_full_data(cur, appointment_id: int):
             e.heart_rate,
             e.height,
             e.weight,
+            e.bmi,
 
             diag.main_diagnosis,
             diag.complications,
@@ -896,6 +898,7 @@ def _fetch_last_appointment_data(cur, patient_id: int):
             e.heart_rate,
             e.height,
             e.weight,
+            e.bmi,
 
             diag.main_diagnosis,
             diag.complications,
@@ -1476,6 +1479,27 @@ def _group_icd10_diagnoses_for_form(icd10_diagnoses):
 
     return result
 
+def _fetch_medications_dictionary(cur):
+    """
+    Возвращает активный справочник лекарств для формы назначений.
+
+    В форме врачу показываем display_name:
+    например, 'Форсига (дапаглифлозин)'.
+    В prescriptions.medication пока сохраняется обычный текст.
+    """
+    cur.execute("""
+        SELECT
+            id,
+            display_name,
+            trade_name,
+            active_substance,
+            drug_group
+        FROM medications
+        WHERE is_active = TRUE
+        ORDER BY sort_order, display_name
+    """)
+    return cur.fetchall()
+
 def get_new_appointment_context(patient_id: int):
     """Собирает данные для формы нового приёма одним соединением к БД."""
     with get_db_connection() as conn:
@@ -1493,6 +1517,7 @@ def get_new_appointment_context(patient_id: int):
                 "complications": [],
                 "comorbidities": [],
             }
+            
 
             if last_appointment_id:
                 last_icd10_diagnoses = _fetch_appointment_icd10_diagnoses(cur, last_appointment_id)
@@ -1516,6 +1541,7 @@ def get_new_appointment_context(patient_id: int):
                 "ultrasound_history": _fetch_patient_ultrasound_history(cur, patient_id),
                 "metrics_history": _fetch_patient_metrics_history(cur, patient_id),
                 "icd10_diagnoses": _fetch_icd10_diagnoses(cur),
+                "medications_dictionary": _fetch_medications_dictionary(cur),
             }
 
 def get_new_patient_context():
@@ -1531,4 +1557,5 @@ def get_new_patient_context():
                 "doctors": _fetch_doctors(cur),
                 "locations": _fetch_locations_by_branch(cur),
                 "icd10_diagnoses": _fetch_icd10_diagnoses(cur),
+                "medications_dictionary": _fetch_medications_dictionary(cur),
             }

@@ -177,6 +177,34 @@ def numeric_to_db(value):
 
     return value.replace(" ", "").replace(",", ".")
 
+def calculate_bmi_for_db(height, weight):
+    """
+    Считает ИМТ для сохранения в БД.
+
+    height приходит в сантиметрах, weight — в килограммах.
+    Возвращает число с двумя знаками после запятой или None.
+
+    Важно: ИМТ считаем на сервере, а не доверяем значению из формы.
+    Поле в форме нужно только для удобства врача.
+    """
+    height = numeric_to_db(height)
+    weight = numeric_to_db(weight)
+
+    if height is None or weight is None:
+        return None
+
+    try:
+        height_cm = float(height)
+        weight_kg = float(weight)
+    except ValueError:
+        return None
+
+    if height_cm <= 0 or weight_kg <= 0:
+        return None
+
+    height_m = height_cm / 100
+    return round(weight_kg / (height_m ** 2), 2)
+
 def parse_bool(value):
     """Преобразует значение из формы в boolean."""
     return str(value).lower() in ["true", "1", "yes", "on"]
@@ -551,6 +579,7 @@ async def create_new_patient(request: Request):
     heart_rate = empty_to_none(form.get("heart_rate"))
     height = empty_to_none(form.get("height"))
     weight = empty_to_none(form.get("weight"))
+    bmi = calculate_bmi_for_db(height, weight)
 
     # ОАК — может быть несколько анализов
     cbc_dates = get_text_list(form, "cbc_investigation_date")
@@ -655,12 +684,12 @@ async def create_new_patient(request: Request):
                 cur.execute("""
                     INSERT INTO examinations (
                         appointment_id, skin_condition, edema_location, systolic_pressure,
-                        diastolic_pressure, bp_note, heart_rate, height, weight
+                        diastolic_pressure, bp_note, heart_rate, height, weight, bmi
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     appointment_id, skin_condition, edema_location, systolic_pressure,
-                    diastolic_pressure, bp_note, heart_rate, height, weight
+                    diastolic_pressure, bp_note, heart_rate, height, weight, bmi
                 ))
 
                 # 5. ОАК — сохраняем все добавленные анализы
@@ -1067,11 +1096,13 @@ async def create_new_appointment_for_existing_patient(patient_id: int, request: 
     edema_location = "; ".join(edema_parts) if edema_parts else None
 
     systolic_pressure = empty_to_none(form.get("systolic_pressure"))
+
     diastolic_pressure = empty_to_none(form.get("diastolic_pressure"))
     bp_note = empty_to_none(form.get("bp_note"))
     heart_rate = empty_to_none(form.get("heart_rate"))
     height = empty_to_none(form.get("height"))
     weight = empty_to_none(form.get("weight"))
+    bmi = calculate_bmi_for_db(height, weight)
 
     # ОАК — может быть несколько новых анализов
     cbc_dates = get_text_list(form, "cbc_investigation_date")
@@ -1188,12 +1219,12 @@ async def create_new_appointment_for_existing_patient(patient_id: int, request: 
                 cur.execute("""
                     INSERT INTO examinations (
                         appointment_id, skin_condition, edema_location, systolic_pressure,
-                        diastolic_pressure, bp_note, heart_rate, height, weight
+                        diastolic_pressure, bp_note, heart_rate, height, weight, bmi
                     )
-                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                 """, (
                     appointment_id, skin_condition, edema_location, systolic_pressure,
-                    diastolic_pressure, bp_note, heart_rate, height, weight
+                    diastolic_pressure, bp_note, heart_rate, height, weight, bmi
                 ))
 
                 # 5. ОАК — сохраняем все добавленные врачом новые столбцы

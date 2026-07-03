@@ -737,7 +737,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         row.innerHTML = `
             <div class="col-md-4">
-                <input type="text" name="medication" class="form-control" placeholder="Название препарата">
+                <input type="text" name="medication" class="form-control" list="medicationsDictionary" autocomplete="off" placeholder="Название препарата">
             </div>
             <div class="col-md-3">
                 <input type="text" name="dosage" class="form-control" placeholder="Дозировка">
@@ -1520,7 +1520,7 @@ document.addEventListener('DOMContentLoaded', function () {
 
         row.innerHTML = `
             <div class="col-md-4">
-                <input type="text" name="medication" class="form-control" placeholder="Название препарата">
+                <input type="text" name="medication" class="form-control" list="medicationsDictionary" autocomplete="off" placeholder="Название препарата">
             </div>
             <div class="col-md-3">
                 <input type="text" name="dosage" class="form-control" placeholder="Дозировка">
@@ -1865,4 +1865,76 @@ document.addEventListener('DOMContentLoaded', function () {
     });
 });
 </script>
+
+<script>
+(function () {
+    function parseNumber(value) {
+        if (!value) {
+            return null;
+        }
+
+        const normalized = String(value)
+            .trim()
+            .replace(/\s+/g, '')
+            .replace(',', '.');
+
+        if (!normalized) {
+            return null;
+        }
+
+        const number = Number(normalized);
+        return Number.isFinite(number) ? number : null;
+    }
+
+    function findHeightInput() {
+        return document.getElementById('heightInput') || document.querySelector('input[name="height"]');
+    }
+
+    function findWeightInput() {
+        return document.getElementById('weightInput') || document.querySelector('input[name="weight"]');
+    }
+
+    function findBmiInput() {
+        return document.getElementById('bmiInput') || document.querySelector('input[name="bmi"]');
+    }
+
+    function updateBmi() {
+        const heightInput = findHeightInput();
+        const weightInput = findWeightInput();
+        const bmiInput = findBmiInput();
+
+        if (!heightInput || !weightInput || !bmiInput) {
+            return;
+        }
+
+        const heightCm = parseNumber(heightInput.value);
+        const weightKg = parseNumber(weightInput.value);
+
+        if (!heightCm || !weightKg || heightCm <= 0 || weightKg <= 0) {
+            bmiInput.value = '';
+            return;
+        }
+
+        const heightM = heightCm / 100;
+        const bmi = weightKg / (heightM * heightM);
+
+        bmiInput.value = bmi.toFixed(2);
+    }
+
+    document.addEventListener('input', function (event) {
+        if (
+            event.target.matches('input[name="height"]') ||
+            event.target.matches('input[name="weight"]') ||
+            event.target.id === 'heightInput' ||
+            event.target.id === 'weightInput'
+        ) {
+            updateBmi();
+        }
+    });
+
+    document.addEventListener('DOMContentLoaded', updateBmi);
+    window.addEventListener('load', updateBmi);
+})();
+</script>
+
 {% endif %}
