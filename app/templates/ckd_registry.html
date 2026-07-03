@@ -1,0 +1,251 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .metric-card {
+        border: 0;
+        border-radius: 1rem;
+        box-shadow: 0 0.25rem 1rem rgba(0,0,0,.08);
+    }
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+        line-height: 1;
+    }
+    .metric-label {
+        color: #6c757d;
+        font-size: .9rem;
+    }
+    .registry-section-title {
+        color: #1E3A8A;
+        font-weight: 700;
+    }
+    .table-sm td, .table-sm th {
+        vertical-align: middle;
+    }
+</style>
+
+<div class="d-flex justify-content-between align-items-start mb-4">
+    <div>
+        <h2 class="mb-1">📊 Регистр ХБП</h2>
+        <p class="text-muted mb-0">Административный контур: клинические очереди, полнота данных и пациенты высокого риска.</p>
+    </div>
+    <div class="text-end text-muted small">
+        Сформировано: {{ dashboard.generated_at or '—' }}
+    </div>
+</div>
+
+<!-- Сводка -->
+<div class="row g-3 mb-4">
+    <div class="col-md-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="metric-value">{{ summary.ckd_patients_total or 0 }}</div>
+                <div class="metric-label">Пациентов с ХБП наблюдается</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="metric-value text-danger">{{ summary.very_high_ckd_patients or 0 }}</div>
+                <div class="metric-label">Очень высокий прогноз</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="metric-value text-warning">{{ summary.high_risk_ckd_patients or 0 }}</div>
+                <div class="metric-label">Высокий + очень высокий риск</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="card metric-card h-100">
+            <div class="card-body">
+                <div class="metric-value text-primary">{{ summary.incomplete_lab_patients or 0 }}</div>
+                <div class="metric-label">Пациентов с неполными данными</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-2">
+        <div class="card metric-card h-100"><div class="card-body"><div class="metric-value">{{ summary.a3_patients or 0 }}</div><div class="metric-label">A3</div></div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card metric-card h-100"><div class="card-body"><div class="metric-value">{{ summary.g4_g5_patients or 0 }}</div><div class="metric-label">С4–С5</div></div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card metric-card h-100"><div class="card-body"><div class="metric-value">{{ summary.without_albuminuria or 0 }}</div><div class="metric-label">Нет альбуминурии</div></div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card metric-card h-100"><div class="card-body"><div class="metric-value">{{ summary.without_fresh_creatinine or 0 }}</div><div class="metric-label">Нет свежего креатинина</div></div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card metric-card h-100"><div class="card-body"><div class="metric-value">{{ summary.without_prognosis or 0 }}</div><div class="metric-label">Нет прогноза</div></div></div>
+    </div>
+    <div class="col-md-2">
+        <div class="card metric-card h-100"><div class="card-body"><div class="metric-value">{{ summary.overdue_control_patients or 0 }}</div><div class="metric-label">Просрочен контроль</div></div></div>
+    </div>
+</div>
+
+<!-- Клинические очереди -->
+<h4 class="registry-section-title mt-4">Клинические очереди</h4>
+<p class="text-muted">Очереди строятся по последним доступным данным пациента: последняя СКФ, последняя альбуминурия, последний прогноз и последняя дата контроля.</p>
+
+<ul class="nav nav-tabs" id="registryTabs" role="tablist">
+    <li class="nav-item" role="presentation"><button class="nav-link active" data-bs-toggle="tab" data-bs-target="#tab-very-high" type="button">Очень высокий прогноз <span class="badge bg-danger">{{ queues.very_high|length }}</span></button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-g4g5" type="button">С4–С5 <span class="badge bg-secondary">{{ queues.g4_g5|length }}</span></button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-a3" type="button">A3 <span class="badge bg-secondary">{{ queues.a3|length }}</span></button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-overdue" type="button">Просрочен контроль <span class="badge bg-warning text-dark">{{ queues.overdue_control|length }}</span></button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-incomplete" type="button">Неполные данные <span class="badge bg-primary">{{ queues.incomplete_labs|length }}</span></button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-decline" type="button">Снижение СКФ <span class="badge bg-dark">{{ queues.rapid_egfr_decline|length }}</span></button></li>
+    <li class="nav-item" role="presentation"><button class="nav-link" data-bs-toggle="tab" data-bs-target="#tab-no-prognosis" type="button">Нет прогноза <span class="badge bg-secondary">{{ queues.without_prognosis|length }}</span></button></li>
+</ul>
+
+{% macro patient_table(items, show_decline=False) %}
+<div class="table-responsive mt-3">
+    <table class="table table-sm table-hover table-bordered">
+        <thead class="table-light">
+            <tr>
+                <th>Пациент</th>
+                <th>Возраст</th>
+                <th>Последний приём</th>
+                <th>Врач</th>
+                <th>СКФ / G</th>
+                <th>ACR / A</th>
+                <th>Прогноз</th>
+                <th>Контроль</th>
+                {% if show_decline %}<th>Динамика СКФ</th>{% endif %}
+                <th></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in items %}
+            <tr>
+                <td><strong>{{ p.patient_fio }}</strong><br><small class="text-muted">{{ p.last_location_name or '—' }}</small></td>
+                <td>{{ p.age or '—' }}</td>
+                <td>{{ p.last_appointment_date or '—' }}</td>
+                <td>{{ p.last_doctor_name or '—' }}</td>
+                <td>
+                    {% if p.latest_egfr is not none %}{{ p.latest_egfr }}{% else %}—{% endif %}
+                    <br><span class="badge bg-secondary">{{ p.latest_gfr_category or 'нет' }}</span>
+                </td>
+                <td>
+                    {% if p.latest_acr is not none %}{{ p.latest_acr }}{% else %}—{% endif %}
+                    <br><span class="badge bg-secondary">{{ p.latest_albuminuria_category or 'нет' }}</span>
+                </td>
+                <td>
+                    {% if p.prognosis_level == 'very_high' %}<span class="badge bg-danger">очень высокий</span>
+                    {% elif p.prognosis_level == 'high' %}<span class="badge bg-warning text-dark">высокий</span>
+                    {% elif p.prognosis_level == 'moderate' %}<span class="badge bg-info text-dark">умеренный</span>
+                    {% elif p.prognosis_level == 'low' %}<span class="badge bg-success">низкий</span>
+                    {% else %}<span class="badge bg-light text-dark">нет</span>{% endif %}
+                    <br><small class="text-muted">{{ p.combined_category or '' }}</small>
+                </td>
+                <td>{{ p.next_control_date or '—' }}</td>
+                {% if show_decline %}
+                <td>
+                    {% if p.egfr_decline_abs is not none %}
+                    −{{ p.egfr_decline_abs }} мл/мин<br><small class="text-muted">{{ p.previous_egfr }} → {{ p.latest_egfr }}</small>
+                    {% else %}—{% endif %}
+                </td>
+                {% endif %}
+                <td><a class="btn btn-sm btn-outline-primary" href="/patient/{{ p.patient_id }}">Открыть</a></td>
+            </tr>
+            {% else %}
+            <tr><td colspan="{% if show_decline %}10{% else %}9{% endif %}" class="text-center text-muted">Нет пациентов в этой очереди</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endmacro %}
+
+<div class="tab-content border border-top-0 p-3 mb-5">
+    <div class="tab-pane fade show active" id="tab-very-high">{{ patient_table(queues.very_high or []) }}</div>
+    <div class="tab-pane fade" id="tab-g4g5">{{ patient_table(queues.g4_g5 or []) }}</div>
+    <div class="tab-pane fade" id="tab-a3">{{ patient_table(queues.a3 or []) }}</div>
+    <div class="tab-pane fade" id="tab-overdue">{{ patient_table(queues.overdue_control or []) }}</div>
+    <div class="tab-pane fade" id="tab-incomplete">{{ patient_table(queues.incomplete_labs or []) }}</div>
+    <div class="tab-pane fade" id="tab-decline">{{ patient_table(queues.rapid_egfr_decline or [], True) }}</div>
+    <div class="tab-pane fade" id="tab-no-prognosis">{{ patient_table(queues.without_prognosis or []) }}</div>
+</div>
+
+<!-- Управленческие блоки -->
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-primary text-white"><strong>Врачи и пациенты высокого риска</strong></div>
+            <div class="card-body table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Врач</th>
+                            <th>Пациентов</th>
+                            <th>Высокий/оч. высокий</th>
+                            <th>Очень высокий</th>
+                            <th>Неполные данные</th>
+                            <th>Просрочен контроль</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in doctor_high_risk %}
+                        <tr>
+                            <td>{{ row.doctor_name }}</td>
+                            <td>{{ row.total_latest_patients }}</td>
+                            <td>{{ row.high_and_very_high_patients }}</td>
+                            <td>{{ row.very_high_patients }}</td>
+                            <td>{{ row.incomplete_latest_patients }}</td>
+                            <td>{{ row.overdue_control_patients }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="text-muted text-center">Нет данных</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-6">
+        <div class="card">
+            <div class="card-header bg-secondary text-white"><strong>Отделения и неполные приёмы</strong></div>
+            <div class="card-body table-responsive">
+                <table class="table table-sm table-hover">
+                    <thead>
+                        <tr>
+                            <th>Отделение</th>
+                            <th>Филиал</th>
+                            <th>Приёмов</th>
+                            <th>Неполных приёмов</th>
+                            <th>Пациентов с неполными данными</th>
+                            <th>Очень высокий риск</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in location_incomplete %}
+                        <tr>
+                            <td>{{ row.location_name }}</td>
+                            <td>{{ row.branch_name }}</td>
+                            <td>{{ row.appointments_total }}</td>
+                            <td>{{ row.incomplete_appointments }}</td>
+                            <td>{{ row.incomplete_latest_patients }}</td>
+                            <td>{{ row.very_high_latest_patients }}</td>
+                        </tr>
+                        {% else %}
+                        <tr><td colspan="6" class="text-muted text-center">Нет данных</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="alert alert-info mt-4">
+    <strong>Как читать регистр:</strong> это управленческий список контроля качества данных и наблюдения пациентов с ХБП. Он не заменяет клиническое решение врача, а показывает, где нужно открыть карточку пациента и проверить данные.
+</div>
+{% endblock %}

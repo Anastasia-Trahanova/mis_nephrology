@@ -1,0 +1,306 @@
+<style>
+    .clinical-validation-summary {
+        display: none;
+    }
+
+    .clinical-validation-summary.is-visible {
+        display: block;
+    }
+
+    .form-control.is-invalid,
+    .form-select.is-invalid {
+        border-color: #dc3545;
+    }
+
+    .clinical-warning-text {
+        color: #dc3545;
+        font-size: 0.875rem;
+        margin-top: 0.25rem;
+    }
+</style>
+
+<script>
+(function () {
+    const NUMBER_RULES = {
+        height: { min: 50, max: 250, message: 'Рост должен быть в диапазоне 50–250 см.' },
+        weight: { min: 30, max: 300, message: 'Вес должен быть в диапазоне 30–300 кг.' },
+        systolic_pressure: { min: 50, max: 300, message: 'Систолическое АД должно быть в диапазоне 50–300 мм рт. ст.' },
+        diastolic_pressure: { min: 30, max: 200, message: 'Диастолическое АД должно быть в диапазоне 30–200 мм рт. ст.' },
+        heart_rate: { min: 20, max: 250, message: 'ЧСС должна быть в диапазоне 20–250 уд/мин.' },
+
+        hemoglobin: { min: 20, max: 250, message: 'Гемоглобин должен быть в диапазоне 20–250 г/л.' },
+        erythrocytes: { min: 0.5, max: 10, message: 'Эритроциты должны быть в диапазоне 0,5–10.' },
+        leukocytes: { min: 0.1, max: 300, message: 'Лейкоциты должны быть в диапазоне 0,1–300.' },
+        platelets: { min: 5, max: 1500, message: 'Тромбоциты должны быть в диапазоне 5–1500.' },
+        esr: { min: 0, max: 150, message: 'СОЭ должна быть в диапазоне 0–150 мм/ч.' },
+        mcv: { min: 40, max: 140, message: 'MCV должен быть в диапазоне 40–140 фл.' },
+        hematocrit: { min: 5, max: 70, message: 'Гематокрит должен быть в диапазоне 5–70 %.' },
+
+        creatinine: { min: 15, max: 3000, message: 'Неверное значение креатинина крови: допустимо 15–3000 мкмоль/л.' },
+        urea: { min: 0.5, max: 80, message: 'Мочевина должна быть в диапазоне 0,5–80 ммоль/л.' },
+        uric_acid: { min: 50, max: 1500, message: 'Мочевая кислота должна быть в диапазоне 50–1500 мкмоль/л.' },
+        glucose: { min: 0.5, max: 40, message: 'Глюкоза должна быть в диапазоне 0,5–40 ммоль/л.' },
+        total_protein: { min: 20, max: 120, message: 'Общий белок должен быть в диапазоне 20–120 г/л.' },
+        albumin: { min: 10, max: 70, message: 'Альбумин крови должен быть в диапазоне 10–70 г/л.' },
+        potassium: { min: 1, max: 10, message: 'Калий должен быть в диапазоне 1–10 ммоль/л.' },
+        calcium: { min: 1, max: 4, message: 'Кальций должен быть в диапазоне 1–4 ммоль/л.' },
+        phosphorus: { min: 0.2, max: 5, message: 'Фосфор должен быть в диапазоне 0,2–5 ммоль/л.' },
+        ferritin: { min: 0, max: 10000, message: 'Ферритин должен быть в диапазоне 0–10000.' },
+        ptg: { min: 0, max: 10000, message: 'ПТГ должен быть в диапазоне 0–10000.' },
+
+        specific_gravity: { min: 1.000, max: 1.050, message: 'Удельный вес мочи должен быть в диапазоне 1,000–1,050.' },
+        urine_protein: { min: 0, max: 20, message: 'Белок в моче должен быть в диапазоне 0–20 г/л.' },
+        urine_leukocytes: { min: 0, max: 10000, message: 'Лейкоциты в моче должны быть неотрицательным числом до 10000.' },
+        urine_erythrocytes: { min: 0, max: 10000, message: 'Эритроциты в моче должны быть неотрицательным числом до 10000.' },
+        bacteria: { min: 0, max: 1000000, message: 'Бактерии должны быть неотрицательным числом.' },
+
+        urine_albumin: { min: 0, max: 1000, message: 'Недопустимое значение' },
+        urine_creatinine: { min: 0.000001, max: 1000, message: 'Недопустимое значение' },
+
+        left_parenchyma: { min: 1, max: 50, message: 'Толщина паренхимы левой почки должна быть в диапазоне 1–50 мм.' },
+        right_parenchyma: { min: 1, max: 50, message: 'Толщина паренхимы правой почки должна быть в диапазоне 1–50 мм.' }
+    };
+
+    const DATE_FIELDS = [
+        'cbc_investigation_date',
+        'biochemistry_investigation_date',
+        'urinalysis_investigation_date',
+        'albuminuria_investigation_date',
+        'ultrasound_investigation_date'
+    ];
+
+    function parseNumber(value) {
+        if (value === null || value === undefined) return null;
+        const normalized = String(value).trim().replace(/\s+/g, '').replace(',', '.');
+        if (normalized === '') return null;
+        const number = Number(normalized);
+        return Number.isFinite(number) ? number : NaN;
+    }
+
+    function getForm() {
+        return document.querySelector('form[method="post"]');
+    }
+
+    function getInputsByName(name) {
+        return Array.from(document.querySelectorAll(`[name="${name}"]`));
+    }
+
+    function getOrCreateFeedback(input) {
+        let feedback = input.parentElement.querySelector('.clinical-warning-text[data-validation-for="' + input.name + '"]');
+        if (!feedback) {
+            feedback = document.createElement('div');
+            feedback.className = 'clinical-warning-text';
+            feedback.setAttribute('data-validation-for', input.name);
+            input.insertAdjacentElement('afterend', feedback);
+        }
+        return feedback;
+    }
+
+    function setFieldError(input, message) {
+        if (!input) return;
+        input.classList.add('is-invalid');
+        const feedback = getOrCreateFeedback(input);
+        feedback.textContent = message;
+    }
+
+    function clearFieldError(input) {
+        if (!input) return;
+        input.classList.remove('is-invalid');
+        const feedback = input.parentElement.querySelector('.clinical-warning-text[data-validation-for="' + input.name + '"]');
+        if (feedback) feedback.textContent = '';
+    }
+
+    function validateNumberInput(input) {
+        const rule = NUMBER_RULES[input.name];
+        if (!rule) return true;
+
+        const raw = input.value.trim();
+        if (raw === '') {
+            clearFieldError(input);
+            return true;
+        }
+
+        const number = parseNumber(raw);
+        if (Number.isNaN(number) || number < rule.min || number > rule.max) {
+            setFieldError(input, rule.message);
+            return false;
+        }
+
+        clearFieldError(input);
+        return true;
+    }
+
+    function validateBloodPressure() {
+        const systolic = document.querySelector('[name="systolic_pressure"]');
+        const diastolic = document.querySelector('[name="diastolic_pressure"]');
+        if (!systolic || !diastolic) return true;
+
+        const sys = parseNumber(systolic.value);
+        const dia = parseNumber(diastolic.value);
+
+        if (sys === null || dia === null || Number.isNaN(sys) || Number.isNaN(dia)) {
+            return true;
+        }
+
+        if (sys <= dia) {
+            setFieldError(systolic, 'Систолическое АД должно быть больше диастолического.');
+            setFieldError(diastolic, 'Диастолическое АД должно быть меньше систолического.');
+            return false;
+        }
+
+        validateNumberInput(systolic);
+        validateNumberInput(diastolic);
+        return true;
+    }
+
+    function validateDateInput(input) {
+        const appointmentDateInput = document.querySelector('[name="appointment_date"]');
+        if (!appointmentDateInput || !input.value) {
+            clearFieldError(input);
+            return true;
+        }
+
+        const appointmentDate = appointmentDateInput.value;
+        if (!appointmentDate) return true;
+
+        if (DATE_FIELDS.includes(input.name) && input.value > appointmentDate) {
+            setFieldError(input, 'Дата исследования не может быть позже даты приёма.');
+            return false;
+        }
+
+        if (input.name === 'next_control_date' && input.value < appointmentDate) {
+            setFieldError(input, 'Дата следующего контроля не должна быть раньше даты приёма.');
+            return false;
+        }
+
+        clearFieldError(input);
+        return true;
+    }
+
+    function validateAlbuminuriaPairs() {
+        let ok = true;
+        const albuminInputs = getInputsByName('urine_albumin');
+        const creatinineInputs = getInputsByName('urine_creatinine');
+        const maxLen = Math.max(albuminInputs.length, creatinineInputs.length);
+
+        for (let index = 0; index < maxLen; index += 1) {
+            const albumin = albuminInputs[index];
+            const creatinine = creatinineInputs[index];
+            const albuminValue = albumin ? albumin.value.trim() : '';
+            const creatinineValue = creatinine ? creatinine.value.trim() : '';
+
+            if (albuminValue && !creatinineValue && creatinine) {
+                setFieldError(creatinine, 'Для расчёта ACR нужен креатинин мочи.');
+                ok = false;
+            }
+            if (creatinineValue && !albuminValue && albumin) {
+                setFieldError(albumin, 'Для расчёта ACR нужен альбумин мочи.');
+                ok = false;
+            }
+        }
+
+        return ok;
+    }
+
+    function ensureSummary(form) {
+        let summary = form.querySelector('.clinical-validation-summary');
+        if (!summary) {
+            summary = document.createElement('div');
+            summary.className = 'alert alert-danger clinical-validation-summary';
+            summary.setAttribute('role', 'alert');
+            form.insertAdjacentElement('afterbegin', summary);
+        }
+        return summary;
+    }
+
+    function hideSummary(form) {
+        const summary = form.querySelector('.clinical-validation-summary');
+        if (summary) {
+            summary.classList.remove('is-visible');
+            summary.textContent = '';
+        }
+    }
+
+    function showSummary(form, count) {
+        const summary = ensureSummary(form);
+        summary.classList.add('is-visible');
+        summary.textContent = `Проверьте поля формы: найдено ошибок — ${count}. Исправьте подсвеченные значения перед сохранением.`;
+    }
+
+    function validateAll(showTopMessage) {
+        const form = getForm();
+        if (!form) return true;
+
+        let ok = true;
+
+        Object.keys(NUMBER_RULES).forEach(function (name) {
+            getInputsByName(name).forEach(function (input) {
+                if (!validateNumberInput(input)) ok = false;
+            });
+        });
+
+        DATE_FIELDS.concat(['next_control_date']).forEach(function (name) {
+            getInputsByName(name).forEach(function (input) {
+                if (!validateDateInput(input)) ok = false;
+            });
+        });
+
+        if (!validateBloodPressure()) ok = false;
+        if (!validateAlbuminuriaPairs()) ok = false;
+
+        const invalidCount = form.querySelectorAll('.is-invalid').length;
+        if (ok && invalidCount === 0) {
+            hideSummary(form);
+            return true;
+        }
+
+        if (showTopMessage) {
+            showSummary(form, invalidCount || 1);
+            const firstInvalid = form.querySelector('.is-invalid');
+            if (firstInvalid) {
+                firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                firstInvalid.focus({ preventScroll: true });
+            }
+        }
+
+        return false;
+    }
+
+    document.addEventListener('input', function (event) {
+        const input = event.target;
+        if (!input || !input.name) return;
+
+        if (NUMBER_RULES[input.name]) {
+            validateNumberInput(input);
+        }
+
+        if (input.name === 'systolic_pressure' || input.name === 'diastolic_pressure') {
+            validateBloodPressure();
+        }
+
+        if (input.name === 'urine_albumin' || input.name === 'urine_creatinine') {
+            validateNumberInput(input);
+            validateAlbuminuriaPairs();
+        }
+    });
+
+    document.addEventListener('change', function (event) {
+        const input = event.target;
+        if (!input || !input.name) return;
+
+        if (DATE_FIELDS.includes(input.name) || input.name === 'next_control_date' || input.name === 'appointment_date') {
+            validateAll(false);
+        }
+    });
+
+    document.addEventListener('submit', function (event) {
+        const form = event.target;
+        if (!form || form.tagName !== 'FORM') return;
+
+        if (!validateAll(true)) {
+            event.preventDefault();
+            event.stopPropagation();
+        }
+    }, true);
+})();
+</script>

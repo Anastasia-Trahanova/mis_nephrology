@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+
+{% block content %}
+<h1>Список пациентов</h1>
+
+<div class="table-responsive">
+    <table class="table table-striped table-hover">
+        <thead class="table-dark">
+            <tr>
+                <th>ID</th>
+                <th>ФИО</th>
+                <th>Дата рождения</th>
+                <th>Телефон</th>
+                <th>Действия</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for patient in patients %}
+            <tr>
+                <td>{{ patient.id }}</td>
+                <td>{{ patient.last_name }} {{ patient.first_name }} {{ patient.patronymic or '' }}</td>
+                <td>{{ patient.birth_date.strftime('%d.%m.%Y') }}</td>
+                <td>{{ patient.phone or '—' }}</td>
+                <td>
+                    <a href="/patient/{{ patient.id }}" class="btn btn-sm btn-primary">Открыть</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

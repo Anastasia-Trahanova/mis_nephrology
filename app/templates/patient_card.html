@@ -1,0 +1,752 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .text-danger { color: #dc3545; }
+</style>
+
+<!-- ШАПКА С ФИО ПАЦИЕНТА (над всем) -->
+<div class="row mb-4">
+    <div class="col-12">
+        <h2 class="text-center" style="color: #1E3A8A;">{{ patient.last_name }} {{ patient.first_name }} {{ patient.patronymic or '' }}</h2>
+    </div>
+</div>
+
+
+<div class="row">
+    <!-- ЛЕВАЯ ПАНЕЛЬ: СПИСОК ПРИЁМОВ (без изменений) -->
+    <div class="col-md-3">
+        <div class="card">
+            <div class="card-header bg-primary text-white">
+                <h5 class="mb-0">📅 История приёмов</h5>
+            </div>
+            <div class="list-group list-group-flush" id="appointmentsList">
+                {% for app in appointments %}
+                <a href="/patient/{{ patient.id }}?appointment_id={{ app.appointment_id }}" 
+                   class="list-group-item list-group-item-action {% if selected_appointment and selected_appointment.id == app.appointment_id %}active{% endif %}">
+                    <strong>{{ app.appointment_date.strftime('%d.%m.%Y') if app.appointment_date else '—' }}</strong><br>
+                    <small>{{ app.doctor_name }}</small>
+                </a>
+                {% else %}
+                <div class="list-group-item text-muted">Нет приёмов</div>
+                {% endfor %}
+            </div>
+            <div class="card-footer">
+                <a href="/new-appointment/{{ patient.id }}" class="btn btn-success w-100">➕ Добавить приём</a>
+            </div>
+        </div>
+    </div>
+    
+    <!-- ОСНОВНАЯ ПАНЕЛЬ -->
+    <div class="col-md-9">
+        {% if selected_appointment %}
+            
+            <!-- КОД ОТОБРАЖЕНИЯ ПРИЁМА -->
+            <div class="card">
+                <div class="card-header bg-secondary text-white">
+                    <h5 class="mb-0">Приём от {{ selected_appointment.appointment_date.strftime('%d.%m.%Y %H:%M') if selected_appointment.appointment_date else '—' }}</h5>
+                </div>
+                <div class="card-body" id="printContent">
+                    <!-- Шапка приёма (врач, отделение, дата) -->
+                    <div class="row mb-4">
+                        <div class="col-md-6">
+                            <p><strong>👨‍⚕️ Врач:</strong> {{ selected_appointment.doctor_name }}</p>
+                            <p><strong>🏥 Отделение:</strong> {{ selected_appointment.location_name }} ({{ selected_appointment.branch_name }})</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>📅 Дата приёма:</strong> {{ selected_appointment.appointment_date.strftime('%d.%m.%Y %H:%M') if selected_appointment.appointment_date else '—' }}</p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <!-- Информация о пациенте (кратко) -->
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <p><strong>Дата рождения:</strong> {{ patient.birth_date.strftime('%d.%m.%Y') if patient.birth_date else '—' }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Возраст на момент приёма:</strong> 
+                               {% if selected_appointment.age_at_appointment %}
+                                   {{ selected_appointment.age_at_appointment }} лет
+                               {% else %}
+                                   —
+                               {% endif %}
+                            </p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Пол:</strong> {{ patient.gender_str if patient.gender_str else '—' }}</p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <!-- Опрос (анамнез) -->
+                    <h5 class="mt-3">Опрос</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-6">
+                            <p><strong>Анамнез жизни:</strong> {{ selected_appointment.life_anamnesis or '—' }}</p>
+                            <p><strong>Анамнез заболевания:</strong> {{ selected_appointment.disease_anamnesis or '—' }}</p>
+                        </div>
+                        <div class="col-md-6">
+                            <p><strong>Жалобы:</strong> {{ selected_appointment.complaints or '—' }}</p>
+                            <p><strong>Наследственность:</strong> {{ 'Отягощена' if selected_appointment.heredity else 'Не отягощена' }}</p>
+                            {% if selected_appointment.heredity_description %}
+                            <p><strong>Описание наследственности:</strong> {{ selected_appointment.heredity_description }}</p>
+                            {% endif %}
+                            <p><strong>Сопутствующие заболевания:</strong> {{ selected_appointment.comorbidities or '—' }}</p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <!-- Осмотр -->
+                    <h5 class="mt-3">Осмотр</h5>
+                    <div class="row mb-3">
+                        <div class="col-md-4">
+                            <p><strong>Кожные покровы:</strong> {{ selected_appointment.skin_condition or '—' }}</p>
+                            <p><strong>Отёки:</strong> {{ selected_appointment.edema_location or '—' }}</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>АД:</strong> 
+                               {% if selected_appointment.systolic_pressure and selected_appointment.diastolic_pressure %}
+                                   {{ selected_appointment.systolic_pressure }}/{{ selected_appointment.diastolic_pressure }} мм рт.ст.
+                                   {% if selected_appointment.bp_note %} ({{ selected_appointment.bp_note }}){% endif %}
+                               {% else %}—{% endif %}
+                            </p>
+                            <p><strong>ЧСС:</strong> {{ selected_appointment.heart_rate or '—' }} уд/мин</p>
+                        </div>
+                        <div class="col-md-4">
+                            <p><strong>Рост:</strong> {{ selected_appointment.height or '—' }} см</p>
+                            <p><strong>Вес:</strong> {{ selected_appointment.weight or '—' }} кг</p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                    
+                    <!-- Общий анализ крови (ОАК) - таблица с историей -->
+                    <h5 class="mt-3">Общий анализ крови</h5>
+                    {% if cbc_history %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 150px;">Показатель / Дата</th>
+                                    {% for item in cbc_history %}
+                                    <th class="text-center" style="min-width: 100px;">
+                                        {{ item.investigation_date.strftime('%d.%m.%Y') }}
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Гемоглобин -->
+                                <tr>
+                                    <td><strong>Гемоглобин, г/л</strong></td>
+                                    {% for item in cbc_history %}
+                                    <td class="text-center">{{ item.hemoglobin or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Эритроциты -->
+                                <tr>
+                                    <td><strong>Эритроциты, ×10¹²/л</strong></td>
+                                    {% for item in cbc_history %}
+                                    <td class="text-center">{{ item.erythrocytes or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Лейкоциты -->
+                                <tr>
+                                    <td><strong>Лейкоциты, ×10⁹/л</strong></td>
+                                    {% for item in cbc_history %}
+                                    <td class="text-center">{{ item.leukocytes or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Тромбоциты -->
+                                <tr>
+                                    <td><strong>Тромбоциты, ×10⁹/л</strong></td>
+                                    {% for item in cbc_history %}
+                                    <td class="text-center">{{ item.platelets or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- СОЭ -->
+                                <tr>
+                                    <td><strong>СОЭ, мм/ч</strong></td>
+                                    {% for item in cbc_history %}
+                                    <td class="text-center">{{ item.esr or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- MCV -->
+                                <tr>
+                                    <td><strong>MCV, фл</strong></td>
+                                    {% for item in cbc_history %}
+                                    <td class="text-center">{{ item.mcv or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Гематокрит -->
+                                <tr>
+                                    <td><strong>Гематокрит, %</strong></td>
+                                    {% for item in cbc_history %}
+                                    <td class="text-center">{{ item.hematocrit or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-secondary">
+                        <p class="mb-0">Общий анализ крови не предоставлен.</p>
+                    </div>
+                    {% endif %}
+
+                    <hr>
+                    
+                    <!-- Биохимия крови -->
+                    <h5 class="mt-3">Биохимический анализ крови</h5>
+
+                    {% if biochemistry_history %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 150px;">Показатель / Дата</th>
+                                    {% for item in biochemistry_history %}
+                                    <th class="text-center" style="min-width: 100px;">
+                                        {{ item.investigation_date.strftime('%d.%m.%Y') }}
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Креатинин -->
+                                <tr>
+                                    <td><strong>Креатинин, мкмоль/л</strong></td>
+                                    {% for item in biochemistry_history %}
+                                    <td class="text-center">{{ item.creatinine or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Мочевина -->
+                                <tr>
+                                    <td><strong>Мочевина, ммоль/л</strong></td>
+                                    {% for item in biochemistry_history %}
+                                    <td class="text-center">{{ item.urea or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Мочевая кислота -->
+                                <tr>
+                                    <td><strong>Мочевая кислота, мкмоль/л</strong></td>
+                                    {% for item in biochemistry_history %}
+                                    <td class="text-center">{{ item.uric_acid or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Глюкоза -->
+                                <tr>
+                                    <td><strong>Глюкоза, ммоль/л</strong></td>
+                                    {% for item in biochemistry_history %}
+                                    <td class="text-center">{{ item.glucose or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Общий белок -->
+                                <tr>
+                                    <td><strong>Общий белок, г/л</strong></td>
+                                    {% for item in biochemistry_history %}
+                                    <td class="text-center">{{ item.total_protein or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Альбумин -->
+                                <tr>
+                                    <td><strong>Альбумин, г/л</strong></td>
+                                    {% for item in biochemistry_history %}
+                                    <td class="text-center">{{ item.albumin or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Калий -->
+                                <tr>
+                                    <td><strong>Калий, ммоль/л</strong></td>
+                                    {% for item in biochemistry_history %}
+                                    <td class="text-center">{{ item.potassium or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Кальций -->
+                                <tr>
+                                    <td><strong>Кальций, ммоль/л</strong></td>
+                                    {% for item in biochemistry_history %}
+                                    <td class="text-center">{{ item.calcium or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Фосфор -->
+                                <tr>
+                                    <td><strong>Фосфор, ммоль/л</strong></td>
+                                    {% for item in biochemistry_history %}
+                                    <td class="text-center">{{ item.phosphorus or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Ферритин -->
+                                <tr>
+                                    <td><strong>Ферритин, нг/мл</strong></td>
+                                    {% for item in biochemistry_history %}
+                                    <td class="text-center">{{ item.ferritin or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- ПТГ -->
+                                <tr>
+                                    <td><strong>ПТГ, пг/мл</strong></td>
+                                    {% for item in biochemistry_history %}
+                                    <td class="text-center">{{ item.ptg or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-secondary">
+                        <p class="mb-0">Биохимический анализ крови не предоставлен.</p>
+                    </div>
+                    {% endif %}
+                    <hr>
+                    
+                    <!-- Расчётные показатели - таблица с историей -->
+                    <h5 class="mt-3">Расчётные показатели</h5>
+
+                    {% if metrics_history %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 180px;">Показатель / Дата</th>
+                                    {% for item in metrics_history %}
+                                    <th class="text-center" style="min-width: 100px;">
+                                        {{ item.investigation_date.strftime('%d.%m.%Y') }}
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>СКФ CKD-EPI, мл/мин/1.73 м²</strong></td>
+                                    {% for item in metrics_history %}
+                                    <td class="text-center">{{ item.egfr_ckdepi or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <td><strong>СКФ Кокрофт-Голт, мл/мин</strong></td>
+                                    {% for item in metrics_history %}
+                                    <td class="text-center">{{ item.crcl_cockcroft_gault or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <tr>
+                                    <td><strong>Категория СКФ</strong></td>
+                                    {% for item in metrics_history %}
+                                    <td class="text-center">{{ item.ckd_stage or '—' }}</td>
+                                    {% endfor %}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-secondary">
+                        <p class="mb-0">Расчётные показатели отсутствуют.</p>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- Общий анализ мочи (ОАМ) - таблица с историей -->
+                    <h5 class="mt-3">Общий анализ мочи</h5>
+                    {% if urinalysis_history %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 150px;">Показатель / Дата</th>
+                                    {% for item in urinalysis_history %}
+                                    <th class="text-center" style="min-width: 100px;">
+                                        {{ item.investigation_date.strftime('%d.%m.%Y') }}
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Удельный вес -->
+                                <tr>
+                                    <td><strong>Удельный вес</strong></td>
+                                    {% for item in urinalysis_history %}
+                                    <td class="text-center">{{ item.specific_gravity or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Белок -->
+                                <tr>
+                                    <td><strong>Белок, г/л</strong></td>
+                                    {% for item in urinalysis_history %}
+                                    <td class="text-center">{{ item.protein or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Лейкоциты -->
+                                <tr>
+                                    <td><strong>Лейкоциты</strong></td>
+                                    {% for item in urinalysis_history %}
+                                    <td class="text-center">{{ item.leukocytes or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Эритроциты -->
+                                <tr>
+                                    <td><strong>Эритроциты</strong></td>
+                                    {% for item in urinalysis_history %}
+                                    <td class="text-center">{{ item.erythrocytes or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Бактерии -->
+                                <tr>
+                                    <td><strong>Бактерии</strong></td>
+                                    {% for item in urinalysis_history %}
+                                    <td class="text-center">{{ item.bacteria or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-secondary">
+                        <p class="mb-0">Общий анализ мочи не предоставлен.</p>
+                    </div>
+                    {% endif %}
+                    
+                    <hr>
+                    <!-- Альбуминурия по KDIGO -->
+                    <h5 class="mt-3">Альбуминурия по KDIGO</h5>
+
+                    {% if albuminuria_history %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 220px;">Показатель / Дата</th>
+                                    {% for item in albuminuria_history %}
+                                    <th class="text-center" style="min-width: 120px;">
+                                        {{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr>
+                                    <td><strong>Альбумин мочи</strong></td>
+                                    {% for item in albuminuria_history %}
+                                    <td class="text-center">
+                                        {% if item.urine_albumin is not none %}
+                                            {{ item.urine_albumin }}
+                                            {% if item.urine_albumin_unit == 'mg_l' %} мг/л{% elif item.urine_albumin_unit == 'g_l' %} г/л{% endif %}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+
+                                <tr>
+                                    <td><strong>Креатинин мочи</strong></td>
+                                    {% for item in albuminuria_history %}
+                                    <td class="text-center">
+                                        {% if item.urine_creatinine is not none %}
+                                            {{ item.urine_creatinine }}
+                                            {% if item.urine_creatinine_unit == 'mmol_l' %} ммоль/л{% elif item.urine_creatinine_unit == 'umol_l' %} мкмоль/л{% endif %}
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+
+                                <tr>
+                                    <td><strong>Альбумин/креатинин мочи, мг/ммоль</strong></td>
+                                    {% for item in albuminuria_history %}
+                                    <td class="text-center">
+                                        {{ item.albumin_creatinine_ratio if item.albumin_creatinine_ratio is not none else '—' }}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+
+                                <tr>
+                                    <td><strong>Категория альбуминурии</strong></td>
+                                    {% for item in albuminuria_history %}
+                                    <td class="text-center">
+                                        {{ item.albuminuria_category or '—' }}
+                                    </td>
+                                    {% endfor %}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-secondary">
+                        <p class="mb-0">Данные об альбуминурии не предоставлены.</p>
+                    </div>
+                    {% endif %}
+                    
+                    <!-- УЗИ почек - таблица с историей -->
+                    <h5 class="mt-3">УЗИ почек</h5>
+                    {% if ultrasound_history %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th style="min-width: 150px;">Показатель / Дата</th>
+                                    {% for item in ultrasound_history %}
+                                    <th class="text-center" style="min-width: 100px;">
+                                        {{ item.investigation_date.strftime('%d.%m.%Y') }}
+                                    </th>
+                                    {% endfor %}
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <!-- Левая почка (размер) -->
+                                <tr>
+                                    <td><strong>Левая почка (размер)</strong></td>
+                                    {% for item in ultrasound_history %}
+                                    <td class="text-center">{{ item.left_kidney_size or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Правая почка (размер) -->
+                                <tr>
+                                    <td><strong>Правая почка (размер)</strong></td>
+                                    {% for item in ultrasound_history %}
+                                    <td class="text-center">{{ item.right_kidney_size or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Левая паренхима -->
+                                <tr>
+                                    <td><strong>Паренхима левой, мм</strong></td>
+                                    {% for item in ultrasound_history %}
+                                    <td class="text-center">{{ item.left_parenchyma or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Правая паренхима -->
+                                <tr>
+                                    <td><strong>Паренхима правой, мм</strong></td>
+                                    {% for item in ultrasound_history %}
+                                    <td class="text-center">{{ item.right_parenchyma or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                                <!-- Описание -->
+                                <tr>
+                                    <td><strong>Описание</strong></td>
+                                    {% for item in ultrasound_history %}
+                                    <td class="text-center">{{ item.description or '---' }}</td>
+                                    {% endfor %}
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-secondary">
+                        <p class="mb-0">УЗИ почек не предоставлено.</p>
+                    </div>
+                    {% endif %}
+
+                    <hr>
+
+                    <h5 class="mt-3">История прогноза ХБП по KDIGO</h5>
+
+                    {% if ckd_prognosis_history %}
+                    <div class="table-responsive">
+                        <table class="table table-bordered table-sm table-hover">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Дата оценки</th>
+                                    <th>Категория СКФ</th>
+                                    <th>Категория альбуминурии</th>
+                                    <th>Итоговая категория</th>
+                                    <th>Прогноз</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for item in ckd_prognosis_history %}
+                                <tr>
+                                    <td>{{ item.assessment_date.strftime('%d.%m.%Y') if item.assessment_date else '—' }}</td>
+                                    <td>{{ item.gfr_category or '—' }}</td>
+                                    <td>{{ item.albuminuria_category or '—' }}</td>
+                                    <td>{{ item.combined_category or '—' }}</td>
+                                    <td>
+                                        {% if item.prognosis_level == 'low' %}
+                                            <span class="badge bg-success">{{ item.prognosis_text }}</span>
+                                        {% elif item.prognosis_level == 'moderate' %}
+                                            <span class="badge bg-warning text-dark">{{ item.prognosis_text }}</span>
+                                        {% elif item.prognosis_level == 'high' %}
+                                            <span class="badge text-dark" style="background-color: #ffb74d;">{{ item.prognosis_text }}</span>
+                                        {% elif item.prognosis_level == 'very_high' %}
+                                            <span class="badge bg-danger">{{ item.prognosis_text }}</span>
+                                        {% else %}
+                                            —
+                                        {% endif %}
+                                    </td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    {% else %}
+                    <div class="alert alert-secondary">
+                        История прогноза ХБП отсутствует.
+                    </div>
+                    {% endif %}
+                    <hr>
+                    
+                    <!-- Диагнозы -->
+                    <h5 class="mt-3">Заключение</h5>
+
+                    {% if ckd_prognosis_current %}
+                        {% set prognosis_class = 'alert-secondary' %}
+                        {% if ckd_prognosis_current.prognosis_level == 'low' %}
+                            {% set prognosis_class = 'alert-success' %}
+                        {% elif ckd_prognosis_current.prognosis_level == 'moderate' %}
+                            {% set prognosis_class = 'alert-warning' %}
+                        {% elif ckd_prognosis_current.prognosis_level == 'high' %}
+                            {% set prognosis_class = 'alert-warning border border-warning' %}
+                        {% elif ckd_prognosis_current.prognosis_level == 'very_high' %}
+                            {% set prognosis_class = 'alert-danger' %}
+                        {% endif %}
+
+                        <div class="alert {{ prognosis_class }} mb-3"
+                            {% if ckd_prognosis_current.prognosis_level == 'high' %}
+                            style="background-color: #ffe0b2; border-color: #ff9800; color: #5d3b00;"
+                            {% endif %}>
+                            <strong>
+                                Прогноз ХБП по KDIGO на
+                                {{ ckd_prognosis_current.assessment_date.strftime('%d.%m.%Y') if ckd_prognosis_current.assessment_date else '—' }}:
+                            </strong>
+                            {{ ckd_prognosis_current.prognosis_text }}
+                            {% if ckd_prognosis_current.combined_category %}
+                                <span class="ms-2 badge bg-light text-dark">
+                                    {{ ckd_prognosis_current.combined_category }}
+                                </span>
+                            {% endif %}
+                        </div>
+                    {% else %}
+                        <div class="alert alert-secondary mb-3">
+                            <strong>Прогноз ХБП по KDIGO:</strong> недостаточно данных для оценки.
+                        </div>
+                    {% endif %}
+
+                    {% if icd10_diagnoses %}
+                    <div class="card mb-3">
+                        
+                        <div class="card-body">
+
+                            <p class="fw-bold mb-1">Основной диагноз</p>
+                            {% set has_main = namespace(value=false) %}
+                            <ul class="mb-3">
+                                {% for item in icd10_diagnoses %}
+                                    {% if item.diagnosis_type == 'main' %}
+                                        {% set has_main.value = true %}
+                                        <li>
+                                            {{ item.icd10_diagnosis }}
+                                            {% if item.doctor_note %}
+                                                <br>
+                                                <span class="text-muted">Уточнение: {{ item.doctor_note }}</span>
+                                            {% endif %}
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+                                {% if not has_main.value %}
+                                    <li>—</li>
+                                {% endif %}
+                            </ul>
+
+                            <p class="fw-bold mb-1">Осложнения основного диагноза</p>
+                            {% set has_complications = namespace(value=false) %}
+                            <ul class="mb-3">
+                                {% for item in icd10_diagnoses %}
+                                    {% if item.diagnosis_type == 'complication' %}
+                                        {% set has_complications.value = true %}
+                                        <li>
+                                            {{ item.icd10_diagnosis }}
+                                            {% if item.doctor_note %}
+                                                <br>
+                                                <span class="text-muted">Уточнение: {{ item.doctor_note }}</span>
+                                            {% endif %}
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+                                {% if not has_complications.value %}
+                                    <li>—</li>
+                                {% endif %}
+                            </ul>
+
+                            <p class="fw-bold mb-1">Сопутствующие заболевания</p>
+                            {% set has_comorbidities = namespace(value=false) %}
+                            <ul class="mb-0">
+                                {% for item in icd10_diagnoses %}
+                                    {% if item.diagnosis_type == 'comorbidity' %}
+                                        {% set has_comorbidities.value = true %}
+                                        <li>
+                                            {{ item.icd10_diagnosis }}
+                                            {% if item.doctor_note %}
+                                                <br>
+                                                <span class="text-muted">Уточнение: {{ item.doctor_note }}</span>
+                                            {% endif %}
+                                        </li>
+                                    {% endif %}
+                                {% endfor %}
+                                {% if not has_comorbidities.value %}
+                                    <li>—</li>
+                                {% endif %}
+                            </ul>
+
+                        </div>
+                    </div>
+                    {% endif %}
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <p><strong>Основной диагноз:</strong> {{ selected_appointment.main_diagnosis or '—' }}</p>
+                            <p><strong>Осложнения:</strong> {{ selected_appointment.complications or '—' }}</p>
+                            <p><strong>Сопутствующие диагнозы:</strong> {{ selected_appointment.diag_comorbidities or '—' }}</p>
+                        </div>
+                    </div>
+                    
+                    <hr>
+                                        
+                    <h5 class="mt-3">Назначения</h5>
+                    <div class="row mb-3">
+                        <div class="col-12">
+                            <p><strong>Диета:</strong> {{ diet_info.diet if diet_info and diet_info.diet else '—' }}</p>
+                            <p><strong>Рекомендации:</strong> {{ diet_info.recommendations if diet_info and diet_info.recommendations else '—' }}</p>
+                            <p><strong>Лекарства:</strong></p>
+                            {% if medications %}
+                                <ul>
+                                {% for med in medications %}
+                                    <li>
+                                        <strong>{{ med.medication or '—' }}</strong>
+                                        {% if med.dosage %} — {{ med.dosage }}{% endif %}
+                                        {% if med.schedule %} ({{ med.schedule }}){% endif %}
+                                    </li>
+                                {% endfor %}
+                                </ul>
+                            {% else %}
+                                <p>—</p>
+                            {% endif %}
+                            <p><strong>Дата следующего контроля:</strong> 
+                                {% if diet_info and diet_info.next_control_date %}
+                                    {{ diet_info.next_control_date.strftime('%d.%m.%Y') }}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </p>
+                        </div>
+                    </div>
+                    
+                
+                </div>
+                
+                <!-- Кнопка сохранения в Word -->
+                <div class="card-footer">
+                    <a href="/export/{{ selected_appointment.id }}/docx" class="btn btn-primary">
+                        📄 Скачать Word
+                    </a>
+                </div>
+            </div>
+        {% else %}
+            <div class="alert alert-info">Выберите приём из списка слева</div>
+        {% endif %}
+    </div>
+</div>
+
+
+
+{% endblock %}

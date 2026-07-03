@@ -1,0 +1,547 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container-fluid">
+    <h2 class="mb-4">🏥 ООО «КОМПАНИЯ «ФЕСФАРМ»</h2>
+    
+    <!-- Блок фильтров -->
+    <!-- Блок фильтров -->
+    <div class="card mb-4">
+        <div class="card-body">
+            <!-- Первая строка: филиал, отделение, врач, поиск -->
+            <div class="row">
+                <div class="col-md-3">
+                    <label for="branchSelect" class="form-label">Филиал</label>
+                    <select id="branchSelect" class="form-select">
+                        <option value="">Все филиалы</option>
+                        {% for branch in branches %}
+                        <option value="{{ branch.id }}">{{ branch.name }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="locationSelect" class="form-label">Отделение</label>
+                    <select id="locationSelect" class="form-select" disabled>
+                        <option value="">Сначала выберите филиал</option>
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="doctorSelect" class="form-label">Врач</label>
+                    <select id="doctorSelect" class="form-select">
+                        <option value="">Все врачи</option>
+                        {% for doctor in doctors %}
+                        <option value="{{ doctor.id }}">{{ doctor.last_name }} {{ doctor.first_name }} {{ doctor.patronymic or '' }}</option>
+                        {% endfor %}
+                    </select>
+                </div>
+                <div class="col-md-3">
+                    <label for="searchInput" class="form-label">Поиск по ФИО</label>
+                    <input type="text" id="searchInput" class="form-control" placeholder="Введите фамилию или имя">
+                </div>
+            </div>
+            
+            <!-- Вторая строка: период + кнопки -->
+            <div class="row mt-3">
+                <div class="col-md-4">
+                    <label for="periodSelect" class="form-label">Период</label>
+                    <select id="periodSelect" class="form-select">
+                        <option value="all">Все приёмы</option>
+                        <option value="today">Сегодня</option>
+                        <option value="week">Последние 7 дней</option>
+                        <option value="month">Последние 30 дней</option>
+                        <option value="year">Последний год</option>
+                        <option value="oldest">Сначала старые</option>
+                        <option value="newest">Сначала новые</option>
+                    </select>
+                </div>
+                <div class="col-md-8">
+                    <div class="d-flex justify-content-between align-items-end h-100">
+                        <div>
+                            <button id="filterBtn" class="btn btn-primary me-2">Применить фильтры</button>
+                            <button id="resetBtn" class="btn btn-secondary">Сбросить</button>
+                        </div>
+                        <div>
+                            <a href="/new-patient" class="btn btn-success">➕ Новый пациент</a>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Таблица с приёмами -->
+    <div class="card">
+        <div class="card-header">
+            <h5>📋 Список приёмов</h5>
+        </div>
+        <div class="card-body">
+            <div class="table-responsive">
+                <table class="table table-striped table-hover">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>Пациент</th>
+                            <th>Возраст</th>
+                            <th>Дата приёма</th>
+                            <th>Врач</th>
+                            <th>Отделение</th>
+                            <th>Филиал</th>
+                            <th>ЭМК</th>
+                            
+                        </tr>
+                    </thead>
+                    <tbody id="appointmentsBody">
+                        <tr><td colspan="7" class="text-center">Загрузка данных...<\/td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const branchSelect = document.getElementById('branchSelect');
+    const locationSelect = document.getElementById('locationSelect');
+    const doctorSelect = document.getElementById('doctorSelect');
+    const searchInput = document.getElementById('searchInput');
+    const periodSelect = document.getElementById('periodSelect');
+    const appointmentsBody = document.getElementById('appointmentsBody');
+
+    function doctorName(doctor) {
+        return `${doctor.last_name || ''} ${doctor.first_name || ''} ${doctor.patronymic || ''}`.trim();
+    }
+
+    function fillSelect(select, items, placeholder, labelFunction, selectedValue = '') {
+        select.innerHTML = '';
+
+        const emptyOption = document.createElement('option');
+        emptyOption.value = '';
+        emptyOption.textContent = placeholder;
+        select.appendChild(emptyOption);
+
+        items.forEach(item => {
+            const option = document.createElement('option');
+            option.value = item.id;
+            option.textContent = labelFunction(item);
+            select.appendChild(option);
+        });
+
+        if (selectedValue) {
+            const exists = Array.from(select.options).some(option => option.value === String(selectedValue));
+            select.value = exists ? selectedValue : '';
+        }
+    }
+
+    async function fetchJson(url) {
+        const response = await fetch(url);
+
+        if (!response.ok) {
+            throw new Error(`Ошибка API: ${response.status}`);
+        }
+
+        return await response.json();
+    }
+
+    async function updateLocations(preserveSelected = true) {
+        const branchId = branchSelect.value;
+        const doctorId = doctorSelect.value;
+        const currentLocationId = preserveSelected ? locationSelect.value : '';
+
+        if (!branchId && !doctorId) {
+            locationSelect.disabled = true;
+            fillSelect(locationSelect, [], 'Сначала выберите филиал', item => item.name);
+            return;
+        }
+
+        const params = new URLSearchParams();
+
+        if (branchId) {
+            params.append('branch_id', branchId);
+        }
+
+        if (doctorId) {
+            params.append('doctor_id', doctorId);
+        }
+
+        locationSelect.disabled = false;
+        locationSelect.innerHTML = '<option value="">Загрузка...</option>';
+
+        try {
+            const locations = await fetchJson(`/api/locations?${params.toString()}`);
+
+            if (locations.length === 0) {
+                fillSelect(locationSelect, [], 'Нет доступных отделений', item => item.name);
+                return;
+            }
+
+            fillSelect(
+                locationSelect,
+                locations,
+                'Все отделения',
+                location => location.name,
+                currentLocationId
+            );
+        } catch (error) {
+            console.error(error);
+            fillSelect(locationSelect, [], 'Ошибка загрузки отделений', item => item.name);
+        }
+    }
+
+    async function updateDoctors(preserveSelected = true) {
+        const branchId = branchSelect.value;
+        const locationId = locationSelect.value;
+        const currentDoctorId = preserveSelected ? doctorSelect.value : '';
+
+        const params = new URLSearchParams();
+
+        if (branchId) {
+            params.append('branch_id', branchId);
+        }
+
+        if (locationId) {
+            params.append('location_id', locationId);
+        }
+
+        doctorSelect.innerHTML = '<option value="">Загрузка...</option>';
+
+        try {
+            const doctors = await fetchJson(`/api/doctors?${params.toString()}`);
+
+            if (doctors.length === 0) {
+                fillSelect(doctorSelect, [], 'Нет доступных врачей', doctorName);
+                return;
+            }
+
+            fillSelect(
+                doctorSelect,
+                doctors,
+                'Все врачи',
+                doctorName,
+                currentDoctorId
+            );
+        } catch (error) {
+            console.error(error);
+            fillSelect(doctorSelect, [], 'Ошибка загрузки врачей', doctorName);
+        }
+    }
+
+    function getPeriodParams() {
+        let sortOrder = 'desc';
+        let dateFrom = null;
+        let dateTo = null;
+        const today = new Date();
+
+        function formatDate(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            return `${year}-${month}-${day}`;
+        }
+
+        if (periodSelect.value === 'today') {
+            dateFrom = formatDate(today);
+            dateTo = formatDate(today);
+        } else if (periodSelect.value === 'week') {
+            const weekAgo = new Date(today);
+            weekAgo.setDate(today.getDate() - 7);
+            dateFrom = formatDate(weekAgo);
+            dateTo = formatDate(today);
+        } else if (periodSelect.value === 'month') {
+            const monthAgo = new Date(today);
+            monthAgo.setDate(today.getDate() - 30);
+            dateFrom = formatDate(monthAgo);
+            dateTo = formatDate(today);
+        } else if (periodSelect.value === 'year') {
+            const yearAgo = new Date(today);
+            yearAgo.setFullYear(today.getFullYear() - 1);
+            dateFrom = formatDate(yearAgo);
+            dateTo = formatDate(today);
+        } else if (periodSelect.value === 'oldest') {
+            sortOrder = 'asc';
+        } else if (periodSelect.value === 'newest') {
+            sortOrder = 'desc';
+        }
+
+        return {
+            sortOrder,
+            dateFrom,
+            dateTo
+        };
+    }
+
+    async function loadAppointments() {
+        const branchId = branchSelect.value;
+        const locationId = locationSelect.value;
+        const doctorId = doctorSelect.value;
+        const search = searchInput.value.trim();
+        const period = periodSelect.value;
+
+        const periodParams = getPeriodParams();
+        const params = new URLSearchParams();
+
+        if (branchId) {
+            params.append('branch_id', branchId);
+        }
+
+        if (locationId) {
+            params.append('location_id', locationId);
+        }
+
+        if (doctorId) {
+            params.append('doctor_id', doctorId);
+        }
+
+        if (search) {
+            params.append('search', search);
+        }
+
+        if (period) {
+            params.append('period', period);
+        }
+
+        if (periodParams.dateFrom) {
+            params.append('date_from', periodParams.dateFrom);
+        }
+
+        if (periodParams.dateTo) {
+            params.append('date_to', periodParams.dateTo);
+        }
+
+        params.append('sort_order', periodParams.sortOrder);
+        params.append('limit', '500');
+
+        appointmentsBody.innerHTML = '<tr><td colspan="7" class="text-center">Загрузка данных...</td></tr>';
+
+        try {
+            const appointments = await fetchJson(`/api/appointments/filtered?${params.toString()}`);
+
+            if (appointments.length === 0) {
+                appointmentsBody.innerHTML = '<tr><td colspan="7" class="text-center">Нет записей</td></tr>';
+                return;
+            }
+
+            appointmentsBody.innerHTML = '';
+
+            appointments.forEach(app => {
+                const appointmentDate = new Date(app.appointment_date);
+                const dateStr = appointmentDate.toLocaleDateString('ru-RU');
+
+                const row = `
+                    <tr>
+                        <td>${app.patient_fio || '—'}</td>
+                        <td>${app.age !== null && app.age !== undefined ? app.age + ' лет' : '—'}</td>
+                        <td>${dateStr}</td>
+                        <td>${app.doctor_fio || '—'}</td>
+                        <td>${app.location_name || '—'}</td>
+                        <td>${app.branch_name || '—'}</td>
+                        <td>
+                            <a href="/patient/${app.patient_id}?appointment_id=${app.appointment_id}" class="btn btn-sm btn-outline-primary">Открыть карточку</a>
+                        </td>
+                    </tr>
+                `;
+
+                appointmentsBody.innerHTML += row;
+            });
+        } catch (error) {
+            console.error(error);
+            appointmentsBody.innerHTML = '<tr><td colspan="7" class="text-center text-danger">Ошибка загрузки данных</td></tr>';
+        }
+    }
+
+    branchSelect.addEventListener('change', async function() {
+        locationSelect.value = '';
+        doctorSelect.value = '';
+
+        await updateLocations(false);
+        await updateDoctors(false);
+    });
+
+    locationSelect.addEventListener('change', async function() {
+        await updateDoctors(true);
+    });
+
+    doctorSelect.addEventListener('change', async function() {
+        await updateLocations(true);
+    });
+
+    async function resetFilters() {
+        branchSelect.value = '';
+        doctorSelect.value = '';
+        searchInput.value = '';
+        periodSelect.value = 'all';
+
+        locationSelect.disabled = true;
+        fillSelect(locationSelect, [], 'Сначала выберите филиал', item => item.name);
+
+        await updateDoctors(false);
+        await loadAppointments();
+    }
+
+    document.getElementById('filterBtn').addEventListener('click', loadAppointments);
+    document.getElementById('resetBtn').addEventListener('click', resetFilters);
+
+    document.querySelector('.card.mb-4').addEventListener('keydown', function(event) {
+    if (event.key === 'Enter') {
+        event.preventDefault();
+        loadAppointments();
+    }
+});
+
+updateDoctors(false);
+loadAppointments();
+</script>
+
+<script>
+    // Сортировка таблицы
+    // Сортировка таблицы с постоянными стрелками
+document.addEventListener('DOMContentLoaded', function() {
+    const table = document.querySelector('.table');
+    const headers = table.querySelectorAll('thead th');
+    const tbody = table.querySelector('tbody');
+    
+    const columns = {
+        0: 'patient_fio',
+        1: 'age',
+        2: 'appointment_date',
+        3: 'doctor_fio'
+        
+    };
+    
+    let sortDirection = {};
+    
+    headers.forEach((header, index) => {
+        // Сохраняем исходный текст заголовка
+        const originalText = header.textContent.trim();
+        
+        if (!(index in columns)) {
+            return;
+        }
+
+        // Очищаем заголовок от старых стрелок
+        header.innerHTML = '';
+        header.style.cursor = 'pointer';
+        header.style.userSelect = 'none';
+        header.style.whiteSpace = 'nowrap';
+        
+        // Добавляем текст заголовка
+        const textSpan = document.createElement('span');
+        textSpan.textContent = originalText;
+        textSpan.style.display = 'inline-block';
+        header.appendChild(textSpan);
+        
+        // Контейнер для стрелок с фиксированной шириной
+        const arrowContainer = document.createElement('span');
+        arrowContainer.style.display = 'inline-flex';
+        arrowContainer.style.flexDirection = 'column';
+        arrowContainer.style.marginLeft = '8px';
+        arrowContainer.style.fontSize = '10px';
+        arrowContainer.style.lineHeight = '1';
+        arrowContainer.style.verticalAlign = 'middle';
+        
+        // Стрелка вверх
+        const arrowUp = document.createElement('span');
+        arrowUp.textContent = '▲';
+        arrowUp.style.cursor = 'pointer';
+        arrowUp.style.color = '#aaa';
+        arrowUp.style.display = 'block';
+        arrowUp.style.textAlign = 'center';
+        arrowUp.title = 'Сортировать по возрастанию';
+        
+        // Стрелка вниз
+        const arrowDown = document.createElement('span');
+        arrowDown.textContent = '▼';
+        arrowDown.style.cursor = 'pointer';
+        arrowDown.style.color = '#aaa';
+        arrowDown.style.display = 'block';
+        arrowDown.style.textAlign = 'center';
+        arrowDown.title = 'Сортировать по убыванию';
+        
+        arrowContainer.appendChild(arrowUp);
+        arrowContainer.appendChild(arrowDown);
+        header.appendChild(arrowContainer);
+        
+        // Обработчик для стрелки вверх
+        arrowUp.addEventListener('click', function(e) {
+            e.stopPropagation();
+            sortTable(index, 'asc');
+            updateArrows(index, 'asc');
+        });
+        
+        // Обработчик для стрелки вниз
+        arrowDown.addEventListener('click', function(e) {
+            e.stopPropagation();
+            sortTable(index, 'desc');
+            updateArrows(index, 'desc');
+        });
+        
+        // Обработчик для клика по тексту заголовка
+        textSpan.addEventListener('click', function(e) {
+            e.stopPropagation();
+            if (sortDirection[index] === 'asc') {
+                sortTable(index, 'desc');
+                updateArrows(index, 'desc');
+            } else {
+                sortTable(index, 'asc');
+                updateArrows(index, 'asc');
+            }
+        });
+        
+        function sortTable(columnIndex, direction) {
+            const rows = Array.from(tbody.querySelectorAll('tr'));
+            const columnName = columns[columnIndex];
+            
+            rows.sort((a, b) => {
+                let aVal = a.cells[columnIndex].textContent.trim();
+                let bVal = b.cells[columnIndex].textContent.trim();
+                
+                if (columnName === 'appointment_date') {
+                    const aDate = new Date(aVal.split('.').reverse().join('-'));
+                    const bDate = new Date(bVal.split('.').reverse().join('-'));
+                    return direction === 'asc' ? aDate - bDate : bDate - aDate;
+                }
+                
+                if (columnName === 'age') {
+                    const aNum = parseInt(aVal) || 0;
+                    const bNum = parseInt(bVal) || 0;
+                    return direction === 'asc' ? aNum - bNum : bNum - aNum;
+                }
+                
+                if (direction === 'asc') {
+                    return aVal.localeCompare(bVal, 'ru');
+                } else {
+                    return bVal.localeCompare(aVal, 'ru');
+                }
+            });
+            
+            rows.forEach(row => tbody.appendChild(row));
+            sortDirection[columnIndex] = direction;
+        }
+        
+        function updateArrows(columnIndex, activeDirection) {
+            headers.forEach((h, i) => {
+                const container = h.querySelector('span:last-child');
+                if (container) {
+                    const up = container.children[0];
+                    const down = container.children[1];
+                    if (up) up.style.color = '#aaa';
+                    if (down) down.style.color = '#aaa';
+                }
+            });
+            
+            const activeContainer = headers[columnIndex].querySelector('span:last-child');
+            if (activeContainer) {
+                const up = activeContainer.children[0];
+                const down = activeContainer.children[1];
+                if (activeDirection === 'asc') {
+                    up.style.color = '#ffcc00';
+                    down.style.color = '#aaa';
+                } else {
+                    up.style.color = '#aaa';
+                    down.style.color = '#ffcc00';
+                }
+            }
+        }
+    });
+});
+</script>
+
+{% endblock %}

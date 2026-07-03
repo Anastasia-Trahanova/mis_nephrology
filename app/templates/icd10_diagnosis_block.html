@@ -1,0 +1,536 @@
+{% set icd10_prefill = last_icd10_diagnoses_grouped if last_icd10_diagnoses_grouped is defined else none %}
+{% set prefill_main = icd10_prefill.main if icd10_prefill else none %}
+{% set prefill_complications = icd10_prefill.complications if icd10_prefill else [] %}
+{% set prefill_comorbidities = icd10_prefill.comorbidities if icd10_prefill else [] %}
+
+<style>
+    .icd10-search-wrapper {
+        position: relative;
+    }
+
+    .icd10-suggestions {
+        position: absolute;
+        z-index: 1050;
+        top: 100%;
+        left: 0;
+        right: 0;
+        max-height: 260px;
+        overflow-y: auto;
+    }
+
+    .icd10-suggestion-item {
+        cursor: pointer;
+    }
+</style>
+
+<div class="col-12 mb-3">
+    <div class="alert alert-light border">
+        
+
+        {% if not icd10_diagnoses %}
+        <div class="alert alert-warning mb-3">
+            Справочник МКБ-10 пока пуст. Сначала заполните таблицу <code>icd10_diagnoses</code>.
+        </div>
+        {% endif %}
+
+        <div class="mb-3">
+            <label class="form-label fw-bold">Основной диагноз по МКБ-10</label>
+
+            <div class="icd10-search-wrapper">
+                <input
+                    type="text"
+                    name="icd10_main_diagnosis"
+                    class="form-control icd10-search-input"
+                    autocomplete="off"
+                    value="{% if prefill_main %}{{ prefill_main.icd10_diagnosis }}{% endif %}"
+                >
+                <div class="icd10-suggestions list-group shadow-sm d-none"></div>
+            </div>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-bold">Уточнение по основному диагнозу</label>
+            <textarea
+                name="icd10_main_note"
+                class="form-control"
+                rows="2"
+            >{% if prefill_main and prefill_main.doctor_note %}{{ prefill_main.doctor_note }}{% endif %}</textarea>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-bold">Осложнения основного диагноза по МКБ-10</label>
+
+            <div id="icd10ComplicationsContainer">
+                {% if prefill_complications %}
+                    {% for item in prefill_complications %}
+                    <div class="icd10-diagnosis-row border rounded p-3 mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label mb-0">Диагноз</label>
+                            <button type="button" class="btn btn-outline-danger btn-sm remove-icd10-row-btn">
+                                Удалить
+                            </button>
+                        </div>
+
+                        <div class="icd10-search-wrapper mb-2">
+                            <input
+                                type="text"
+                                name="icd10_complication_diagnosis"
+                                class="form-control icd10-search-input"
+                                autocomplete="off"
+                                value="{{ item.icd10_diagnosis }}"
+                            >
+                            <div class="icd10-suggestions list-group shadow-sm d-none"></div>
+                        </div>
+
+                        <label class="form-label">Уточнение по осложнению</label>
+                        <textarea
+                            name="icd10_complication_note"
+                            class="form-control"
+                            rows="1"
+                        >{% if item.doctor_note %}{{ item.doctor_note }}{% endif %}</textarea>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="icd10-diagnosis-row border rounded p-3 mb-2">
+                        <label class="form-label">Диагноз</label>
+
+                        <div class="icd10-search-wrapper mb-2">
+                            <input
+                                type="text"
+                                name="icd10_complication_diagnosis"
+                                class="form-control icd10-search-input"
+                                autocomplete="off"
+                            >
+                            <div class="icd10-suggestions list-group shadow-sm d-none"></div>
+                        </div>
+
+                        <label class="form-label">Уточнение по осложнению</label>
+                        <textarea
+                            name="icd10_complication_note"
+                            class="form-control"
+                            rows="1"
+                        ></textarea>
+                    </div>
+                {% endif %}
+            </div>
+
+            <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm mt-2"
+                id="addIcd10ComplicationBtn"
+            >
+                + Добавить осложнение
+            </button>
+        </div>
+
+        <div class="mb-3">
+            <label class="form-label fw-bold">Сопутствующие заболевания по МКБ-10</label>
+
+            <div id="icd10ComorbiditiesContainer">
+                {% if prefill_comorbidities %}
+                    {% for item in prefill_comorbidities %}
+                    <div class="icd10-diagnosis-row border rounded p-3 mb-2">
+                        <div class="d-flex justify-content-between align-items-center mb-2">
+                            <label class="form-label mb-0">Диагноз</label>
+                            <button type="button" class="btn btn-outline-danger btn-sm remove-icd10-row-btn">
+                                Удалить
+                            </button>
+                        </div>
+
+                        <div class="icd10-search-wrapper mb-2">
+                            <input
+                                type="text"
+                                name="icd10_comorbidity_diagnosis"
+                                class="form-control icd10-search-input"
+                                autocomplete="off"
+                                value="{{ item.icd10_diagnosis }}"
+                            >
+                            <div class="icd10-suggestions list-group shadow-sm d-none"></div>
+                        </div>
+
+                        <label class="form-label">Уточнение по сопутствующему заболеванию</label>
+                        <textarea
+                            name="icd10_comorbidity_note"
+                            class="form-control"
+                            rows="1"
+                        >{% if item.doctor_note %}{{ item.doctor_note }}{% endif %}</textarea>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="icd10-diagnosis-row border rounded p-3 mb-2">
+                        <label class="form-label">Диагноз</label>
+
+                        <div class="icd10-search-wrapper mb-2">
+                            <input
+                                type="text"
+                                name="icd10_comorbidity_diagnosis"
+                                class="form-control icd10-search-input"
+                                autocomplete="off"
+                            >
+                            <div class="icd10-suggestions list-group shadow-sm d-none"></div>
+                        </div>
+
+                        <label class="form-label">Уточнение по сопутствующему заболеванию</label>
+                        <textarea
+                            name="icd10_comorbidity_note"
+                            class="form-control"
+                            rows="1"
+                        ></textarea>
+                    </div>
+                {% endif %}
+            </div>
+
+            <button
+                type="button"
+                class="btn btn-outline-secondary btn-sm mt-2"
+                id="addIcd10ComorbidityBtn"
+            >
+                + Добавить сопутствующее заболевание
+            </button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const ICD10_DIAGNOSES = [
+        {% for item in icd10_diagnoses %}
+            {{ item.diagnosis | tojson }}{% if not loop.last %},{% endif %}
+        {% endfor %}
+    ];
+
+    function normalizeIcd10Text(value) {
+        return String(value || "")
+            .toLowerCase()
+            .replaceAll("ё", "е")
+            .replace(/[.,;:()]/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
+    }
+
+    function getIcd10Aliases(diagnosis) {
+        const text = normalizeIcd10Text(diagnosis);
+        let aliases = "";
+
+        if (text.includes("n18") || text.includes("хроническая болезнь почек")) {
+            aliases += " хбп хроническая болезнь почек";
+        }
+
+        if (text.includes("n17") || text.includes("острая почечная недостаточность")) {
+            aliases += " опп острая почечная недостаточность острое повреждение почек почечная недостаточность";
+        }
+
+        if (text.includes("n19") || text.includes("почечная недостаточность")) {
+            aliases += " почечная недостаточность хпн";
+        }
+
+        if (
+            text.includes("e10") ||
+            text.includes("e11") ||
+            text.includes("e14") ||
+            text.includes("сахарный диабет")
+        ) {
+            aliases += " сд сахарный диабет диабет диабетическая нефропатия";
+        }
+
+        if (
+            text.includes("i10") ||
+            text.includes("i11") ||
+            text.includes("i12") ||
+            text.includes("i13") ||
+            text.includes("i15") ||
+            text.includes("гипертенз") ||
+            text.includes("гипертоничес")
+        ) {
+            aliases += " аг артериальная гипертензия гипертония гипертоническая болезнь гипертензивная болезнь гипертензивная нефропатия реноваскулярная гипертензия";
+        }
+
+        if (text.includes("анем")) {
+            aliases += " анемия анемический синдром";
+        }
+
+        if (
+            text.includes("n25") ||
+            text.includes("e21") ||
+            text.includes("e83")
+        ) {
+            aliases += " мкн минеральные костные нарушения минерально костные нарушения фосфор кальций гиперпаратиреоз остеодистрофия";
+        }
+
+        if (
+            text.includes("n20") ||
+            text.includes("n21") ||
+            text.includes("n23")
+        ) {
+            aliases += " мкб мочекаменная болезнь камни уролитиаз почечная колика";
+        }
+
+        if (
+            text.includes("n10") ||
+            text.includes("n11") ||
+            text.includes("n12") ||
+            text.includes("пиелонефрит")
+        ) {
+            aliases += " пиелонефрит тубулоинтерстициальный нефрит";
+        }
+
+        return normalizeIcd10Text(aliases);
+    }
+
+    function getWords(value) {
+        return normalizeIcd10Text(value)
+            .split(" ")
+            .filter(Boolean);
+    }
+
+    function hasExactAlias(aliases, query) {
+        const aliasWords = getWords(aliases);
+        return aliasWords.includes(query);
+    }
+
+    function hasWordStartingWith(text, query) {
+        const words = getWords(text);
+        return words.some(word => word.startsWith(query));
+    }
+
+    function hasMeaningfulSubstring(text, query) {
+        if (query.length < 3) {
+            return false;
+        }
+
+        return normalizeIcd10Text(text).includes(query);
+    }
+
+    function getIcd10SearchScore(diagnosis, query) {
+        const text = normalizeIcd10Text(diagnosis);
+        const aliases = getIcd10Aliases(diagnosis);
+        const q = normalizeIcd10Text(query);
+
+        if (!q) {
+            return 0;
+        }
+
+        const queryWords = q.split(" ").filter(Boolean);
+        const codePart = text.split(" — ")[0];
+
+        let score = 1000;
+
+        if (codePart.startsWith(q)) {
+            score = Math.min(score, 0);
+        }
+
+        if (text.startsWith(q)) {
+            score = Math.min(score, 1);
+        }
+
+        if (hasExactAlias(aliases, q)) {
+            score = Math.min(score, 2);
+        }
+
+        if (hasWordStartingWith(text, q)) {
+            score = Math.min(score, 3);
+        }
+
+        if (hasMeaningfulSubstring(text, q)) {
+            score = Math.min(score, 4);
+        }
+
+        if (q.length >= 3 && normalizeIcd10Text(aliases).includes(q)) {
+            score = Math.min(score, 5);
+        }
+
+        const allWordsFound = queryWords.every(word => {
+            if (word.length < 3) {
+                return (
+                    codePart.startsWith(word) ||
+                    hasExactAlias(aliases, word) ||
+                    hasWordStartingWith(text, word)
+                );
+            }
+
+            return (
+                text.includes(word) ||
+                normalizeIcd10Text(aliases).includes(word)
+            );
+        });
+
+        if (queryWords.length > 1 && allWordsFound) {
+            score = Math.min(score, 6);
+        }
+
+        return score;
+    }
+
+    function findIcd10Diagnoses(query) {
+        const q = normalizeIcd10Text(query);
+
+        if (!q) {
+            return ICD10_DIAGNOSES.slice();
+        }
+
+        return ICD10_DIAGNOSES
+            .map((diagnosis, index) => {
+                return {
+                    diagnosis: diagnosis,
+                    index: index,
+                    score: getIcd10SearchScore(diagnosis, q)
+                };
+            })
+            .filter(item => item.score < 1000)
+            .sort((a, b) => {
+                if (a.score !== b.score) {
+                    return a.score - b.score;
+                }
+
+                return a.index - b.index;
+            })
+            .map(item => item.diagnosis);
+    }
+
+    function hideAllIcd10Suggestions() {
+        document.querySelectorAll(".icd10-suggestions").forEach(block => {
+            block.classList.add("d-none");
+            block.innerHTML = "";
+        });
+    }
+
+    function renderIcd10Suggestions(input, showAll = false) {
+        const wrapper = input.closest(".icd10-search-wrapper");
+        const suggestionsBlock = wrapper.querySelector(".icd10-suggestions");
+
+        let results;
+
+        if (showAll) {
+            results = ICD10_DIAGNOSES.slice();
+        } else {
+            results = findIcd10Diagnoses(input.value);
+        }
+
+        suggestionsBlock.innerHTML = "";
+
+        if (!results.length) {
+            suggestionsBlock.classList.add("d-none");
+            return;
+        }
+
+        results.forEach(diagnosis => {
+            const item = document.createElement("button");
+            item.type = "button";
+            item.className = "list-group-item list-group-item-action icd10-suggestion-item";
+            item.textContent = diagnosis;
+
+            item.addEventListener("click", () => {
+                input.value = diagnosis;
+                suggestionsBlock.classList.add("d-none");
+                suggestionsBlock.innerHTML = "";
+            });
+
+            suggestionsBlock.appendChild(item);
+        });
+
+        suggestionsBlock.classList.remove("d-none");
+    }
+
+    function initIcd10Search(root = document) {
+        root.querySelectorAll(".icd10-search-input").forEach(input => {
+            input.addEventListener("input", () => {
+                renderIcd10Suggestions(input, false);
+            });
+
+            input.addEventListener("focus", () => {
+                renderIcd10Suggestions(input, true);
+            });
+
+            input.addEventListener("click", () => {
+                renderIcd10Suggestions(input, true);
+            });
+        });
+    }
+
+    function createIcd10DiagnosisRow(diagnosisFieldName, noteFieldName, noteLabelText) {
+        const row = document.createElement("div");
+        row.className = "icd10-diagnosis-row border rounded p-3 mb-2";
+
+        row.innerHTML = `
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <label class="form-label mb-0">Диагноз</label>
+                <button type="button" class="btn btn-outline-danger btn-sm remove-icd10-row-btn">
+                    Удалить
+                </button>
+            </div>
+
+            <div class="icd10-search-wrapper mb-2">
+                <input
+                    type="text"
+                    name="${diagnosisFieldName}"
+                    class="form-control icd10-search-input"
+                    autocomplete="off"
+                >
+                <div class="icd10-suggestions list-group shadow-sm d-none"></div>
+            </div>
+
+            <label class="form-label">${noteLabelText}</label>
+            <textarea
+                name="${noteFieldName}"
+                class="form-control"
+                rows="1"
+            ></textarea>
+        `;
+
+        row.querySelector(".remove-icd10-row-btn").addEventListener("click", () => {
+            row.remove();
+        });
+
+        initIcd10Search(row);
+
+        return row;
+    }
+
+    document.addEventListener("DOMContentLoaded", () => {
+        initIcd10Search();
+
+        document.querySelectorAll(".remove-icd10-row-btn").forEach(button => {
+            button.addEventListener("click", () => {
+                const row = button.closest(".icd10-diagnosis-row");
+                if (row) {
+                    row.remove();
+                }
+            });
+        });
+
+        const addComplicationBtn = document.getElementById("addIcd10ComplicationBtn");
+        const complicationsContainer = document.getElementById("icd10ComplicationsContainer");
+
+        if (addComplicationBtn && complicationsContainer) {
+            addComplicationBtn.addEventListener("click", () => {
+                complicationsContainer.appendChild(
+                    createIcd10DiagnosisRow(
+                        "icd10_complication_diagnosis",
+                        "icd10_complication_note",
+                        "Уточнение по осложнению"
+                    )
+                );
+            });
+        }
+
+        const addComorbidityBtn = document.getElementById("addIcd10ComorbidityBtn");
+        const comorbiditiesContainer = document.getElementById("icd10ComorbiditiesContainer");
+
+        if (addComorbidityBtn && comorbiditiesContainer) {
+            addComorbidityBtn.addEventListener("click", () => {
+                comorbiditiesContainer.appendChild(
+                    createIcd10DiagnosisRow(
+                        "icd10_comorbidity_diagnosis",
+                        "icd10_comorbidity_note",
+                        "Уточнение по сопутствующему заболеванию"
+                    )
+                );
+            });
+        }
+
+        document.addEventListener("click", event => {
+            if (!event.target.closest(".icd10-search-wrapper")) {
+                hideAllIcd10Suggestions();
+            }
+        });
+    });
+</script>
