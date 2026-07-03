@@ -1,51 +1,53 @@
 from logging.config import fileConfig
 from pathlib import Path
-import os
+import sys
+
 from alembic import context
-from sqlalchemy import engine_from_config, pool
+from sqlalchemy import create_engine, pool
+
 
 config = context.config
 
 if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
+
+from app.settings import settings  # noqa: E402
+
+
 target_metadata = None
-
-
-def get_database_url() -> str:
-    env_url = os.getenv("DATABASE_URL")
-    if env_url:
-        return env_url
-
-    host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5432")
-    user = os.getenv("DB_USER", "nephrology_user")
-    password = os.getenv("DB_PASSWORD", "change_me")
-    name = os.getenv("DB_NAME", "nephrology_mis")
-    return f"postgresql://{user}:{password}@{host}:{port}/{name}"
 
 
 def run_migrations_offline() -> None:
     context.configure(
-        url=get_database_url(),
+        url=settings.sqlalchemy_url,
         target_metadata=target_metadata,
         literal_binds=True,
         dialect_opts={"paramstyle": "named"},
     )
+
     with context.begin_transaction():
         context.run_migrations()
 
 
 def run_migrations_online() -> None:
-    configuration = config.get_section(config.config_ini_section) or {}
-    configuration["sqlalchemy.url"] = get_database_url()
-    connectable = engine_from_config(
-        configuration,
-        prefix="sqlalchemy.",
+    connectable = create_engine(
+        settings.sqlalchemy_url,
         poolclass=pool.NullPool,
     )
+
     with connectable.connect() as connection:
-        context.configure(connection=connection, target_metadata=target_metadata)
+        context.configure(
+            connection=connection,
+            target_metadata=target_metadata,
+        )
+
         with context.begin_transaction():
             context.run_migrations()
 

@@ -6,6 +6,8 @@ import os
 
 from dotenv import load_dotenv
 
+from urllib.parse import quote_plus
+
 
 # Корень проекта:
 # app/settings.py -> app/ -> корень проекта
@@ -74,11 +76,11 @@ class Settings:
 
     @property
     def sqlalchemy_url(self) -> str:
-        """
-        URL подключения для SQLAlchemy/Alembic, если понадобится использовать в коде.
-        """
+        user = quote_plus(self.db_user)
+        password = quote_plus(self.db_password)
+
         return (
-            f"postgresql://{self.db_user}:{self.db_password}"
+            f"postgresql+psycopg2://{user}:{password}"
             f"@{self.db_host}:{self.db_port}/{self.db_name}"
         )
 
