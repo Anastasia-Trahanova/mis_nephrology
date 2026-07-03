@@ -1,0 +1,1868 @@
+{#
+Назначение файла: JavaScript общей формы приёма: загрузка отделений, добавление строк/колонок анализов, лекарства, расчёт ACR и переход по Enter.
+Файл выделен при разделении большой формы приёма на структурные части.
+Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
+#}
+{% if appointment_form_mode == 'new_appointment' %}
+<script>
+    // Загрузка отделений при выборе врача
+    const doctorSelect = document.querySelector('select[name="doctor_id"]');
+    const locationSelect = document.getElementById('locationSelect');
+    
+    async function loadDoctorLocations(doctorId, selectedLocationId = '') {
+        if (doctorId) {
+            locationSelect.disabled = false;
+            locationSelect.innerHTML = '<option value="">Загрузка...</option>';
+
+            try {
+                const response = await fetch(`/api/doctor-locations/${doctorId}`);
+                const locations = await response.json();
+
+                if (locations.length === 0) {
+                    locationSelect.innerHTML = '<option value="">У этого врача нет отделений</option>';
+                } else {
+                    locationSelect.innerHTML = '<option value="">Выберите отделение</option>';
+                    locations.forEach(loc => {
+                        const selected = String(loc.id) === String(selectedLocationId) ? 'selected' : '';
+                        locationSelect.innerHTML += `<option value="${loc.id}" ${selected}>${loc.name} (${loc.branch_name})</option>`;
+                    });
+                }
+            } catch (error) {
+                locationSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+            }
+        } else {
+            locationSelect.innerHTML = '<option value="" selected>Сначала выберите врача</option>';
+        }
+        }
+
+    if (doctorSelect && locationSelect) {
+        doctorSelect.addEventListener('change', function() {
+            loadDoctorLocations(this.value);
+        });
+
+        if (doctorSelect.value) {
+            const selectedLocationId = document.getElementById('lastLocationId')?.value || '';
+            loadDoctorLocations(doctorSelect.value, selectedLocationId);
+        }
+    }
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.querySelector('form');
+    const locationSelect = document.getElementById('locationSelect');
+
+    if (!form || !locationSelect) {
+        return;
+    }
+
+    form.addEventListener('submit', function (event) {
+        // На всякий случай: disabled-поле браузер не проверяет,
+        // поэтому перед проверкой делаем его активным.
+        locationSelect.disabled = false;
+
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            form.reportValidity();
+
+            const firstInvalid = form.querySelector(':invalid');
+            if (firstInvalid) {
+                firstInvalid.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+                firstInvalid.focus();
+            }
+
+            return false;
+        }
+    });
+});
+</script>
+
+<script>
+function getTodayDateValue() {
+    const appointmentDate = document.querySelector('[name="appointment_date"]')?.value;
+    if (appointmentDate) return appointmentDate;
+
+    const today = new Date();
+    const month = String(today.getMonth() + 1).padStart(2, '0');
+    const day = String(today.getDate()).padStart(2, '0');
+
+    return `${today.getFullYear()}-${month}-${day}`;
+}
+
+function addDynamicColumn(config) {
+    const headerRow = document.getElementById(config.headerRowId);
+    if (!headerRow) return;
+
+    const currentNewColumns = headerRow.querySelectorAll('.new-analysis-date').length + 1;
+
+    const th = document.createElement('th');
+    th.className = 'text-center table-success';
+    th.style.minWidth = config.minWidth || '140px';
+
+    th.innerHTML = `
+        <div class="small fw-bold mb-1">${config.title} ${currentNewColumns}</div>
+        <input type="date"
+               name="${config.dateFieldName}"
+               class="form-control form-control-sm new-analysis-date"
+               value="${getTodayDateValue()}">
+    `;
+
+    headerRow.appendChild(th);
+
+    config.fields.forEach(field => {
+        const row = document.getElementById(field.rowId);
+        if (!row) return;
+
+        const td = document.createElement('td');
+        td.className = 'table-success';
+
+        if (field.type === 'textarea') {
+            td.innerHTML = `
+                <textarea name="${field.name}"
+                          class="form-control form-control-sm"
+                          rows="2"></textarea>
+            `;
+        } else {
+            td.innerHTML = `
+                <input type="text"
+                       name="${field.name}"
+                       class="form-control form-control-sm">
+            `;
+        }
+
+        row.appendChild(td);
+    });
+}
+
+function parseNumber(value) {
+    if (!value) return null;
+
+    const number = parseFloat(String(value).replace(',', '.'));
+
+    return Number.isFinite(number) ? number : null;
+}
+
+function calculateAge(birthDateValue, calculationDateValue) {
+    if (!birthDateValue || !calculationDateValue) return null;
+
+    const birthDate = new Date(birthDateValue);
+    const calculationDate = new Date(calculationDateValue);
+
+    let age = calculationDate.getFullYear() - birthDate.getFullYear();
+
+    const monthDiff = calculationDate.getMonth() - birthDate.getMonth();
+    const dayDiff = calculationDate.getDate() - birthDate.getDate();
+
+    if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+        age -= 1;
+    }
+
+    return age;
+}
+
+function calculateCkdEpi2021(creatinineUmol, age, genderValue) {
+    if (!creatinineUmol || !age || !genderValue) return null;
+
+    const scr = creatinineUmol / 88.4;
+
+    const isFemale =
+        genderValue === 'false' ||
+        genderValue === 'False' ||
+        genderValue === 'Женский' ||
+        genderValue === 'женский';
+
+    const kappa = isFemale ? 0.7 : 0.9;
+    const alpha = isFemale ? -0.241 : -0.302;
+    const sexFactor = isFemale ? 1.012 : 1.0;
+
+    const egfr =
+        142 *
+        Math.pow(Math.min(scr / kappa, 1), alpha) *
+        Math.pow(Math.max(scr / kappa, 1), -1.200) *
+        Math.pow(0.9938, age) *
+        sexFactor;
+
+    return Math.round(egfr * 100) / 100;
+}
+
+function calculateCockcroftGault(creatinineUmol, age, weightKg, genderValue) {
+    if (!creatinineUmol || !age || !weightKg || !genderValue) return null;
+
+    const scr = creatinineUmol / 88.4;
+
+    const isFemale =
+        genderValue === 'false' ||
+        genderValue === 'False' ||
+        genderValue === 'Женский' ||
+        genderValue === 'женский';
+
+    let crcl = ((140 - age) * weightKg) / (72 * scr);
+
+    if (isFemale) {
+        crcl *= 0.85;
+    }
+
+    return Math.round(crcl * 100) / 100;
+}
+
+function getCkdStage(egfr) {
+    if (egfr === null || egfr === undefined) return '—';
+
+    if (egfr >= 90) return 'С1';
+    if (egfr >= 60) return 'С2';
+    if (egfr >= 45) return 'С3a';
+    if (egfr >= 30) return 'С3b';
+    if (egfr >= 15) return 'С4';
+
+    return 'G5';
+}
+
+function formatDateForTable(dateValue) {
+    if (!dateValue) return 'Новый расчёт';
+
+    const parts = dateValue.split('-');
+
+    if (parts.length !== 3) return dateValue;
+
+    return `${parts[2]}.${parts[1]}.${parts[0]}`;
+}
+
+function clearNewMetricsColumns() {
+    document.querySelectorAll('.new-metrics-column').forEach(cell => cell.remove());
+}
+
+function getSortableDateFromCell(cell) {
+    if (!cell) return '9999-12-31';
+
+    const dataDate = cell.getAttribute('data-date');
+
+    if (dataDate) {
+        return dataDate;
+    }
+
+    const text = cell.textContent.trim();
+
+    // Формат dd.mm.yyyy -> yyyy-mm-dd
+    const match = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+
+    if (match) {
+        return `${match[3]}-${match[2]}-${match[1]}`;
+    }
+
+    return '9999-12-31';
+}
+
+function sortMetricsTableChronologically() {
+    const headerRow = document.getElementById('metricsHeaderRow');
+    const egfrRow = document.getElementById('egfrRow');
+    const cockcroftRow = document.getElementById('cockcroftRow');
+    const ckdStageRow = document.getElementById('ckdStageRow');
+
+    if (!headerRow || !egfrRow || !cockcroftRow || !ckdStageRow) {
+        return;
+    }
+
+    const headerCells = Array.from(headerRow.children).slice(1);
+    const egfrCells = Array.from(egfrRow.children).slice(1);
+    const cockcroftCells = Array.from(cockcroftRow.children).slice(1);
+    const stageCells = Array.from(ckdStageRow.children).slice(1);
+
+    const columns = headerCells.map((headerCell, index) => {
+        return {
+            date: getSortableDateFromCell(headerCell),
+            originalIndex: index,
+            headerCell: headerCell,
+            egfrCell: egfrCells[index],
+            cockcroftCell: cockcroftCells[index],
+            stageCell: stageCells[index]
+        };
+    });
+
+    columns.sort((a, b) => {
+        if (a.date === b.date) {
+            return a.originalIndex - b.originalIndex;
+        }
+
+        return a.date.localeCompare(b.date);
+    });
+
+    columns.forEach(column => {
+        headerRow.appendChild(column.headerCell);
+        egfrRow.appendChild(column.egfrCell);
+        cockcroftRow.appendChild(column.cockcroftCell);
+        ckdStageRow.appendChild(column.stageCell);
+    });
+}
+
+function appendMetricColumn(dateValue, egfr, cockcroft, stage) {
+    const headerRow = document.getElementById('metricsHeaderRow');
+    const egfrRow = document.getElementById('egfrRow');
+    const cockcroftRow = document.getElementById('cockcroftRow');
+    const ckdStageRow = document.getElementById('ckdStageRow');
+
+    if (!headerRow || !egfrRow || !cockcroftRow || !ckdStageRow) return;
+
+    const headerCell = document.createElement('th');
+    headerCell.className = 'text-center table-success new-metrics-column';
+    headerCell.setAttribute('data-date', dateValue || '');
+    headerCell.textContent = formatDateForTable(dateValue);
+    headerRow.appendChild(headerCell);
+
+    const egfrCell = document.createElement('td');
+    egfrCell.className = 'text-center table-success new-metrics-column';
+    egfrCell.textContent = egfr !== null ? egfr : '—';
+    egfrRow.appendChild(egfrCell);
+
+    const cockcroftCell = document.createElement('td');
+    cockcroftCell.className = 'text-center table-success new-metrics-column';
+    cockcroftCell.textContent = cockcroft !== null ? cockcroft : '—';
+    cockcroftRow.appendChild(cockcroftCell);
+
+    const stageCell = document.createElement('td');
+    stageCell.className = 'text-center table-success new-metrics-column';
+    stageCell.textContent = stage || '—';
+    ckdStageRow.appendChild(stageCell);
+}
+
+function updateMetricsTable() {
+    clearNewMetricsColumns();
+
+    const birthDate = document.querySelector('[name="birth_date"]')?.value;
+    const gender = document.querySelector('[name="gender"]')?.value;
+    const weight = parseNumber(document.querySelector('[name="weight"]')?.value);
+    const appointmentDate = document.querySelector('[name="appointment_date"]')?.value;
+
+    const creatinineInputs = Array.from(document.querySelectorAll('[name="creatinine"]'));
+    const biochemistryDateInputs = Array.from(document.querySelectorAll('[name="biochemistry_investigation_date"]'));
+
+    let addedAnyColumn = false;
+
+    creatinineInputs.forEach((input, index) => {
+        const creatinine = parseNumber(input.value);
+
+        if (creatinine === null) {
+            return;
+        }
+
+        const dateValue = biochemistryDateInputs[index]?.value || appointmentDate;
+        const age = calculateAge(birthDate, dateValue);
+
+        const egfr = calculateCkdEpi2021(creatinine, age, gender);
+        const cockcroft = calculateCockcroftGault(creatinine, age, weight, gender);
+        const stage = getCkdStage(egfr);
+
+        appendMetricColumn(dateValue, egfr, cockcroft, stage);
+        addedAnyColumn = true;
+    });
+
+    sortMetricsTableChronologically();
+
+    if (!addedAnyColumn) {
+        alert('Добавьте биохимический анализ и заполните креатинин.');
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function () {
+    const addCbcButton = document.getElementById('addCbcColumnBtn');
+    const addBiochemistryButton = document.getElementById('addBiochemistryColumnBtn');
+    const addUrinalysisButton = document.getElementById('addUrinalysisColumnBtn');
+    const addUltrasoundButton = document.getElementById('addUltrasoundColumnBtn');
+    const updateMetricsButton = document.getElementById('updateMetricsTableBtn');
+
+    if (addCbcButton) {
+        addCbcButton.addEventListener('click', function () {
+            addDynamicColumn({
+                headerRowId: 'cbcHeaderRow',
+                title: 'Новый анализ',
+                dateFieldName: 'cbc_investigation_date',
+                fields: [
+                    { rowId: 'cbc_hemoglobin_row', name: 'hemoglobin' },
+                    { rowId: 'cbc_erythrocytes_row', name: 'erythrocytes' },
+                    { rowId: 'cbc_leukocytes_row', name: 'leukocytes' },
+                    { rowId: 'cbc_platelets_row', name: 'platelets' },
+                    { rowId: 'cbc_esr_row', name: 'esr' },
+                    { rowId: 'cbc_mcv_row', name: 'mcv' },
+                    { rowId: 'cbc_hematocrit_row', name: 'hematocrit' }
+                ]
+            });
+        });
+    }
+
+    if (addBiochemistryButton) {
+        addBiochemistryButton.addEventListener('click', function () {
+            addDynamicColumn({
+                headerRowId: 'biochemistryHeaderRow',
+                title: 'Новый анализ',
+                dateFieldName: 'biochemistry_investigation_date',
+                fields: [
+                    { rowId: 'bio_creatinine_row', name: 'creatinine' },
+                    { rowId: 'bio_urea_row', name: 'urea' },
+                    { rowId: 'bio_uric_acid_row', name: 'uric_acid' },
+                    { rowId: 'bio_glucose_row', name: 'glucose' },
+                    { rowId: 'bio_total_protein_row', name: 'total_protein' },
+                    { rowId: 'bio_albumin_row', name: 'albumin' },
+                    { rowId: 'bio_potassium_row', name: 'potassium' },
+                    { rowId: 'bio_calcium_row', name: 'calcium' },
+                    { rowId: 'bio_phosphorus_row', name: 'phosphorus' },
+                    { rowId: 'bio_ferritin_row', name: 'ferritin' },
+                    { rowId: 'bio_ptg_row', name: 'ptg' }
+                ]
+            });
+        });
+    }
+
+    if (addUrinalysisButton) {
+        addUrinalysisButton.addEventListener('click', function () {
+            addDynamicColumn({
+                headerRowId: 'urinalysisHeaderRow',
+                title: 'Новый анализ',
+                dateFieldName: 'urinalysis_investigation_date',
+                fields: [
+                    { rowId: 'uri_specific_gravity_row', name: 'specific_gravity' },
+                    { rowId: 'uri_protein_row', name: 'urine_protein' },
+                    { rowId: 'uri_leukocytes_row', name: 'urine_leukocytes' },
+                    { rowId: 'uri_erythrocytes_row', name: 'urine_erythrocytes' },
+                    { rowId: 'uri_bacteria_row', name: 'bacteria' }
+                ]
+            });
+        });
+    }
+
+    if (addUltrasoundButton) {
+        addUltrasoundButton.addEventListener('click', function () {
+            addDynamicColumn({
+                headerRowId: 'ultrasoundHeaderRow',
+                title: 'Новое УЗИ',
+                dateFieldName: 'ultrasound_investigation_date',
+                minWidth: '170px',
+                fields: [
+                    { rowId: 'us_left_kidney_size_row', name: 'left_kidney_size' },
+                    { rowId: 'us_right_kidney_size_row', name: 'right_kidney_size' },
+                    { rowId: 'us_left_parenchyma_row', name: 'left_parenchyma' },
+                    { rowId: 'us_right_parenchyma_row', name: 'right_parenchyma' },
+                    { rowId: 'us_description_row', name: 'ultrasound_desc', type: 'textarea' }
+                ]
+            });
+        });
+    }
+
+    if (updateMetricsButton) {
+        updateMetricsButton.addEventListener('click', updateMetricsTable);
+    }
+});
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const addAlbuminuriaButton = document.getElementById('addAlbuminuriaColumnBtn');
+    const headerRow = document.getElementById('albuminuriaHeaderRow');
+
+    if (!addAlbuminuriaButton || !headerRow) {
+        return;
+    }
+
+    function parseAlbuminuriaNumber(value) {
+        if (!value) return null;
+
+        const normalized = String(value).replace(',', '.').replace(/\s/g, '');
+        const number = Number(normalized);
+
+        return Number.isFinite(number) ? number : null;
+    }
+
+    function albuminToMgL(value, unit) {
+        const albumin = parseAlbuminuriaNumber(value);
+
+        if (albumin === null) return null;
+
+        if (unit === 'mg_l') return albumin;
+        if (unit === 'g_l') return albumin * 1000;
+
+        return null;
+    }
+
+    function creatinineToMmolL(value, unit) {
+        const creatinine = parseAlbuminuriaNumber(value);
+
+        if (creatinine === null || creatinine <= 0) return null;
+
+        if (unit === 'mmol_l') return creatinine;
+        if (unit === 'umol_l') return creatinine / 1000;
+
+        return null;
+    }
+
+    function getAlbuminuriaCategory(acr) {
+        if (acr === null) return '';
+        if (acr < 3) return 'A1';
+        if (acr <= 30) return 'A2';
+        return 'A3';
+    }
+
+    function addCell(rowId, html) {
+        const row = document.getElementById(rowId);
+        if (!row) return;
+
+        const td = document.createElement('td');
+        td.className = 'table-success';
+        td.innerHTML = html;
+        row.appendChild(td);
+    }
+
+    function updateAlbuminuriaColumn(columnId) {
+        const albuminInput = document.querySelector(`[data-albuminuria-column="${columnId}"][data-field="albumin"]`);
+        const albuminUnitSelect = document.querySelector(`[data-albuminuria-column="${columnId}"][data-field="albumin_unit"]`);
+        const creatinineInput = document.querySelector(`[data-albuminuria-column="${columnId}"][data-field="creatinine"]`);
+        const creatinineUnitSelect = document.querySelector(`[data-albuminuria-column="${columnId}"][data-field="creatinine_unit"]`);
+        const acrInput = document.querySelector(`[data-albuminuria-column="${columnId}"][data-field="acr"]`);
+        const categoryInput = document.querySelector(`[data-albuminuria-column="${columnId}"][data-field="category"]`);
+
+        const albuminMgL = albuminToMgL(albuminInput.value, albuminUnitSelect.value);
+        const creatinineMmolL = creatinineToMmolL(creatinineInput.value, creatinineUnitSelect.value);
+
+        if (albuminMgL === null || creatinineMmolL === null) {
+            acrInput.value = '';
+            categoryInput.value = '';
+            return;
+        }
+
+        const acr = albuminMgL / creatinineMmolL;
+        const roundedAcr = Math.round(acr * 100) / 100;
+
+        acrInput.value = roundedAcr.toFixed(2);
+        categoryInput.value = getAlbuminuriaCategory(roundedAcr);
+    }
+
+    function addAlbuminuriaColumn() {
+    const columnId = `albuminuria_${Date.now()}`;
+    const columnNumber = headerRow.querySelectorAll('.new-albuminuria-date').length + 1;
+
+    const th = document.createElement('th');
+    th.className = 'text-center table-success';
+    th.style.minWidth = '220px';
+
+    th.innerHTML = `
+        <div class="small fw-bold mb-1">Новая альбуминурия ${columnNumber}</div>
+        <input type="date"
+               name="albuminuria_investigation_date"
+               class="form-control form-control-sm new-albuminuria-date"
+               value="${getTodayDateValue()}">
+    `;
+
+    headerRow.appendChild(th);
+
+    addCell('albuminuria_albumin_row', `
+        <div class="d-flex gap-2 align-items-center">
+            <input type="text"
+                   name="urine_albumin"
+                   class="form-control form-control-sm"
+                   data-albuminuria-column="${columnId}"
+                   data-field="albumin"
+                   >
+            <select name="urine_albumin_unit"
+                    class="form-select form-select-sm"
+                    style="min-width: 90px; max-width: 100px;"
+                    data-albuminuria-column="${columnId}"
+                    data-field="albumin_unit">
+                <option value="mg_l" selected>мг/л</option>
+                <option value="g_l">г/л</option>
+            </select>
+        </div>
+    `);
+
+    addCell('albuminuria_creatinine_row', `
+        <div class="d-flex gap-2 align-items-center">
+            <input type="text"
+                   name="urine_creatinine"
+                   class="form-control form-control-sm"
+                   data-albuminuria-column="${columnId}"
+                   data-field="creatinine"
+                   >
+            <select name="urine_creatinine_unit"
+                    class="form-select form-select-sm"
+                    style="min-width: 110px; max-width: 120px;"
+                    data-albuminuria-column="${columnId}"
+                    data-field="creatinine_unit">
+                <option value="mmol_l" selected>ммоль/л</option>
+                <option value="umol_l">мкмоль/л</option>
+            </select>
+        </div>
+    `);
+
+    addCell('albuminuria_acr_row', `
+        <input type="text"
+               class="form-control form-control-sm"
+               data-albuminuria-column="${columnId}"
+               data-field="acr"
+               readonly>
+    `);
+
+    addCell('albuminuria_category_row', `
+        <input type="text"
+               class="form-control form-control-sm albuminuria-category"
+               data-albuminuria-column="${columnId}"
+               data-field="category"
+               readonly>
+    `);
+
+    document
+        .querySelectorAll(`[data-albuminuria-column="${columnId}"]`)
+        .forEach(function (field) {
+            field.addEventListener('input', function () {
+                updateAlbuminuriaColumn(columnId);
+            });
+
+            field.addEventListener('change', function () {
+                updateAlbuminuriaColumn(columnId);
+            });
+        });
+}
+
+    addAlbuminuriaButton.addEventListener('click', addAlbuminuriaColumn);
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const excludedFieldNames = new Set([
+        'birth_date',
+        'appointment_date',
+        'appointment_time',
+        'cbc_investigation_date',
+        'biochemistry_investigation_date',
+        'urinalysis_investigation_date',
+        'ultrasound_investigation_date'
+    ]);
+
+    function isDynamicAnalysisField(field) {
+        const cell = field.closest('td');
+        const header = field.closest('th');
+
+        if (cell && cell.classList.contains('table-success')) {
+            return true;
+        }
+
+        if (header && header.classList.contains('table-success')) {
+            return true;
+        }
+
+        return false;
+    }
+
+    function fieldHasValue(field) {
+        const type = (field.getAttribute('type') || '').toLowerCase();
+
+        if (type === 'checkbox' || type === 'radio') {
+            return field.checked;
+        }
+
+        if (field.tagName.toLowerCase() === 'select') {
+            return field.value !== '' && field.value !== null;
+        }
+
+        return field.value && field.value.trim() !== '';
+    }
+
+    function shouldHighlightField(field) {
+        const name = field.getAttribute('name');
+
+        if (!name) {
+            return false;
+        }
+
+        if (excludedFieldNames.has(name)) {
+            return false;
+        }
+
+        if (isDynamicAnalysisField(field)) {
+            return false;
+        }
+
+        if (!fieldHasValue(field)) {
+            return false;
+        }
+
+        return true;
+    }
+
+    function removeHighlight(field) {
+        field.classList.remove('prefilled-field');
+    }
+
+    const fields = document.querySelectorAll('input, textarea, select');
+
+    fields.forEach(function (field) {
+        if (shouldHighlightField(field)) {
+            field.classList.add('prefilled-field');
+
+            const type = (field.getAttribute('type') || '').toLowerCase();
+
+            if (type === 'checkbox' || type === 'radio' || field.tagName.toLowerCase() === 'select') {
+                field.addEventListener('change', function () {
+                    removeHighlight(field);
+                }, { once: true });
+            } else {
+                field.addEventListener('input', function () {
+                    removeHighlight(field);
+                }, { once: true });
+
+                field.addEventListener('change', function () {
+                    removeHighlight(field);
+                }, { once: true });
+            }
+        }
+    });
+});
+</script>
+
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const medicationsContainer = document.getElementById('medicationsContainer');
+    const addMedicationBtn = document.getElementById('addMedicationBtn');
+
+    if (!medicationsContainer || !addMedicationBtn) {
+        return;
+    }
+
+    function createMedicationRow() {
+        const row = document.createElement('div');
+        row.className = 'row mb-2 medication-row';
+
+        row.innerHTML = `
+            <div class="col-md-4">
+                <input type="text" name="medication" class="form-control" placeholder="Название препарата">
+            </div>
+            <div class="col-md-3">
+                <input type="text" name="dosage" class="form-control" placeholder="Дозировка">
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="schedule" class="form-control" placeholder="Режим приёма">
+            </div>
+            <div class="col-md-1 d-flex align-items-center">
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger remove-medication-btn"
+                        title="Удалить препарат"
+                        style="border: none; background: none; color: #dc3545;">
+                    ✖
+                </button>
+            </div>
+        `;
+
+        return row;
+    }
+
+    addMedicationBtn.addEventListener('click', function () {
+        medicationsContainer.appendChild(createMedicationRow());
+    });
+
+    medicationsContainer.addEventListener('click', function (event) {
+        const removeButton = event.target.closest('.remove-medication-btn');
+
+        if (!removeButton) {
+            return;
+        }
+
+        const row = removeButton.closest('.medication-row');
+
+        if (row) {
+            row.remove();
+        }
+    });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function normalizeCategory(value) {
+        return String(value || '')
+            .trim()
+            .replace(/\s+/g, '');
+    }
+
+    function getLastValidCategory(selectors, allowedValues) {
+        let lastValue = '';
+
+        selectors.forEach(function (selector) {
+            document.querySelectorAll(selector).forEach(function (element) {
+                const rawValue = element.value !== undefined
+                    ? element.value
+                    : element.textContent;
+
+                const value = normalizeCategory(rawValue);
+
+                if (allowedValues.includes(value)) {
+                    lastValue = value;
+                }
+            });
+        });
+
+        return lastValue;
+    }
+
+    function formatDateRu(dateValue) {
+        if (!dateValue) {
+            return '';
+        }
+
+        const parts = dateValue.split('-');
+
+        if (parts.length !== 3) {
+            return dateValue;
+        }
+
+        return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    }
+
+    function getCkdPrognosis(gfrCategory, albuminuriaCategory) {
+        const matrix = {
+            С1: {
+                A1: ['low', 'низкий'],
+                A2: ['moderate', 'умеренно повышенный'],
+                A3: ['high', 'высокий']
+            },
+            С2: {
+                A1: ['low', 'низкий'],
+                A2: ['moderate', 'умеренно повышенный'],
+                A3: ['high', 'высокий']
+            },
+            С3a: {
+                A1: ['moderate', 'умеренно повышенный'],
+                A2: ['high', 'высокий'],
+                A3: ['very_high', 'очень высокий']
+            },
+            С3b: {
+                A1: ['high', 'высокий'],
+                A2: ['very_high', 'очень высокий'],
+                A3: ['very_high', 'очень высокий']
+            },
+            С4: {
+                A1: ['very_high', 'очень высокий'],
+                A2: ['very_high', 'очень высокий'],
+                A3: ['very_high', 'очень высокий']
+            },
+            С5: {
+                A1: ['very_high', 'очень высокий'],
+                A2: ['very_high', 'очень высокий'],
+                A3: ['very_high', 'очень высокий']
+            }
+        };
+
+        if (!gfrCategory || !albuminuriaCategory) {
+            return {
+                level: 'insufficient',
+                text: 'недостаточно данных',
+                combined: ''
+            };
+        }
+
+        const result = matrix[gfrCategory]?.[albuminuriaCategory];
+
+        if (!result) {
+            return {
+                level: 'insufficient',
+                text: 'недостаточно данных',
+                combined: ''
+            };
+        }
+
+        return {
+            level: result[0],
+            text: result[1],
+            combined: `${gfrCategory}${albuminuriaCategory}`
+        };
+    }
+
+    function setRiskClass(block, level) {
+        block.classList.remove(
+            'alert-secondary',
+            'alert-success',
+            'alert-warning',
+            'alert-danger',
+            'ckd-risk-high'
+        );
+
+        if (level === 'low') {
+            block.classList.add('alert-success');
+        } else if (level === 'moderate') {
+            block.classList.add('alert-warning');
+        } else if (level === 'high') {
+            block.classList.add('ckd-risk-high');
+        } else if (level === 'very_high') {
+            block.classList.add('alert-danger');
+        } else {
+            block.classList.add('alert-secondary');
+        }
+
+        block.dataset.riskLevel = level;
+    }
+
+    function setBadgeClass(badge, level) {
+        if (!badge) {
+            return;
+        }
+
+        badge.className = 'ms-2 badge';
+
+        if (level === 'low') {
+            badge.classList.add('bg-success');
+        } else if (level === 'moderate') {
+            badge.classList.add('bg-warning', 'text-dark');
+        } else if (level === 'high') {
+            badge.classList.add('bg-warning', 'text-dark');
+        } else if (level === 'very_high') {
+            badge.classList.add('bg-danger');
+        } else {
+            badge.classList.add('bg-light', 'text-dark');
+        }
+    }
+
+    function updateCkdPrognosisPreview() {
+        const block = document.getElementById('ckdPrognosisPreview');
+        const text = document.getElementById('ckdPrognosisText');
+        const badge = document.getElementById('ckdCombinedCategory');
+
+        if (!block || !text) {
+            return;
+        }
+
+        const appointmentDate =
+            document.querySelector('[name="appointment_date"]')?.value ||
+            new Date().toISOString().slice(0, 10);
+
+        const gfrCategory = getLastValidCategory([
+            '.biochemistry-stage',
+            '.ckd-stage-preview',
+            '#ckdStageRow td:not(:first-child)',
+            '[name="ckd_stage"]',
+            '[data-field="ckd_stage"]'
+        ], ['G1', 'G2', 'G3a', 'G3b', 'G4', 'G5']);
+
+        const albuminuriaCategory = getLastValidCategory([
+            '.albuminuria-category',
+            '#albuminuria_category_row td:not(:first-child)',
+            '[name="albuminuria_category"]',
+            '[data-albuminuria-column][data-field="category"]',
+            '[data-field="category"]'
+        ], ['A1', 'A2', 'A3']);
+
+        
+        const ckdPrognosisBlock = document.getElementById('ckdPrognosisBlock');
+        const ckdPrognosisText = document.getElementById('ckdPrognosisText');
+
+        if (!gfrCategory || !albuminuriaCategory) {
+            if (ckdPrognosisBlock) {
+                ckdPrognosisBlock.classList.add('d-none');
+            }
+
+            if (ckdPrognosisText) {
+                ckdPrognosisText.textContent = '';
+            }
+
+            return;
+        }
+
+        text.textContent = `на ${formatDateRu(appointmentDate)}: ${prognosis.text}`;
+
+        if (ckdPrognosisBlock) {
+            ckdPrognosisBlock.classList.remove('d-none');
+        }
+
+        if (ckdPrognosisText) {
+            ckdPrognosisText.textContent = `${combinedCategory}, ${prognosisText}`;
+        }
+
+        block.title = '';
+    }
+
+    function delayedUpdateCkdPrognosisPreview() {
+        setTimeout(updateCkdPrognosisPreview, 0);
+    }
+
+    const style = document.createElement('style');
+    style.textContent = `
+        .ckd-risk-high {
+            background-color: #fd7e14;
+            border-color: #fd7e14;
+            color: #000;
+        }
+    `;
+    document.head.appendChild(style);
+
+    document.addEventListener('input', delayedUpdateCkdPrognosisPreview);
+    document.addEventListener('change', delayedUpdateCkdPrognosisPreview);
+    document.addEventListener('click', delayedUpdateCkdPrognosisPreview);
+
+    delayedUpdateCkdPrognosisPreview();
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function isVisible(element) {
+        return !!(
+            element.offsetWidth ||
+            element.offsetHeight ||
+            element.getClientRects().length
+        );
+    }
+
+    function getFocusableFields(form) {
+        return Array.from(
+            form.querySelectorAll('input, select')
+        ).filter(function (field) {
+            if (field.type === 'hidden') return false;
+            if (field.type === 'button') return false;
+            if (field.type === 'submit') return false;
+            if (field.type === 'reset') return false;
+            if (field.disabled) return false;
+            if (field.readOnly) return false;
+            if (!isVisible(field)) return false;
+
+            return true;
+        });
+    }
+
+    document.querySelectorAll('form').forEach(function (form) {
+        form.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter') {
+                return;
+            }
+
+            const currentField = event.target;
+
+            if (!currentField.matches('input, select')) {
+                return;
+            }
+
+            if (currentField.tagName.toLowerCase() === 'textarea') {
+                return;
+            }
+
+            event.preventDefault();
+
+            const fields = getFocusableFields(form);
+            const currentIndex = fields.indexOf(currentField);
+
+            if (currentIndex === -1) {
+                return;
+            }
+
+            const nextField = fields[currentIndex + 1];
+
+            if (nextField) {
+                nextField.focus();
+
+                if (nextField.tagName.toLowerCase() === 'input') {
+                    nextField.select();
+                }
+            }
+        });
+    });
+});
+</script>
+{% else %}
+<script>
+    // Загрузка отделений при выборе врача
+    const doctorSelect = document.querySelector('select[name="doctor_id"]');
+    const locationSelect = document.getElementById('locationSelect');
+    
+    if (doctorSelect && locationSelect) {
+        doctorSelect.addEventListener('change', async function() {
+            const doctorId = this.value;
+            
+            if (doctorId) {
+                locationSelect.disabled = false;
+                locationSelect.innerHTML = '<option value="">Загрузка...</option>';
+                
+                try {
+                    const response = await fetch(`/api/doctor-locations/${doctorId}`);
+                    const locations = await response.json();
+                    
+                    if (locations.length === 0) {
+                        locationSelect.innerHTML = '<option value="">У этого врача нет отделений</option>';
+                    } else {
+                        locationSelect.innerHTML = '<option value="">Выберите отделение</option>';
+                        locations.forEach(loc => {
+                            locationSelect.innerHTML += `<option value="${loc.id}">${loc.name} (${loc.branch_name})</option>`;
+                        });
+                    }
+                } catch (error) {
+                    locationSelect.innerHTML = '<option value="">Ошибка загрузки</option>';
+                }
+            } else {
+                locationSelect.disabled = false;
+                locationSelect.innerHTML = '<option value="" selected>Сначала выберите врача</option>';
+            }
+        });
+    }
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const form = document.querySelector('form');
+    const locationSelect = document.getElementById('locationSelect');
+
+    if (!form || !locationSelect) {
+        return;
+    }
+
+    form.addEventListener('submit', function (event) {
+        // На всякий случай: disabled-поле браузер не проверяет,
+        // поэтому перед проверкой делаем его активным.
+        locationSelect.disabled = false;
+
+        if (!form.checkValidity()) {
+            event.preventDefault();
+            event.stopPropagation();
+
+            form.reportValidity();
+
+            const firstInvalid = form.querySelector(':invalid');
+            if (firstInvalid) {
+                firstInvalid.scrollIntoView({
+                    behavior: 'smooth',
+                    block: 'center'
+                });
+                firstInvalid.focus();
+            }
+
+            return false;
+        }
+    });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function parseMetricNumber(value) {
+        if (!value) {
+            return null;
+        }
+
+        const normalized = String(value).replace(',', '.').replace(/\s/g, '');
+        const number = Number(normalized);
+
+        return Number.isFinite(number) ? number : null;
+    }
+
+    function calculateAgeForMetrics(birthDateValue, analysisDateValue) {
+        if (!birthDateValue || !analysisDateValue) {
+            return null;
+        }
+
+        const birthDate = new Date(birthDateValue);
+        const analysisDate = new Date(analysisDateValue);
+
+        if (Number.isNaN(birthDate.getTime()) || Number.isNaN(analysisDate.getTime())) {
+            return null;
+        }
+
+        let age = analysisDate.getFullYear() - birthDate.getFullYear();
+
+        const monthDiff = analysisDate.getMonth() - birthDate.getMonth();
+        const dayDiff = analysisDate.getDate() - birthDate.getDate();
+
+        if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+            age -= 1;
+        }
+
+        return age;
+    }
+
+    function calculateCkdEpi2021(creatinineUmolL, age, genderValue) {
+        if (!creatinineUmolL || !age || !genderValue) {
+            return null;
+        }
+
+        const creatinineMgDl = creatinineUmolL / 88.4;
+        const isMale = String(genderValue).toLowerCase() === 'true';
+
+        const kappa = isMale ? 0.9 : 0.7;
+        const alpha = isMale ? -0.302 : -0.241;
+        const sexMultiplier = isMale ? 1 : 1.012;
+
+        const ratio = creatinineMgDl / kappa;
+
+        const egfr =
+            142 *
+            Math.pow(Math.min(ratio, 1), alpha) *
+            Math.pow(Math.max(ratio, 1), -1.200) *
+            Math.pow(0.9938, age) *
+            sexMultiplier;
+
+        return Math.round(egfr * 10) / 10;
+    }
+
+    function calculateCockcroftGault(creatinineUmolL, age, weightKg, genderValue) {
+        if (!creatinineUmolL || !age || !weightKg || !genderValue) {
+            return null;
+        }
+
+        const isMale = String(genderValue).toLowerCase() === 'true';
+
+        let crcl = ((140 - age) * weightKg) / creatinineUmolL;
+
+        if (isMale) {
+            crcl *= 1.23;
+        } else {
+            crcl *= 1.04;
+        }
+
+        return Math.round(crcl * 10) / 10;
+    }
+
+    function getCkdStage(egfr) {
+        if (egfr === null || egfr === undefined || egfr === '') {
+            return '';
+        }
+
+        if (egfr >= 90) {
+            return 'С1';
+        }
+
+        if (egfr >= 60) {
+            return 'С2';
+        }
+
+        if (egfr >= 45) {
+            return 'С3a';
+        }
+
+        if (egfr >= 30) {
+            return 'С3b';
+        }
+
+        if (egfr >= 15) {
+            return 'С4';
+        }
+
+        return 'С5';
+    }
+
+    function updateBiochemistryMetrics(card) {
+        if (!card) {
+            return;
+        }
+
+        const birthDate = document.querySelector('[name="birth_date"]')?.value;
+        const gender = document.querySelector('[name="gender"]')?.value;
+        const weight = parseMetricNumber(document.querySelector('[name="weight"]')?.value);
+
+        const creatinineInput = card.querySelector('[name="creatinine"]');
+        const dateInput = card.querySelector('[name="biochemistry_investigation_date"]');
+        const appointmentDate = document.querySelector('[name="appointment_date"]')?.value;
+
+        const egfrInput = card.querySelector('.biochemistry-egfr');
+        const cockcroftInput = card.querySelector('.biochemistry-cockcroft');
+        const stageInput = card.querySelector('.biochemistry-stage');
+
+        if (!creatinineInput || !egfrInput || !cockcroftInput || !stageInput) {
+            return;
+        }
+
+        const creatinine = parseMetricNumber(creatinineInput.value);
+        const analysisDate = dateInput?.value || appointmentDate;
+        const age = calculateAgeForMetrics(birthDate, analysisDate);
+
+        const egfr = calculateCkdEpi2021(creatinine, age, gender);
+        const cockcroft = calculateCockcroftGault(creatinine, age, weight, gender);
+        const stage = getCkdStage(egfr);
+
+        egfrInput.value = egfr !== null ? egfr + ' мл/мин/1,73 м²' : '';
+        cockcroftInput.value = cockcroft !== null ? cockcroft + ' мл/мин' : '';
+        stageInput.value = stage;
+    }
+
+    function updateAllBiochemistryMetrics() {
+        document.querySelectorAll('#biochemistryContainer .lab-analysis-card').forEach(function (card) {
+            updateBiochemistryMetrics(card);
+        });
+    }
+
+    document.addEventListener('input', function (event) {
+        if (
+            event.target.matches('[name="creatinine"]') ||
+            event.target.matches('[name="weight"]') ||
+            event.target.matches('[name="birth_date"]')
+        ) {
+            const card = event.target.closest('#biochemistryContainer .lab-analysis-card');
+
+            if (card) {
+                updateBiochemistryMetrics(card);
+            } else {
+                updateAllBiochemistryMetrics();
+            }
+        }
+    });
+
+    document.addEventListener('change', function (event) {
+        if (
+            event.target.matches('[name="creatinine"]') ||
+            event.target.matches('[name="biochemistry_investigation_date"]') ||
+            event.target.matches('[name="weight"]') ||
+            event.target.matches('[name="birth_date"]') ||
+            event.target.matches('[name="gender"]')
+        ) {
+            const card = event.target.closest('#biochemistryContainer .lab-analysis-card');
+
+            if (card) {
+                updateBiochemistryMetrics(card);
+            } else {
+                updateAllBiochemistryMetrics();
+            }
+        }
+    });
+
+    updateAllBiochemistryMetrics();
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function clearClonedFields(card) {
+        card.querySelectorAll('input').forEach(function (input) {
+            if (input.type === 'date') {
+                input.value = '{{ now_date }}';
+            } else if (input.readOnly) {
+                input.value = '';
+            } else {
+                input.value = '';
+            }
+        });
+
+        card.querySelectorAll('select').forEach(function (select) {
+            select.selectedIndex = 0;
+        });
+
+        const removeButton = card.querySelector('.remove-lab-card');
+        if (removeButton) {
+            removeButton.style.display = 'inline-block';
+        }
+    }
+
+    function setupDynamicLabContainer(containerId) {
+        const container = document.getElementById(containerId);
+        const button = document.querySelector(`[data-add-lab="${containerId}"]`);
+
+        if (!container || !button) {
+            return;
+        }
+
+        button.addEventListener('click', function () {
+            const firstCard = container.querySelector('.lab-analysis-card');
+
+            if (!firstCard) {
+                return;
+            }
+
+            const clone = firstCard.cloneNode(true);
+            clearClonedFields(clone);
+            container.appendChild(clone);
+            updateAlbuminuriaBlock(clone);
+        });
+
+        container.addEventListener('click', function (event) {
+            const removeButton = event.target.closest('.remove-lab-card');
+
+            if (!removeButton) {
+                return;
+            }
+
+            const card = removeButton.closest('.lab-analysis-card');
+            const cards = container.querySelectorAll('.lab-analysis-card');
+
+            if (card && cards.length > 1) {
+                card.remove();
+            }
+        });
+    }
+
+    function parseNumber(value) {
+        if (!value) {
+            return null;
+        }
+
+        const normalized = String(value).replace(',', '.').replace(/\s/g, '');
+        const number = Number(normalized);
+
+        return Number.isFinite(number) ? number : null;
+    }
+
+    function albuminToMgL(value, unit) {
+        const albumin = parseNumber(value);
+
+        if (albumin === null) {
+            return null;
+        }
+
+        if (unit === 'mg_l') {
+            return albumin;
+        }
+
+        if (unit === 'g_l') {
+            return albumin * 1000;
+        }
+
+        return null;
+    }
+
+    function creatinineToMmolL(value, unit) {
+        const creatinine = parseNumber(value);
+
+        if (creatinine === null || creatinine <= 0) {
+            return null;
+        }
+
+        if (unit === 'mmol_l') {
+            return creatinine;
+        }
+
+        if (unit === 'umol_l') {
+            return creatinine / 1000;
+        }
+
+        return null;
+    }
+
+    function getAlbuminuriaCategory(acr) {
+        if (acr === null) {
+            return '';
+        }
+
+        if (acr < 3) {
+            return 'A1';
+        }
+
+        if (acr <= 30) {
+            return 'A2';
+        }
+
+        return 'A3';
+    }
+
+    function updateAlbuminuriaBlock(block) {
+        if (!block || !block.classList.contains('albuminuria-block')) {
+            return;
+        }
+
+        const albuminInput = block.querySelector('.albuminuria-albumin');
+        const albuminUnitSelect = block.querySelector('.albuminuria-albumin-unit');
+        const creatinineInput = block.querySelector('.albuminuria-creatinine');
+        const creatinineUnitSelect = block.querySelector('.albuminuria-creatinine-unit');
+        const acrInput = block.querySelector('.albuminuria-acr');
+        const categoryInput = block.querySelector('.albuminuria-category');
+
+        if (!albuminInput || !albuminUnitSelect || !creatinineInput || !creatinineUnitSelect || !acrInput || !categoryInput) {
+            return;
+        }
+
+        const albuminMgL = albuminToMgL(albuminInput.value, albuminUnitSelect.value);
+        const creatinineMmolL = creatinineToMmolL(creatinineInput.value, creatinineUnitSelect.value);
+
+        if (albuminMgL === null || creatinineMmolL === null) {
+            acrInput.value = '';
+            categoryInput.value = '';
+            return;
+        }
+
+        const acr = albuminMgL / creatinineMmolL;
+        const roundedAcr = Math.round(acr * 100) / 100;
+
+        acrInput.value = roundedAcr.toFixed(2);
+        categoryInput.value = getAlbuminuriaCategory(roundedAcr);
+    }
+
+    document.addEventListener('input', function (event) {
+        const block = event.target.closest('.albuminuria-block');
+
+        if (block) {
+            updateAlbuminuriaBlock(block);
+        }
+    });
+
+    document.addEventListener('change', function (event) {
+        const block = event.target.closest('.albuminuria-block');
+
+        if (block) {
+            updateAlbuminuriaBlock(block);
+        }
+    });
+
+    setupDynamicLabContainer('cbcContainer');
+    setupDynamicLabContainer('biochemistryContainer');
+    setupDynamicLabContainer('urinalysisContainer');
+    setupDynamicLabContainer('albuminuriaContainer');
+    setupDynamicLabContainer('ultrasoundContainer');
+
+    document.querySelectorAll('.albuminuria-block').forEach(updateAlbuminuriaBlock);
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    const medicationsContainer = document.getElementById('medicationsContainer');
+    const addMedicationBtn = document.getElementById('addMedicationBtn');
+
+    if (!medicationsContainer || !addMedicationBtn) {
+        return;
+    }
+
+    function createMedicationRow() {
+        const row = document.createElement('div');
+        row.className = 'row mb-2 medication-row';
+
+        row.innerHTML = `
+            <div class="col-md-4">
+                <input type="text" name="medication" class="form-control" placeholder="Название препарата">
+            </div>
+            <div class="col-md-3">
+                <input type="text" name="dosage" class="form-control" placeholder="Дозировка">
+            </div>
+            <div class="col-md-4">
+                <input type="text" name="schedule" class="form-control" placeholder="Режим приёма">
+            </div>
+            <div class="col-md-1 d-flex align-items-center">
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger remove-medication-btn"
+                        title="Удалить препарат"
+                        style="border: none; background: none; color: #dc3545;">
+                    ✖
+                </button>
+            </div>
+        `;
+
+        return row;
+    }
+
+    addMedicationBtn.addEventListener('click', function () {
+        medicationsContainer.appendChild(createMedicationRow());
+    });
+
+    medicationsContainer.addEventListener('click', function (event) {
+        const removeButton = event.target.closest('.remove-medication-btn');
+
+        if (!removeButton) {
+            return;
+        }
+
+        const row = removeButton.closest('.medication-row');
+
+        if (row) {
+            row.remove();
+        }
+    });
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function normalizeCategory(value) {
+        return String(value || '')
+            .trim()
+            .replace(/\s+/g, '');
+    }
+
+    function getLastValidCategory(selectors, allowedValues) {
+        let lastValue = '';
+
+        selectors.forEach(function (selector) {
+            document.querySelectorAll(selector).forEach(function (element) {
+                const rawValue = element.value !== undefined
+                    ? element.value
+                    : element.textContent;
+
+                const value = normalizeCategory(rawValue);
+
+                if (allowedValues.includes(value)) {
+                    lastValue = value;
+                }
+            });
+        });
+
+        return lastValue;
+    }
+
+    function formatDateRu(dateValue) {
+        if (!dateValue) {
+            return '';
+        }
+
+        const parts = dateValue.split('-');
+
+        if (parts.length !== 3) {
+            return dateValue;
+        }
+
+        return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    }
+
+    function getCkdPrognosis(gfrCategory, albuminuriaCategory) {
+        const matrix = {
+            G1: {
+                A1: ['low', 'низкий'],
+                A2: ['moderate', 'умеренно повышенный'],
+                A3: ['high', 'высокий']
+            },
+            G2: {
+                A1: ['low', 'низкий'],
+                A2: ['moderate', 'умеренно повышенный'],
+                A3: ['high', 'высокий']
+            },
+            G3a: {
+                A1: ['moderate', 'умеренно повышенный'],
+                A2: ['high', 'высокий'],
+                A3: ['very_high', 'очень высокий']
+            },
+            G3b: {
+                A1: ['high', 'высокий'],
+                A2: ['very_high', 'очень высокий'],
+                A3: ['very_high', 'очень высокий']
+            },
+            G4: {
+                A1: ['very_high', 'очень высокий'],
+                A2: ['very_high', 'очень высокий'],
+                A3: ['very_high', 'очень высокий']
+            },
+            G5: {
+                A1: ['very_high', 'очень высокий'],
+                A2: ['very_high', 'очень высокий'],
+                A3: ['very_high', 'очень высокий']
+            }
+        };
+
+        if (!gfrCategory || !albuminuriaCategory) {
+            return {
+                level: 'insufficient',
+                text: 'недостаточно данных',
+                combined: ''
+            };
+        }
+
+        const result = matrix[gfrCategory]?.[albuminuriaCategory];
+
+        if (!result) {
+            return {
+                level: 'insufficient',
+                text: 'недостаточно данных',
+                combined: ''
+            };
+        }
+
+        return {
+            level: result[0],
+            text: result[1],
+            combined: `${gfrCategory}${albuminuriaCategory}`
+        };
+    }
+
+    function setRiskClass(block, level) {
+        block.classList.remove(
+            'alert-secondary',
+            'alert-success',
+            'alert-warning',
+            'alert-danger',
+            'ckd-risk-high'
+        );
+
+        if (level === 'low') {
+            block.classList.add('alert-success');
+        } else if (level === 'moderate') {
+            block.classList.add('alert-warning');
+        } else if (level === 'high') {
+            block.classList.add('ckd-risk-high');
+        } else if (level === 'very_high') {
+            block.classList.add('alert-danger');
+        } else {
+            block.classList.add('alert-secondary');
+        }
+
+        block.dataset.riskLevel = level;
+    }
+
+    function setBadgeClass(badge, level) {
+        if (!badge) {
+            return;
+        }
+
+        badge.className = 'ms-2 badge';
+
+        if (level === 'low') {
+            badge.classList.add('bg-success');
+        } else if (level === 'moderate') {
+            badge.classList.add('bg-warning', 'text-dark');
+        } else if (level === 'high') {
+            badge.classList.add('bg-warning', 'text-dark');
+        } else if (level === 'very_high') {
+            badge.classList.add('bg-danger');
+        } else {
+            badge.classList.add('bg-light', 'text-dark');
+        }
+    }
+
+    function updateCkdPrognosisPreview() {
+        const block = document.getElementById('ckdPrognosisPreview');
+        const text = document.getElementById('ckdPrognosisText');
+        const badge = document.getElementById('ckdCombinedCategory');
+
+        if (!block || !text) {
+            return;
+        }
+
+        const appointmentDate =
+            document.querySelector('[name="appointment_date"]')?.value ||
+            new Date().toISOString().slice(0, 10);
+
+        const gfrCategory = getLastValidCategory([
+            '.biochemistry-stage',
+            '.ckd-stage-preview',
+            '#ckdStageRow td:not(:first-child)',
+            '[name="ckd_stage"]',
+            '[data-field="ckd_stage"]'
+        ], ['G1', 'G2', 'G3a', 'G3b', 'G4', 'G5']);
+
+        const albuminuriaCategory = getLastValidCategory([
+            '.albuminuria-category',
+            '#albuminuria_category_row td:not(:first-child)',
+            '[name="albuminuria_category"]',
+            '[data-albuminuria-column][data-field="category"]',
+            '[data-field="category"]'
+        ], ['A1', 'A2', 'A3']);
+
+        
+
+        const ckdPrognosisBlock = document.getElementById('ckdPrognosisBlock');
+        const ckdPrognosisText = document.getElementById('ckdPrognosisText');
+
+        if (!gfrCategory || !albuminuriaCategory) {
+            if (ckdPrognosisBlock) {
+                ckdPrognosisBlock.classList.add('d-none');
+            }
+
+            if (ckdPrognosisText) {
+                ckdPrognosisText.textContent = '';
+            }
+
+            return;
+        }
+
+        if (ckdPrognosisBlock) {
+            ckdPrognosisBlock.classList.remove('d-none');
+        }
+
+        if (ckdPrognosisText) {
+            ckdPrognosisText.textContent = `${combinedCategory}, ${prognosisText}`;
+        }
+
+        block.title = '';
+    }
+
+    function delayedUpdateCkdPrognosisPreview() {
+        setTimeout(updateCkdPrognosisPreview, 0);
+    }
+
+    const style = document.createElement('style');
+    style.textContent = `
+        .ckd-risk-high {
+            background-color: #fd7e14;
+            border-color: #fd7e14;
+            color: #000;
+        }
+    `;
+    document.head.appendChild(style);
+
+    document.addEventListener('input', delayedUpdateCkdPrognosisPreview);
+    document.addEventListener('change', delayedUpdateCkdPrognosisPreview);
+    document.addEventListener('click', delayedUpdateCkdPrognosisPreview);
+
+    delayedUpdateCkdPrognosisPreview();
+});
+</script>
+
+<script>
+document.addEventListener('DOMContentLoaded', function () {
+    function isVisible(element) {
+        return !!(
+            element.offsetWidth ||
+            element.offsetHeight ||
+            element.getClientRects().length
+        );
+    }
+
+    function getFocusableFields(form) {
+        return Array.from(
+            form.querySelectorAll('input, textarea')
+        ).filter(function (field) {
+            if (field.type === 'hidden') return false;
+            if (field.type === 'button') return false;
+            if (field.type === 'submit') return false;
+            if (field.type === 'reset') return false;
+            if (field.type === 'checkbox') return false;
+            if (field.type === 'radio') return false;
+            if (field.disabled) return false;
+            if (field.readOnly) return false;
+            if (!isVisible(field)) return false;
+
+            return true;
+        });
+    }
+
+    document.querySelectorAll('form').forEach(function (form) {
+        form.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter') {
+                return;
+            }
+
+            const currentField = event.target;
+
+            if (!currentField.matches('input, textarea')) {
+                return;
+            }
+
+            if (
+                currentField.type === 'checkbox' ||
+                currentField.type === 'radio' ||
+                currentField.type === 'button' ||
+                currentField.type === 'submit' ||
+                currentField.type === 'reset'
+            ) {
+                return;
+            }
+
+            // В textarea Shift + Enter оставляем для переноса строки
+            if (currentField.tagName.toLowerCase() === 'textarea' && event.shiftKey) {
+                return;
+            }
+
+            event.preventDefault();
+
+            const fields = getFocusableFields(form);
+            const currentIndex = fields.indexOf(currentField);
+
+            if (currentIndex === -1) {
+                return;
+            }
+
+            const nextField = fields[currentIndex + 1];
+
+            if (nextField) {
+                nextField.focus();
+
+                if (
+                    nextField.tagName.toLowerCase() === 'input' ||
+                    nextField.tagName.toLowerCase() === 'textarea'
+                ) {
+                    nextField.select();
+                }
+            }
+        });
+    });
+});
+</script>
+{% endif %}

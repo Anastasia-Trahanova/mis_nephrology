@@ -1,0 +1,54 @@
+{#
+Назначение файла: блок «Расчётные показатели». Сейчас выводится только в форме нового приёма существующего пациента, где есть история расчётов.
+Файл выделен при разделении большой формы приёма на структурные части.
+Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
+#}
+{% if appointment_form_mode == 'new_appointment' %}
+<hr>
+
+            <!-- ===================================================== -->
+            <!-- РАСЧЁТНЫЕ ПОКАЗАТЕЛИ -->
+            <!-- ===================================================== -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">Расчётные показатели</h5>
+                <button type="button" class="btn btn-outline-primary btn-sm" id="updateMetricsTableBtn">
+                    🔄 Обновить
+                </button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm table-hover align-middle" id="metricsTable">
+                    <thead class="table-light">
+                        <tr id="metricsHeaderRow">
+                            <th style="min-width: 190px;">Показатель / Дата</th>
+                            {% for item in metrics_history %}
+                            <th class="text-center" style="min-width: 120px;"
+                                data-date="{{ item.investigation_date.isoformat() if item.investigation_date else '' }}">
+                                {{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="egfrRow">
+                            <td><strong>СКФ CKD-EPI, мл/мин/1,73 м²</strong></td>
+                            {% for item in metrics_history %}
+                            <td class="text-center">{{ item.egfr_ckdepi or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="cockcroftRow">
+                            <td><strong>СКФ Кокрофт–Голт, мл/мин</strong></td>
+                            {% for item in metrics_history %}
+                            <td class="text-center">{{ item.crcl_cockcroft_gault or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="ckdStageRow">
+                            <td><strong>Категория СКФ</strong></td>
+                            {% for item in metrics_history %}
+                            <td class="text-center">{{ item.ckd_stage or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+{% endif %}

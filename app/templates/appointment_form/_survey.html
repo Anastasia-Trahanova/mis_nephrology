@@ -1,0 +1,33 @@
+{#
+Назначение файла: блок «Опрос» общей формы приёма: анамнез, жалобы, наследственность и сопутствующие заболевания.
+Файл выделен при разделении большой формы приёма на структурные части.
+Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
+#}
+<hr>
+            <h5>Опрос</h5>
+            <div class="row">
+                <div class="col-md-6">
+                    <label class="form-label">Анамнез жизни</label>
+                    <textarea name="life_anamnesis" class="form-control" rows="2">{{ last_appointment.life_anamnesis if last_appointment and last_appointment.life_anamnesis else '' }}</textarea>
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Анамнез заболевания</label>
+                    <textarea name="disease_anamnesis" class="form-control" rows="2">{{ last_appointment.disease_anamnesis if last_appointment and last_appointment.disease_anamnesis else '' }}</textarea>
+                </div>
+            </div>
+            <div class="row mt-2">
+                <div class="col-12">
+                    <label class="form-label">Жалобы</label>
+                    <textarea name="complaints" class="form-control" rows="2">{{ last_appointment.complaints if last_appointment and last_appointment.complaints else '' }}</textarea>
+                </div>
+                <div class="col-12">
+                    <div class="form-check">
+                        <input type="checkbox" name="heredity" class="form-check-input" value="true" {% if last_appointment and last_appointment.heredity %}checked{% endif %}>
+                        <label class="form-check-label">Отягощённая наследственность</label>
+                    </div>
+                    <label class="form-label">Описание наследственности</label>
+                    <textarea name="heredity_description" class="form-control" rows="2">{{ last_appointment.heredity_description if last_appointment and last_appointment.heredity_description else '' }}</textarea>
+                    <label class="form-label">Сопутствующие заболевания</label>
+                    <textarea name="comorbidities" class="form-control" rows="2">{{ last_appointment.comorbidities if last_appointment and last_appointment.comorbidities else '' }}</textarea>
+                </div>
+            </div>

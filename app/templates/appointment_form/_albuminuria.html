@@ -1,0 +1,142 @@
+{#
+Назначение файла: блок «Альбуминурия по KDIGO»: альбумин мочи, креатинин мочи, ACR и категория A1/A2/A3.
+Файл выделен при разделении большой формы приёма на структурные части.
+Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
+#}
+{% if appointment_form_mode == 'new_appointment' %}
+<hr>
+
+            <!-- ===================================================== -->
+            <!-- АЛЬБУМИНУРИЯ ПО KDIGO -->
+            <!-- ===================================================== -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">Альбуминурия по KDIGO</h5>
+                <button type="button" class="btn btn-outline-success btn-sm" id="addAlbuminuriaColumnBtn">
+                    ➕ Добавить альбуминурию
+                </button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm table-hover align-middle">
+                    <thead class="table-light">
+                        <tr id="albuminuriaHeaderRow">
+                            <th style="min-width: 230px;">Показатель / Дата</th>
+                            {% for item in albuminuria_history %}
+                            <th class="text-center" style="min-width: 140px;">
+                                {{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="albuminuria_albumin_row">
+                            <td><strong>Альбумин мочи</strong></td>
+                            {% for item in albuminuria_history %}
+                            <td class="text-center">
+                                {% if item.urine_albumin is not none %}
+                                    {{ item.urine_albumin }}
+                                    {% if item.urine_albumin_unit == 'mg_l' %} мг/л{% elif item.urine_albumin_unit == 'g_l' %} г/л{% endif %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+
+                        <tr id="albuminuria_creatinine_row">
+                            <td><strong>Креатинин мочи</strong></td>
+                            {% for item in albuminuria_history %}
+                            <td class="text-center">
+                                {% if item.urine_creatinine is not none %}
+                                    {{ item.urine_creatinine }}
+                                    {% if item.urine_creatinine_unit == 'mmol_l' %} ммоль/л{% elif item.urine_creatinine_unit == 'umol_l' %} мкмоль/л{% endif %}
+                                {% else %}
+                                    —
+                                {% endif %}
+                            </td>
+                            {% endfor %}
+                        </tr>
+
+                        <tr id="albuminuria_acr_row">
+                            <td><strong>ACR, мг/ммоль</strong></td>
+                            {% for item in albuminuria_history %}
+                            <td class="text-center">
+                                {{ item.albumin_creatinine_ratio if item.albumin_creatinine_ratio is not none else '—' }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+
+                        <tr id="albuminuria_category_row">
+                            <td><strong>Категория альбуминурии</strong></td>
+                            {% for item in albuminuria_history %}
+                            <td class="text-center">
+                                {{ item.albuminuria_category or '—' }}
+                            </td>
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+{% else %}
+<hr>
+            <h5>Альбуминурия по KDIGO</h5>
+
+            <div id="albuminuriaContainer">
+                <div class="lab-analysis-card albuminuria-block border rounded p-3 mb-3 bg-light">
+                    <div class="row mb-2">
+                        <div class="col-md-3">
+                            <label class="form-label">Дата исследования</label>
+                            <input type="date" name="albuminuria_investigation_date" class="form-control" value="{{ now_date }}">
+                        </div>
+                        <div class="col-md-9 d-flex align-items-end justify-content-end">
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-lab-card" style="display:none;">
+                                ✖ Удалить анализ
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Альбумин мочи</label>
+                            <input type="text" name="urine_albumin" class="form-control albuminuria-albumin" >
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Единицы измерения</label>
+                            <select name="urine_albumin_unit" class="form-select albuminuria-albumin-unit">
+                                <option value="mg_l" selected>мг/л</option>
+                                <option value="g_l">г/л</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Креатинин мочи</label>
+                            <input type="text" name="urine_creatinine" class="form-control albuminuria-creatinine" >
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Единицы измерения</label>
+                            <select name="urine_creatinine_unit" class="form-select albuminuria-creatinine-unit">
+                                <option value="mmol_l" selected>ммоль/л</option>
+                                <option value="umol_l">мкмоль/л</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="row mb-2">
+                        <div class="col-md-6">
+                            <label class="form-label">Альбумин/креатинин мочи, мг/ммоль</label>
+                            <input type="text" class="form-control albuminuria-acr" readonly>
+                        </div>
+                        <div class="col-md-3">
+                            <label class="form-label">Категория альбуминурии</label>
+                            <input type="text" class="form-control albuminuria-category" readonly>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-sm btn-outline-primary mb-3" data-add-lab="albuminuriaContainer">
+                ➕ Добавить ещё анализ альбуминурии
+            </button>
+{% endif %}

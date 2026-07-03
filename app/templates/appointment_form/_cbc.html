@@ -1,0 +1,110 @@
+{#
+Назначение файла: блок «Общий анализ крови». Для нового пациента используется ввод первичных анализов, для нового приёма — таблица истории с добавлением новой колонки.
+Файл выделен при разделении большой формы приёма на структурные части.
+Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
+#}
+{% if appointment_form_mode == 'new_appointment' %}
+<hr>
+
+            <!-- ===================================================== -->
+            <!-- ОБЩИЙ АНАЛИЗ КРОВИ -->
+            <!-- ===================================================== -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">Общий анализ крови</h5>
+                <button type="button" class="btn btn-outline-success btn-sm" id="addCbcColumnBtn">
+                    ➕ Добавить ОАК
+                </button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm table-hover align-middle">
+                    <thead class="table-light">
+                        <tr id="cbcHeaderRow">
+                            <th style="min-width: 190px;">Показатель / Дата</th>
+                            {% for item in cbc_history %}
+                            <th class="text-center" style="min-width: 120px;">
+                                {{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="cbc_hemoglobin_row">
+                            <td><strong>Гемоглобин, г/л</strong></td>
+                            {% for item in cbc_history %}
+                            <td class="text-center">{{ item.hemoglobin or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="cbc_erythrocytes_row">
+                            <td><strong>Эритроциты, ×10¹²/л</strong></td>
+                            {% for item in cbc_history %}
+                            <td class="text-center">{{ item.erythrocytes or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="cbc_leukocytes_row">
+                            <td><strong>Лейкоциты, ×10⁹/л</strong></td>
+                            {% for item in cbc_history %}
+                            <td class="text-center">{{ item.leukocytes or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="cbc_platelets_row">
+                            <td><strong>Тромбоциты, ×10⁹/л</strong></td>
+                            {% for item in cbc_history %}
+                            <td class="text-center">{{ item.platelets or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="cbc_esr_row">
+                            <td><strong>СОЭ, мм/ч</strong></td>
+                            {% for item in cbc_history %}
+                            <td class="text-center">{{ item.esr or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="cbc_mcv_row">
+                            <td><strong>MCV, фл</strong></td>
+                            {% for item in cbc_history %}
+                            <td class="text-center">{{ item.mcv or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="cbc_hematocrit_row">
+                            <td><strong>Гематокрит, %</strong></td>
+                            {% for item in cbc_history %}
+                            <td class="text-center">{{ item.hematocrit or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+{% else %}
+<hr>
+            <h5>Общий анализ крови</h5>
+
+            <div id="cbcContainer">
+                <div class="lab-analysis-card border rounded p-3 mb-3 bg-light">
+                    <div class="row mb-2">
+                        <div class="col-md-3">
+                            <label class="form-label">Дата исследования</label>
+                            <input type="date" name="cbc_investigation_date" class="form-control" value="{{ now_date }}">
+                        </div>
+                        <div class="col-md-9 d-flex align-items-end justify-content-end">
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-lab-card" style="display:none;">
+                                ✖ Удалить анализ
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row g-2">
+                        <div class="col-md-3"><input type="text" name="hemoglobin" class="form-control" placeholder="Гемоглобин (г/л)"></div>
+                        <div class="col-md-3"><input type="text" name="erythrocytes" class="form-control" placeholder="Эритроциты"></div>
+                        <div class="col-md-3"><input type="text" name="leukocytes" class="form-control" placeholder="Лейкоциты"></div>
+                        <div class="col-md-3"><input type="text" name="platelets" class="form-control" placeholder="Тромбоциты"></div>
+                        <div class="col-md-3"><input type="text" name="esr" class="form-control" placeholder="СОЭ (мм/ч)"></div>
+                        <div class="col-md-3"><input type="text" name="mcv" class="form-control" placeholder="MCV (фл)"></div>
+                        <div class="col-md-3"><input type="text" name="hematocrit" class="form-control" placeholder="Гематокрит (%)"></div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-sm btn-outline-primary mb-3" data-add-lab="cbcContainer">
+                ➕ Добавить ещё ОАК
+            </button>
+{% endif %}

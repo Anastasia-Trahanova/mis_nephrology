@@ -1,0 +1,96 @@
+{#
+Назначение файла: блок «Общий анализ мочи». Для нового пациента используется ввод первичных анализов, для нового приёма — таблица истории с добавлением новой колонки.
+Файл выделен при разделении большой формы приёма на структурные части.
+Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
+#}
+{% if appointment_form_mode == 'new_appointment' %}
+<hr>
+
+            <!-- ===================================================== -->
+            <!-- ОБЩИЙ АНАЛИЗ МОЧИ -->
+            <!-- ===================================================== -->
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h5 class="mb-0">Общий анализ мочи</h5>
+                <button type="button" class="btn btn-outline-success btn-sm" id="addUrinalysisColumnBtn">
+                    ➕ Добавить ОАМ
+                </button>
+            </div>
+
+            <div class="table-responsive">
+                <table class="table table-bordered table-sm table-hover align-middle">
+                    <thead class="table-light">
+                        <tr id="urinalysisHeaderRow">
+                            <th style="min-width: 190px;">Показатель / Дата</th>
+                            {% for item in urinalysis_history %}
+                            <th class="text-center" style="min-width: 120px;">
+                                {{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}
+                            </th>
+                            {% endfor %}
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr id="uri_specific_gravity_row">
+                            <td><strong>Удельный вес</strong></td>
+                            {% for item in urinalysis_history %}
+                            <td class="text-center">{{ item.specific_gravity or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="uri_protein_row">
+                            <td><strong>Белок, г/л</strong></td>
+                            {% for item in urinalysis_history %}
+                            <td class="text-center">{{ item.protein or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="uri_leukocytes_row">
+                            <td><strong>Лейкоциты</strong></td>
+                            {% for item in urinalysis_history %}
+                            <td class="text-center">{{ item.leukocytes or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="uri_erythrocytes_row">
+                            <td><strong>Эритроциты</strong></td>
+                            {% for item in urinalysis_history %}
+                            <td class="text-center">{{ item.erythrocytes or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                        <tr id="uri_bacteria_row">
+                            <td><strong>Бактерии</strong></td>
+                            {% for item in urinalysis_history %}
+                            <td class="text-center">{{ item.bacteria or '—' }}</td>
+                            {% endfor %}
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+{% else %}
+<hr>
+            <h5>Общий анализ мочи</h5>
+
+            <div id="urinalysisContainer">
+                <div class="lab-analysis-card border rounded p-3 mb-3 bg-light">
+                    <div class="row mb-2">
+                        <div class="col-md-3">
+                            <label class="form-label">Дата исследования</label>
+                            <input type="date" name="urinalysis_investigation_date" class="form-control" value="{{ now_date }}">
+                        </div>
+                        <div class="col-md-9 d-flex align-items-end justify-content-end">
+                            <button type="button" class="btn btn-sm btn-outline-danger remove-lab-card" style="display:none;">
+                                ✖ Удалить анализ
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="row g-2">
+                        <div class="col-md-3"><input type="text" name="specific_gravity" class="form-control" placeholder="Удельный вес"></div>
+                        <div class="col-md-3"><input type="text" name="urine_protein" class="form-control" placeholder="Белок (г/л)"></div>
+                        <div class="col-md-2"><input type="text" name="urine_leukocytes" class="form-control" placeholder="Лейкоциты"></div>
+                        <div class="col-md-2"><input type="text" name="urine_erythrocytes" class="form-control" placeholder="Эритроциты"></div>
+                        <div class="col-md-2"><input type="text" name="bacteria" class="form-control" placeholder="Бактерии"></div>
+                    </div>
+                </div>
+            </div>
+
+            <button type="button" class="btn btn-sm btn-outline-primary mb-3" data-add-lab="urinalysisContainer">
+                ➕ Добавить ещё ОАМ
+            </button>
+{% endif %}
