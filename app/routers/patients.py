@@ -8,7 +8,7 @@ from ..database import (
     get_doctors,     get_doctor_locations,     get_db_connection,
     get_doctors_for_filter, get_locations_for_filter, save_ckd_prognosis_for_appointment,
 )
-from ..calculations import calculate_all_metrics, calculate_age,  calculate_albuminuria_metrics
+from ..calculations import calculate_all_metrics, calculate_age,  calculate_albuminuria_metrics, calculate_bmi
 from ..validation import validate_appointment_form
 
 router = APIRouter(tags=["patients"])
@@ -179,31 +179,15 @@ def numeric_to_db(value):
 
 def calculate_bmi_for_db(height, weight):
     """
-    Считает ИМТ для сохранения в БД.
+    Совместимость для текущего patients.py.
 
-    height приходит в сантиметрах, weight — в килограммах.
-    Возвращает число с двумя знаками после запятой или None.
+    Саму формулу здесь больше не держим:
+    медицинский расчёт вынесен в app/medical_algorithms/bmi.py.
 
-    Важно: ИМТ считаем на сервере, а не доверяем значению из формы.
-    Поле в форме нужно только для удобства врача.
+    Важно: значение ИМТ из формы не используем как источник истины.
+    Сервер всегда пересчитывает ИМТ по росту и весу.
     """
-    height = numeric_to_db(height)
-    weight = numeric_to_db(weight)
-
-    if height is None or weight is None:
-        return None
-
-    try:
-        height_cm = float(height)
-        weight_kg = float(weight)
-    except ValueError:
-        return None
-
-    if height_cm <= 0 or weight_kg <= 0:
-        return None
-
-    height_m = height_cm / 100
-    return round(weight_kg / (height_m ** 2), 2)
+    return calculate_bmi(height, weight)
 
 def parse_bool(value):
     """Преобразует значение из формы в boolean."""

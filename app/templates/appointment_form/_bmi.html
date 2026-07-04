@@ -1,0 +1,99 @@
+-- код для динамического расчета ИМТ в форме повторного приема и форме добавления нового пациента
+
+<script>
+(function () {
+  function initBmiCalculator() {
+    const heightInput = document.getElementById('heightInput') || document.querySelector('input[name="height"]');
+    const weightInput = document.getElementById('weightInput') || document.querySelector('input[name="weight"]');
+    const bmiInput = document.getElementById('bmiInput') || document.querySelector('input[name="bmi"]');
+
+    if (!heightInput || !weightInput || !bmiInput) {
+      return;
+    }
+
+    function parseNumber(value) {
+      if (value === null || value === undefined) {
+        return null;
+      }
+
+      const normalized = String(value)
+        .trim()
+        .replace(/\s/g, '')
+        .replace(',', '.');
+
+      if (!normalized) {
+        return null;
+      }
+
+      const number = Number(normalized);
+      return Number.isFinite(number) ? number : null;
+    }
+
+    function calculateBmi(heightValue, weightValue) {
+      const heightCm = parseNumber(heightValue);
+      const weightKg = parseNumber(weightValue);
+
+      if (heightCm === null || weightKg === null) {
+        return '';
+      }
+
+      if (heightCm <= 0 || weightKg <= 0) {
+        return '';
+      }
+
+      const heightM = heightCm / 100;
+
+      if (heightM <= 0) {
+        return '';
+      }
+
+      return (weightKg / (heightM * heightM)).toFixed(2);
+    }
+
+    function updateBmi() {
+      bmiInput.value = calculateBmi(heightInput.value, weightInput.value);
+
+      // Чтобы другие скрипты формы, если они слушают change/input,
+      // тоже увидели изменение ИМТ.
+      bmiInput.dispatchEvent(new Event('input', { bubbles: true }));
+      bmiInput.dispatchEvent(new Event('change', { bubbles: true }));
+    }
+
+    // В форме нового приёма поля могут быть предзаполнены из прошлого приёма.
+    // Они должны оставаться редактируемыми.
+    heightInput.removeAttribute('readonly');
+    heightInput.removeAttribute('disabled');
+
+    weightInput.removeAttribute('readonly');
+    weightInput.removeAttribute('disabled');
+
+    // ИМТ руками не вводим: это расчетное поле.
+    bmiInput.setAttribute('readonly', 'readonly');
+    bmiInput.removeAttribute('disabled');
+
+    heightInput.addEventListener('input', updateBmi);
+    heightInput.addEventListener('change', updateBmi);
+    heightInput.addEventListener('keyup', updateBmi);
+    heightInput.addEventListener('paste', function () {
+      setTimeout(updateBmi, 0);
+    });
+
+    weightInput.addEventListener('input', updateBmi);
+    weightInput.addEventListener('change', updateBmi);
+    weightInput.addEventListener('keyup', updateBmi);
+    weightInput.addEventListener('paste', function () {
+      setTimeout(updateBmi, 0);
+    });
+
+    // Первичный пересчёт при открытии страницы:
+    // особенно важно для нового приёма, где рост/вес уже подставлены.
+    updateBmi();
+  }
+
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', initBmiCalculator);
+  } else {
+    initBmiCalculator();
+  }
+})();
+</script>
