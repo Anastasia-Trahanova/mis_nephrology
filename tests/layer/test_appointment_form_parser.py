@@ -92,6 +92,9 @@ def test_parse_appointment_form_returns_structured_sections_and_bmi():
 
     assert data["cbc"]["hemoglobin"] == ["130", None]
     assert data["biochemistry"]["creatinine"] == ["100", None]
+    # В фабрике намеренно используется привычная запись удельного веса мочи 1015.
+    # Парсер должен получать уже нормализованный внутренний формат 1.015.
+    assert data["urinalysis"]["specific_gravity"] == ["1.015", None]
     assert data["albuminuria"]["urine_albumin_unit"] == ["mg_l", "mg_l"]
     assert data["prescriptions"]["medications"] == ["Лозартан", ""]
     assert data["appointment_date_default"] == date(2026, 7, 4)

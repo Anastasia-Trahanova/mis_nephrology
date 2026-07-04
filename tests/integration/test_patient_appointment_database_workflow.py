@@ -232,6 +232,14 @@ def test_create_patient_first_appointment_and_read_saved_data_from_db():
                 cur.execute("SELECT bmi FROM examinations WHERE appointment_id = %s", (appointment_id,))
                 assert round(float(cur.fetchone()["bmi"]), 2) == 24.22
 
+                # В форме врач может ввести удельный вес мочи как 1015.
+                # Сервис должен принять это значение, нормализовать его и сохранить как 1.015.
+                cur.execute(
+                    "SELECT specific_gravity FROM urinalysis_results WHERE appointment_id = %s",
+                    (appointment_id,),
+                )
+                assert round(float(cur.fetchone()["specific_gravity"]), 3) == 1.015
+
                 cur.execute(
                     """
                     SELECT albumin_creatinine_ratio, albuminuria_category

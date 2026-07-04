@@ -21,6 +21,52 @@ def _to_float(value: Any) -> Optional[float]:
     except ValueError:
         return None
 
+def _normalize_numeric_value_for_validation(field_name: str, value: Any) -> Any:
+    """
+    Нормализует безопасные альтернативные форматы перед валидацией.
+
+    Важно:
+    эта функция НЕ должна делать опасные догадки.
+    Например:
+    - креатинин 100 не превращаем ни во что другое;
+    - глюкозу 55 не делим на 10;
+    - ферритин 1200 не меняем;
+    - тромбоциты 250 не меняем.
+
+    Сейчас здесь есть только однозначная нормализация удельного веса мочи:
+    - 1015 -> 1.015
+    - 1005 -> 1.005
+    - 1050 -> 1.050
+
+    Это нужно потому, что врачи могут вводить удельный вес мочи в обоих форматах:
+    лабораторном десятичном 1.015 и коротком привычном 1015.
+    Внутренний формат хранения и проверки — десятичный: 1.015.
+    """
+    value_text = _empty_to_none(value)
+    if value_text is None:
+        return value
+
+    if field_name != "specific_gravity":
+        return value
+
+    normalized_text = str(value_text).strip().replace(" ", "").replace(",", ".")
+
+    try:
+        number = float(normalized_text)
+    except ValueError:
+        return value
+
+    # Уже правильный формат: 1.015, 1.020, 1.030.
+    if 1.000 <= number <= 1.050:
+        return normalized_text
+
+    # Альтернативный формат: 1000–1050.
+    # Нормализуем только этот узкий и однозначный диапазон.
+    # Не нормализуем 1500, 900, 9999 и другие странные значения.
+    if number.is_integer() and 1000 <= number <= 1050:
+        return f"{number / 1000:.3f}"
+
+    return value
 
 def _to_date(value: Any) -> Optional[date]:
     value = _empty_to_none(value)
@@ -131,7 +177,9 @@ def validate_appointment_form(form, appointment_date_value: Any) -> List[Validat
             if value_text is None:
                 continue
 
-            number = _to_float(value_text)
+            normalized_value = _normalize_numeric_value_for_validation(field_name, value_text)
+
+            number = _to_float(normalized_value)
             if number is None:
                 _add_error(errors, field_name, f"Поле должно быть числом. {message}", index)
                 continue

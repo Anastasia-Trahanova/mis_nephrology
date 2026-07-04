@@ -1,7 +1,8 @@
 """
 Парсер HTML-формы приёма.
 
-Этот модуль нужен, чтобы patients.py и appointments.py не знали имена всех полей формы. Здесь собраны правила:
+Этот модуль нужен, чтобы patients.py и appointments.py не знали имена всех
+полей формы. Здесь собраны правила:
 - какие поля относятся к опросу;
 - какие поля относятся к осмотру;
 - какие поля относятся к ОАК, биохимии, ОАМ, альбуминурии и УЗИ;
@@ -19,6 +20,7 @@ from fastapi import HTTPException
 
 from .appointment_diagnosis_service import parse_icd10_diagnoses_from_form
 from .appointment_text_builder import build_edema_location, build_skin_condition
+from .clinical_value_normalization import normalize_appointment_form_values
 from .form_parsing import (
     empty_to_none,
     get_numeric_list,
@@ -100,7 +102,13 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
 
     appointment_datetime нужен как дата по умолчанию для анализов, если врач не
     заполнил отдельную дату исследования.
+
+    Перед разбором форма проходит нормализацию клинических числовых значений.
+    Это важно для случаев вроде удельного веса мочи: врач может ввести 1015,
+    а внутренняя модель хранит 1.015.
     """
+    form = normalize_appointment_form_values(form)
+
     height = empty_to_none(form.get("height"))
     weight = empty_to_none(form.get("weight"))
 

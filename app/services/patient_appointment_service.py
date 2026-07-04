@@ -12,9 +12,14 @@
 - вызвать сохранение всех разделов приёма;
 - commit / rollback.
 
-SQL создания patients и appointments вынесен в repositories:
-- app/repositories/patients.py;
-- app/repositories/appointments.py.
+Перед медицинской валидацией и сохранением форма проходит нормализацию
+клинических числовых значений:
+- десятичная запятая -> точка;
+- удельный вес мочи 1015 -> 1.015;
+- гематокрит 0.39 -> 39.
+
+Нормализация выполняет только однозначные преобразования. Сомнительно высокие
+значения остаются как есть и проверяются validate_appointment_form.
 """
 
 from __future__ import annotations
@@ -34,6 +39,7 @@ from .appointment_form_parser import (
     parse_required_appointment_fields,
 )
 from .appointment_save_service import save_appointment_details
+from .clinical_value_normalization import normalize_appointment_form_values
 
 
 @dataclass(frozen=True)
@@ -62,14 +68,16 @@ def create_patient_with_first_appointment(form: Any) -> AppointmentSaveResult:
 
     Используется POST /api/patients/new.
     """
-    patient_data = parse_new_patient_form(form)
-    appointment_required = parse_required_appointment_fields(form)
+    normalized_form = normalize_appointment_form_values(form)
+
+    patient_data = parse_new_patient_form(normalized_form)
+    appointment_required = parse_required_appointment_fields(normalized_form)
     appointment_datetime = appointment_required["appointment_datetime"]
 
-    validation_errors = validate_appointment_form(form, appointment_datetime.date())
+    validation_errors = validate_appointment_form(normalized_form, appointment_datetime.date())
     _raise_validation_errors(validation_errors)
 
-    appointment_data = parse_appointment_form(form, appointment_datetime)
+    appointment_data = parse_appointment_form(normalized_form, appointment_datetime)
 
     with get_db_connection() as conn:
         try:
@@ -113,13 +121,15 @@ def create_appointment_for_existing_patient(patient_id: int, form: Any) -> Appoi
     Пациент заново не создаётся: используется patient_id из URL.
     Используется POST /api/patients/{patient_id}/appointments/new.
     """
-    appointment_required = parse_required_appointment_fields(form)
+    normalized_form = normalize_appointment_form_values(form)
+
+    appointment_required = parse_required_appointment_fields(normalized_form)
     appointment_datetime = appointment_required["appointment_datetime"]
 
-    validation_errors = validate_appointment_form(form, appointment_datetime.date())
+    validation_errors = validate_appointment_form(normalized_form, appointment_datetime.date())
     _raise_validation_errors(validation_errors)
 
-    appointment_data = parse_appointment_form(form, appointment_datetime)
+    appointment_data = parse_appointment_form(normalized_form, appointment_datetime)
 
     with get_db_connection() as conn:
         try:
