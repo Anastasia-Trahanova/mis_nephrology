@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from .routers import pages, patients, auth, ckd_registry
+from .routers import pages, patients, auth, ckd_registry, appointments, appointment_filters
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 import time
@@ -63,5 +63,7 @@ app.add_middleware(
 # Подключаем роутеры: auth должен быть доступен без входа, остальные закрываются middleware.
 app.include_router(auth.router)
 app.include_router(pages.router)
+app.include_router(appointment_filters.router)
 app.include_router(patients.router)
+app.include_router(appointments.router)
 app.include_router(ckd_registry.router)
