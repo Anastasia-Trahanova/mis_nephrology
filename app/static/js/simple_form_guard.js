@@ -165,14 +165,36 @@
   }
 
   function parseIsoDate(value) {
-    const text = String(value || "").trim();
-    if (!text) return null;
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) return "invalid";
-    const date = new Date(`${text}T00:00:00`);
-    if (Number.isNaN(date.getTime())) return "invalid";
-    const iso = date.toISOString().slice(0, 10);
-    return iso === text ? text : "invalid";
-  }
+        const text = String(value || "").trim();
+
+        if (!text) return null;
+
+        const match = text.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+        if (!match) return "invalid";
+
+        const year = Number(match[1]);
+        const month = Number(match[2]);
+        const day = Number(match[3]);
+
+        if (!Number.isInteger(year) || !Number.isInteger(month) || !Number.isInteger(day)) {
+            return "invalid";
+        }
+
+        const date = new Date(year, month - 1, day);
+
+        if (Number.isNaN(date.getTime())) return "invalid";
+
+        if (
+            date.getFullYear() !== year ||
+            date.getMonth() !== month - 1 ||
+            date.getDate() !== day
+        ) {
+            return "invalid";
+        }
+
+        return text;
+    }
 
   function ensureFieldMessage(control) {
     if (!control) return null;

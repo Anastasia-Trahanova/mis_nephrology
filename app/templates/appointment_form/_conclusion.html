@@ -88,7 +88,8 @@
                 
                 <div class="col-md-6 mt-3">
                     <label class="form-label fw-bold">Дата следующего контроля</label>
-                    <input type="date" name="next_control_date" class="form-control" value="{{ last_diet_info.next_control_date.strftime('%Y-%m-%d') if last_diet_info and last_diet_info.next_control_date else '' }}">
+                    {# Дата следующего контроля относится к НОВОМУ приёму. Не подставляем сюда дату из прошлого приёма/диеты: она остаётся только историческим текстом в верхнем сообщении формы. #}
+<input type="date" name="next_control_date" class="form-control" value="">
                 </div>
             </div>
 
