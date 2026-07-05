@@ -18,14 +18,13 @@ from typing import Optional
 
 from fastapi import APIRouter
 
-from ..database import (
-    get_all_appointments,
+from app.repositories.appointments import get_all_appointments
+from app.repositories.reference_data import (
     get_branches,
     get_doctor_locations,
     get_doctors_for_filter,
     get_locations_for_filter,
 )
-
 router = APIRouter(tags=["appointment_filters"])
 
 

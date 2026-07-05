@@ -10,12 +10,40 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 
 from datetime import datetime
 from datetime import date
-from ..database import (
-    get_all_patients, get_all_appointments, get_branches, get_locations_by_branch,  get_doctors, get_patient_by_id, get_patient_appointments, 
-    get_appointment_full_data, get_last_appointment_data, get_appointment_medications, get_appointment_diet, get_patient_biochemistry_history,
-    get_patient_cbc_history, get_patient_urinalysis_history, get_patient_ultrasound_history, get_location_info, get_patient_metrics_history,
-    get_patient_albuminuria_history, get_patient_ckd_prognosis_history, get_appointment_ckd_prognosis,
-    get_patient_card_context, get_new_appointment_context, get_new_patient_context
+from app.repositories.patients import (
+    get_all_patients,
+    get_patient_by_id,
+)
+from app.repositories.appointments import (
+    get_all_appointments,
+    get_patient_appointments,
+    get_appointment_full_data,
+    get_last_appointment_data,
+    get_appointment_medications,
+    get_appointment_diet,
+)
+from app.repositories.reference_data import (
+    get_branches,
+    get_locations_by_branch,
+    get_doctors,
+    get_location_info,
+)
+from app.repositories.lab_history import (
+    get_patient_biochemistry_history,
+    get_patient_cbc_history,
+    get_patient_urinalysis_history,
+    get_patient_ultrasound_history,
+    get_patient_metrics_history,
+    get_patient_albuminuria_history,
+)
+from app.repositories.ckd_prognosis import (
+    get_patient_ckd_prognosis_history,
+    get_appointment_ckd_prognosis,
+)
+from app.services.patient_card_context_service import get_patient_card_context
+from app.services.appointment_form_context_service import (
+    get_new_appointment_context,
+    get_new_patient_context,
 )
 router = APIRouter(tags=["pages"]) #	Создаёт группу маршрутов с тегом pages (для документации)
 templates = Jinja2Templates(directory="app/templates") #	Указывает, где искать HTML-файлы

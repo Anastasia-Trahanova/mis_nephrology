@@ -10,7 +10,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
-from ..database import get_db_connection
+from app.db.connection import get_db_connection
 
 router = APIRouter(tags=["auth"])
 templates = Jinja2Templates(directory="app/templates")

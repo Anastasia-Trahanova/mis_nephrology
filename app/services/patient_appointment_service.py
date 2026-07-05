@@ -29,7 +29,7 @@ from typing import Any
 
 from fastapi import HTTPException
 
-from ..database import get_db_connection
+from app.db.connection import get_db_connection
 from ..repositories.appointments import create_appointment
 from ..repositories.patients import create_patient, get_patient_for_appointment
 from ..validation import validate_appointment_form

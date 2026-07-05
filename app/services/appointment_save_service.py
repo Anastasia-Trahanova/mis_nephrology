@@ -21,7 +21,7 @@ from ..calculations import (
     calculate_albuminuria_metrics,
     calculate_all_metrics,
 )
-from ..database import save_ckd_prognosis_for_appointment
+from app.repositories.ckd_prognosis import save_ckd_prognosis_for_appointment
 from ..repositories.diagnoses import insert_text_diagnoses
 from ..repositories.examinations import insert_examination
 from ..repositories.labs import (

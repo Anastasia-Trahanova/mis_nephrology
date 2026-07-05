@@ -8,7 +8,7 @@
 
 from typing import Any, Dict
 
-from .database import get_db_connection
+from app.db.connection import get_db_connection
 
 
 CKD_REGISTRY_SQL = """
