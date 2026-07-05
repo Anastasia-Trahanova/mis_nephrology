@@ -1,0 +1,224 @@
+/*
+===============================================================================
+Файл: app/static/css/02_clinical_messages.css
+Назначение: единый внешний вид ошибок, предупреждений и подсказок в медицинских формах.
+
+Что настраивается здесь:
+- ошибки сохранения формы;
+- предупреждения при вводе странных или некорректных значений;
+- подсказки рядом с полями;
+- подсветка поля, которое не прошло проверку;
+- блоки с клиническими предупреждениями после серверной валидации;
+- сообщения о нормализации значений, например: 1015 будет сохранено как 1.015.
+
+Важно:
+- Сейчас серверная логика сообщений только формируется. Этот CSS заранее задаёт
+  единый внешний вид, чтобы потом не стилизовать каждую ошибку отдельно.
+- Файл не меняет текст ошибок. Текст ошибок задаётся в Python/JS, а здесь только
+  внешний вид: цвет, рамка, фон, размер, отступы.
+
+Как пользоваться:
+1. Нужно поменять цвет ошибок — меняй --mis-error-color и --mis-error-bg.
+2. Нужно поменять цвет предупреждений — меняй --mis-warning-color и --mis-warning-bg.
+3. Нужно изменить вид подсказок под полями — меняй .mis-field-help.
+4. Нужно подсветить поле с ошибкой — добавляй к input/select/textarea класс
+   .mis-field-error или Bootstrap-класс .is-invalid.
+5. Нужно показать предупреждение без блокировки сохранения — используй
+   .mis-clinical-warning или .mis-normalization-notice.
+===============================================================================
+*/
+
+:root {
+  /* -------------------------------------------------------------------------
+     ОШИБКИ: блокируют сохранение формы
+     ------------------------------------------------------------------------- */
+  --mis-error-color: #842029;
+  --mis-error-bg: #f8d7da;
+  --mis-error-border-color: #f5c2c7;
+  --mis-error-field-border-color: #dc3545;
+
+  /* -------------------------------------------------------------------------
+     ПРЕДУПРЕЖДЕНИЯ: не всегда блокируют сохранение, но требуют внимания врача
+     ------------------------------------------------------------------------- */
+  --mis-warning-color: #664d03;
+  --mis-warning-bg: #fff3cd;
+  --mis-warning-border-color: #ffecb5;
+  --mis-warning-field-border-color: #ffc107;
+
+  /* -------------------------------------------------------------------------
+     ИНФОРМАЦИОННЫЕ СООБЩЕНИЯ: подсказки и нормализация
+     ------------------------------------------------------------------------- */
+  --mis-info-color: #055160;
+  --mis-info-bg: #cff4fc;
+  --mis-info-border-color: #b6effb;
+
+  /* -------------------------------------------------------------------------
+     УСПЕШНЫЕ СООБЩЕНИЯ
+     ------------------------------------------------------------------------- */
+  --mis-success-color: #0f5132;
+  --mis-success-bg: #d1e7dd;
+  --mis-success-border-color: #badbcc;
+
+  /* -------------------------------------------------------------------------
+     ОБЩИЕ НАСТРОЙКИ СООБЩЕНИЙ
+     ------------------------------------------------------------------------- */
+  --mis-message-font-size: 0.95rem;
+  --mis-message-padding-y: 0.75rem;
+  --mis-message-padding-x: 1rem;
+  --mis-message-border-radius: 0.375rem;
+  --mis-message-margin-bottom: 1rem;
+
+  /* Подсказки под полями. */
+  --mis-field-help-font-size: 0.875rem;
+  --mis-field-help-color: #6c757d;
+}
+
+/* -----------------------------------------------------------------------------
+   УНИВЕРСАЛЬНЫЕ БЛОКИ СООБЩЕНИЙ
+   ----------------------------------------------------------------------------- */
+
+.mis-message,
+.mis-clinical-error,
+.mis-clinical-warning,
+.mis-clinical-info,
+.mis-normalization-notice,
+.mis-save-error,
+.mis-save-warning {
+  font-size: var(--mis-message-font-size);
+  padding: var(--mis-message-padding-y) var(--mis-message-padding-x);
+  border: 1px solid transparent;
+  border-radius: var(--mis-message-border-radius);
+  margin-bottom: var(--mis-message-margin-bottom);
+}
+
+/* Ошибка: сохранение формы должно быть остановлено. */
+.mis-clinical-error,
+.mis-save-error,
+.alert-danger {
+  color: var(--mis-error-color);
+  background-color: var(--mis-error-bg);
+  border-color: var(--mis-error-border-color);
+}
+
+/* Предупреждение: значение подозрительное или требует внимания. */
+.mis-clinical-warning,
+.mis-save-warning,
+.alert-warning {
+  color: var(--mis-warning-color);
+  background-color: var(--mis-warning-bg);
+  border-color: var(--mis-warning-border-color);
+}
+
+/* Информационное сообщение: например, нормализация значения. */
+.mis-clinical-info,
+.mis-normalization-notice,
+.alert-info {
+  color: var(--mis-info-color);
+  background-color: var(--mis-info-bg);
+  border-color: var(--mis-info-border-color);
+}
+
+/* Успешное сохранение/действие. */
+.mis-save-success,
+.alert-success {
+  color: var(--mis-success-color);
+  background-color: var(--mis-success-bg);
+  border-color: var(--mis-success-border-color);
+}
+
+/* -----------------------------------------------------------------------------
+   ПОДСКАЗКИ ПОД ПОЛЯМИ
+   -----------------------------------------------------------------------------
+   Пример в шаблоне:
+
+   <input name="specific_gravity" class="form-control">
+   <div class="mis-field-help">
+     Можно вводить как 1.015 или 1015. В БД будет сохранено 1.015.
+   </div>
+*/
+
+.mis-field-help,
+.form-text {
+  font-size: var(--mis-field-help-font-size);
+  color: var(--mis-field-help-color);
+  margin-top: 0.25rem;
+}
+
+/* -----------------------------------------------------------------------------
+   ПОДСВЕТКА ПОЛЕЙ С ОШИБКАМИ И ПРЕДУПРЕЖДЕНИЯМИ
+   ----------------------------------------------------------------------------- */
+
+.mis-field-error,
+.form-control.is-invalid,
+.form-select.is-invalid,
+textarea.is-invalid {
+  border-color: var(--mis-error-field-border-color);
+}
+
+.mis-field-error:focus,
+.form-control.is-invalid:focus,
+.form-select.is-invalid:focus,
+textarea.is-invalid:focus {
+  border-color: var(--mis-error-field-border-color);
+  box-shadow: 0 0 0 0.2rem rgba(220, 53, 69, 0.25);
+}
+
+.mis-field-warning,
+.form-control.is-warning,
+.form-select.is-warning,
+textarea.is-warning {
+  border-color: var(--mis-warning-field-border-color);
+}
+
+.mis-field-warning:focus,
+.form-control.is-warning:focus,
+.form-select.is-warning:focus,
+textarea.is-warning:focus {
+  border-color: var(--mis-warning-field-border-color);
+  box-shadow: 0 0 0 0.2rem rgba(255, 193, 7, 0.25);
+}
+
+/* Текст ошибки рядом с конкретным полем. Совместим с Bootstrap invalid-feedback. */
+.mis-field-error-message,
+.invalid-feedback {
+  color: var(--mis-error-color);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+/* Текст предупреждения рядом с конкретным полем. */
+.mis-field-warning-message {
+  color: var(--mis-warning-color);
+  font-size: 0.875rem;
+  margin-top: 0.25rem;
+}
+
+/* -----------------------------------------------------------------------------
+   СПИСОК ОШИБОК ПРИ СОХРАНЕНИИ ФОРМЫ
+   -----------------------------------------------------------------------------
+   Когда мы сделаем сохранение формы с возвратом ошибок на страницу, можно будет
+   выводить общий блок:
+
+   <div class="mis-form-errors">
+     <h5>Форма содержит ошибки</h5>
+     <ul>...</ul>
+   </div>
+*/
+
+.mis-form-errors {
+  color: var(--mis-error-color);
+  background-color: var(--mis-error-bg);
+  border: 1px solid var(--mis-error-border-color);
+  border-radius: var(--mis-message-border-radius);
+  padding: var(--mis-message-padding-y) var(--mis-message-padding-x);
+  margin-bottom: var(--mis-message-margin-bottom);
+}
+
+.mis-form-errors ul {
+  margin-bottom: 0;
+  padding-left: 1.25rem;
+}
+
+.mis-form-errors li + li {
+  margin-top: 0.25rem;
+}

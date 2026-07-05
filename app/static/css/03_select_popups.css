@@ -1,0 +1,213 @@
+/*
+===============================================================================
+Файл: app/static/css/03_select_popups.css
+Назначение: единый внешний вид выпадающих списков, автодополнения и pop-up выбора.
+
+Что настраивается здесь:
+- обычные select-поля;
+- выпадающие списки Bootstrap .dropdown-menu;
+- списки выбора врача, отделения, филиала;
+- выбор лекарств из справочника;
+- выбор диагнозов МКБ-10;
+- будущие autocomplete/popover/listbox элементы.
+
+Важно:
+- Браузерные нативные <datalist> почти не стилизуются CSS во всех браузерах.
+  Если нужен полностью управляемый дизайн списка выбора, лучше делать свой
+  autocomplete-блок с классами .mis-autocomplete-menu / .mis-autocomplete-item.
+- Этот файл не меняет данные списков, только внешний вид.
+
+Как пользоваться:
+1. Нужно изменить размер текста во всех select — меняй --mis-select-font-size.
+2. Нужно поменять высоту select — меняй --mis-select-padding-y.
+3. Нужно изменить выпадающее меню диагнозов/лекарств — меняй .mis-autocomplete-menu.
+4. Нужно подсветить активный пункт — меняй .mis-autocomplete-item.is-active.
+===============================================================================
+*/
+
+:root {
+  /* -------------------------------------------------------------------------
+     SELECT-ПОЛЯ
+     ------------------------------------------------------------------------- */
+  --mis-select-font-size: 1rem;
+  --mis-select-padding-y: 0.375rem;
+  --mis-select-padding-x: 0.75rem;
+  --mis-select-border-radius: 0.375rem;
+  --mis-select-border-color: #ced4da;
+  --mis-select-focus-border-color: #86b7fe;
+  --mis-select-focus-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.25);
+
+  /* -------------------------------------------------------------------------
+     DROPDOWN / AUTOCOMPLETE
+     ------------------------------------------------------------------------- */
+  --mis-popup-background: #ffffff;
+  --mis-popup-border-color: #dee2e6;
+  --mis-popup-border-radius: 0.375rem;
+  --mis-popup-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+  --mis-popup-font-size: 0.95rem;
+  --mis-popup-max-height: 18rem;
+  --mis-popup-z-index: 1050;
+
+  --mis-popup-item-padding-y: 0.45rem;
+  --mis-popup-item-padding-x: 0.75rem;
+  --mis-popup-item-color: #212529;
+  --mis-popup-item-hover-bg: #f8f9fa;
+  --mis-popup-item-active-bg: #0d6efd;
+  --mis-popup-item-active-color: #ffffff;
+
+  /* -------------------------------------------------------------------------
+     СПИСКИ ЛЕКАРСТВ И ДИАГНОЗОВ
+     ------------------------------------------------------------------------- */
+  --mis-dictionary-note-color: #6c757d;
+  --mis-dictionary-code-color: #0d6efd;
+}
+
+/* -----------------------------------------------------------------------------
+   ОБЫЧНЫЕ SELECT-ПОЛЯ
+   ----------------------------------------------------------------------------- */
+
+select,
+.form-select,
+.mis-select {
+  font-size: var(--mis-select-font-size);
+  padding: var(--mis-select-padding-y) var(--mis-select-padding-x);
+  border-radius: var(--mis-select-border-radius);
+  border-color: var(--mis-select-border-color);
+}
+
+select:focus,
+.form-select:focus,
+.mis-select:focus {
+  border-color: var(--mis-select-focus-border-color);
+  box-shadow: var(--mis-select-focus-shadow);
+}
+
+/* -----------------------------------------------------------------------------
+   BOOTSTRAP DROPDOWN
+   ----------------------------------------------------------------------------- */
+
+.dropdown-menu,
+.mis-dropdown-menu {
+  background: var(--mis-popup-background);
+  border-color: var(--mis-popup-border-color);
+  border-radius: var(--mis-popup-border-radius);
+  box-shadow: var(--mis-popup-shadow);
+  font-size: var(--mis-popup-font-size);
+  max-height: var(--mis-popup-max-height);
+  overflow-y: auto;
+  z-index: var(--mis-popup-z-index);
+}
+
+.dropdown-item,
+.mis-dropdown-item {
+  color: var(--mis-popup-item-color);
+  padding: var(--mis-popup-item-padding-y) var(--mis-popup-item-padding-x);
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus,
+.mis-dropdown-item:hover,
+.mis-dropdown-item:focus {
+  background: var(--mis-popup-item-hover-bg);
+}
+
+.dropdown-item.active,
+.dropdown-item:active,
+.mis-dropdown-item.is-active {
+  color: var(--mis-popup-item-active-color);
+  background: var(--mis-popup-item-active-bg);
+}
+
+/* -----------------------------------------------------------------------------
+   УНИВЕРСАЛЬНЫЙ AUTOCOMPLETE
+   -----------------------------------------------------------------------------
+   Для будущих списков лекарств/диагнозов можно использовать такую структуру:
+
+   <div class="mis-autocomplete">
+     <input class="form-control">
+     <div class="mis-autocomplete-menu">
+       <button type="button" class="mis-autocomplete-item">
+         <span class="mis-dictionary-code">N18.3</span>
+         <span>Хроническая болезнь почек</span>
+       </button>
+     </div>
+   </div>
+*/
+
+.mis-autocomplete {
+  position: relative;
+}
+
+.mis-autocomplete-menu {
+  position: absolute;
+  top: calc(100% + 0.25rem);
+  left: 0;
+  right: 0;
+  background: var(--mis-popup-background);
+  border: 1px solid var(--mis-popup-border-color);
+  border-radius: var(--mis-popup-border-radius);
+  box-shadow: var(--mis-popup-shadow);
+  font-size: var(--mis-popup-font-size);
+  max-height: var(--mis-popup-max-height);
+  overflow-y: auto;
+  z-index: var(--mis-popup-z-index);
+}
+
+.mis-autocomplete-item {
+  display: block;
+  width: 100%;
+  border: 0;
+  background: transparent;
+  color: var(--mis-popup-item-color);
+  text-align: left;
+  padding: var(--mis-popup-item-padding-y) var(--mis-popup-item-padding-x);
+  cursor: pointer;
+}
+
+.mis-autocomplete-item:hover,
+.mis-autocomplete-item:focus,
+.mis-autocomplete-item.is-active {
+  background: var(--mis-popup-item-hover-bg);
+}
+
+.mis-autocomplete-item.is-selected {
+  color: var(--mis-popup-item-active-color);
+  background: var(--mis-popup-item-active-bg);
+}
+
+/* -----------------------------------------------------------------------------
+   ВЫБОР ДИАГНОЗОВ И ЛЕКАРСТВ
+   ----------------------------------------------------------------------------- */
+
+.mis-dictionary-code {
+  color: var(--mis-dictionary-code-color);
+  font-weight: 600;
+  margin-right: 0.35rem;
+}
+
+.mis-dictionary-note {
+  color: var(--mis-dictionary-note-color);
+  font-size: 0.875em;
+}
+
+/* Строки назначений лекарств. Можно добавлять на wrapper каждой строки. */
+.mis-medication-row {
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+/* Строки МКБ-10 диагнозов. */
+.mis-icd10-row {
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+/* -----------------------------------------------------------------------------
+   ПУСТОЕ СОСТОЯНИЕ СПИСКА
+   ----------------------------------------------------------------------------- */
+
+.mis-popup-empty {
+  color: var(--mis-dictionary-note-color);
+  padding: var(--mis-popup-item-padding-y) var(--mis-popup-item-padding-x);
+  font-style: italic;
+}

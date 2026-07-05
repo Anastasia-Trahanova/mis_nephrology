@@ -1,10 +1,12 @@
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from .routers import pages, patients, auth, ckd_registry, appointments, appointment_filters
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 import time
 import logging
 from .settings import settings
+
 
 # Настройка логирования в файл
 logging.basicConfig(
@@ -47,6 +49,7 @@ class LoggingMiddleware(BaseHTTPMiddleware):
     
 
 app = FastAPI(title="МИС Нефролога", version="1.0.0")
+app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 # Подключаем middleware.
 # Важно: SessionMiddleware добавляется последним, чтобы он был внешним слоем

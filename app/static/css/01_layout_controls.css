@@ -1,0 +1,216 @@
+/*
+===============================================================================
+Файл: app/static/css/01_layout_controls.css
+Назначение: единые настройки общего внешнего вида страниц.
+
+Что настраивается здесь:
+- общий шрифт приложения;
+- размер основного текста;
+- межстрочный интервал;
+- выравнивание заголовков и блоков;
+- внешний вид кнопок, включая кнопку экспорта Word;
+- внешний вид таблиц: шрифт внутри таблиц, размер, отступы, расположение;
+- базовые карточки/секции, если нужно привести страницы к единому стилю.
+
+Важно:
+- Этот файл НЕ должен менять бизнес-логику, поля формы, name/id элементов.
+- Здесь меняется только внешний вид.
+- Значения ниже подобраны консервативно, чтобы текущий стиль почти не изменился.
+- Для будущего редизайна сначала меняй переменные в :root, а не HTML-шаблоны.
+
+Как пользоваться:
+1. Нужно поменять шрифт во всём приложении — меняй --mis-font-family-base.
+2. Нужно увеличить текст во всех формах/таблицах — меняй --mis-font-size-base.
+3. Нужно изменить стиль всех кнопок — меняй блок .btn.
+4. Нужно отдельно настроить кнопку Word-экспорта — используй .mis-word-export-btn
+   или добавь этот класс к ссылке/кнопке экспорта в шаблоне.
+5. Нужно сделать таблицы компактнее — меняй --mis-table-cell-padding-y/x.
+===============================================================================
+*/
+
+:root {
+  /* -------------------------------------------------------------------------
+     1. ШРИФТЫ И РАЗМЕРЫ ТЕКСТА
+     ------------------------------------------------------------------------- */
+
+  /* Главный шрифт всего приложения. Можно заменить на Arial, Inter, Roboto и т.д. */
+  --mis-font-family-base: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", "Liberation Sans", sans-serif;
+
+  /* Базовый размер текста на страницах. 1rem обычно равен 16px. */
+  --mis-font-size-base: 1rem;
+
+  /* Текст внутри таблиц. Можно поставить 0.9rem, если таблицы слишком крупные. */
+  --mis-font-size-table: 0.95rem;
+
+  /* Мелкие подсказки под полями. */
+  --mis-font-size-small: 0.875rem;
+
+  /* Межстрочный интервал для обычного текста. */
+  --mis-line-height-base: 1.5;
+
+  /* -------------------------------------------------------------------------
+     2. ЦВЕТА И БАЗОВЫЕ ОТСТУПЫ
+     ------------------------------------------------------------------------- */
+
+  --mis-text-color: #212529;
+  --mis-muted-text-color: #6c757d;
+  --mis-page-background: #ffffff;
+  --mis-card-background: #ffffff;
+  --mis-border-color: #dee2e6;
+
+  /* Радиус скругления карточек, кнопок, полей и таблиц. */
+  --mis-border-radius: 0.375rem;
+
+  /* Общий отступ внутри карточек/секций. */
+  --mis-section-padding: 1rem;
+
+  /* -------------------------------------------------------------------------
+     3. КНОПКИ
+     ------------------------------------------------------------------------- */
+
+  --mis-button-font-size: 1rem;
+  --mis-button-padding-y: 0.375rem;
+  --mis-button-padding-x: 0.75rem;
+  --mis-button-border-radius: 0.375rem;
+
+  /* Кнопка экспорта Word. По умолчанию не навязывает цвет, чтобы не ломать стиль. */
+  --mis-word-export-font-size: 1rem;
+  --mis-word-export-padding-y: 0.375rem;
+  --mis-word-export-padding-x: 0.75rem;
+
+  /* -------------------------------------------------------------------------
+     4. ТАБЛИЦЫ
+     ------------------------------------------------------------------------- */
+
+  --mis-table-width: 100%;
+  --mis-table-font-size: var(--mis-font-size-table);
+  --mis-table-cell-padding-y: 0.5rem;
+  --mis-table-cell-padding-x: 0.5rem;
+  --mis-table-header-font-weight: 600;
+  --mis-table-border-color: var(--mis-border-color);
+
+  /* Выравнивание текста внутри таблиц: left / center / right. */
+  --mis-table-text-align: left;
+  --mis-table-header-text-align: left;
+}
+
+/* -----------------------------------------------------------------------------
+   ОБЩИЕ НАСТРОЙКИ СТРАНИЦЫ
+   ----------------------------------------------------------------------------- */
+
+body {
+  font-family: var(--mis-font-family-base);
+  font-size: var(--mis-font-size-base);
+  line-height: var(--mis-line-height-base);
+  color: var(--mis-text-color);
+  background: var(--mis-page-background);
+}
+
+/* Класс для основного заголовка страницы. Можно добавлять постепенно. */
+.mis-page-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  text-align: left;
+  margin-bottom: 1rem;
+}
+
+/* Класс для заголовка внутри медицинского блока/карточки. */
+.mis-section-title {
+  font-size: 1.1rem;
+  font-weight: 600;
+  text-align: left;
+  margin-bottom: 0.75rem;
+}
+
+/* Универсальная карточка-секция. Можно использовать в будущих шаблонах. */
+.mis-section-card {
+  background: var(--mis-card-background);
+  border: 1px solid var(--mis-border-color);
+  border-radius: var(--mis-border-radius);
+  padding: var(--mis-section-padding);
+  margin-bottom: 1rem;
+}
+
+/* -----------------------------------------------------------------------------
+   КНОПКИ
+   -----------------------------------------------------------------------------
+   Здесь настраиваются общие кнопки. Значения близки к Bootstrap, чтобы текущий
+   стиль не изменился резко. Если захочешь единый дизайн всех кнопок, меняй
+   переменные --mis-button-* выше.
+*/
+
+.btn {
+  font-size: var(--mis-button-font-size);
+  padding: var(--mis-button-padding-y) var(--mis-button-padding-x);
+  border-radius: var(--mis-button-border-radius);
+}
+
+/*
+Кнопка экспорта Word.
+Чтобы управлять ей отдельно, добавь класс mis-word-export-btn к ссылке экспорта:
+
+<a href="..." class="btn btn-success mis-word-export-btn">Скачать Word</a>
+
+Если класс ещё не добавлен, текущая кнопка продолжит жить по Bootstrap-стилю.
+*/
+.mis-word-export-btn,
+a[href*="export"].btn,
+a[href*="docx"].btn {
+  font-size: var(--mis-word-export-font-size);
+  padding: var(--mis-word-export-padding-y) var(--mis-word-export-padding-x);
+}
+
+/* -----------------------------------------------------------------------------
+   ТАБЛИЦЫ
+   -----------------------------------------------------------------------------
+   Этот блок управляет таблицами во всех страницах, где используются .table.
+   Чтобы сделать только отдельные таблицы медицинской карточки другими, можно
+   добавить класс .mis-table к нужным таблицам.
+*/
+
+.table,
+.mis-table {
+  width: var(--mis-table-width);
+  font-size: var(--mis-table-font-size);
+  text-align: var(--mis-table-text-align);
+}
+
+.table th,
+.table td,
+.mis-table th,
+.mis-table td {
+  padding: var(--mis-table-cell-padding-y) var(--mis-table-cell-padding-x);
+  border-color: var(--mis-table-border-color);
+  vertical-align: middle;
+}
+
+.table th,
+.mis-table th {
+  font-weight: var(--mis-table-header-font-weight);
+  text-align: var(--mis-table-header-text-align);
+}
+
+/* Если таблица широкая, оборачивай её в .mis-table-responsive. */
+.mis-table-responsive {
+  width: 100%;
+  overflow-x: auto;
+}
+
+/* -----------------------------------------------------------------------------
+   ВЫРАВНИВАНИЕ И РАСПОЛОЖЕНИЕ
+   -----------------------------------------------------------------------------
+   Эти классы можно добавлять в шаблоны, если нужно централизованно управлять
+   расположением без inline-style.
+*/
+
+.mis-align-left { text-align: left; }
+.mis-align-center { text-align: center; }
+.mis-align-right { text-align: right; }
+
+.mis-block-start { align-items: flex-start; }
+.mis-block-center { align-items: center; }
+.mis-block-end { align-items: flex-end; }
+
+.mis-muted {
+  color: var(--mis-muted-text-color);
+}
