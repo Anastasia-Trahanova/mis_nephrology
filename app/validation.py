@@ -1,8 +1,33 @@
+"""
+Назначение файла: серверная проверка клинических полей перед сохранением приёма.
+
+Главный принцип текущего этапа:
+- врачу показываем только короткие сообщения: "Неверное значение" / "Некорректная дата";
+- технические диапазоны остаются внутри приложения и не выводятся в интерфейс;
+- нормализация безопасных форматов остаётся внутренней логикой;
+- частично заполненная альбуминурия не блокирует сохранение и не показывает подсказки.
+
+Важно: диапазоны ниже — это НЕ референсные интервалы нормы. Это широкие
+технические пределы, чтобы не сохранять очевидно невозможные значения.
+"""
+
 from datetime import date, datetime
 from typing import Any, Dict, List, Optional
 
+from .services.clinical_value_normalization import normalize_appointment_form_values
+
 
 ValidationError = Dict[str, Any]
+
+ERROR_INVALID_VALUE = "Неверное значение"
+ERROR_INVALID_DATE = "Некорректная дата"
+ERROR_REQUIRED_FIELDS = "Не все обязательные поля заполнены"
+
+DATE_OF_BIRTH_IN_FUTURE = "Дата рождения не может быть в будущем"
+APPOINTMENT_BEFORE_BIRTH = "Дата приёма не может быть раньше даты рождения"
+NEXT_VISIT_BEFORE_APPOINTMENT = "Дата следующего визита не может быть раньше даты приёма"
+NEXT_VISIT_BEFORE_TODAY = "Дата следующего визита не может быть раньше текущей даты"
+INVESTIGATION_AFTER_APPOINTMENT = "Дата исследования не может быть позже даты приёма"
 
 
 def _empty_to_none(value: Any) -> Optional[str]:
@@ -16,64 +41,21 @@ def _to_float(value: Any) -> Optional[float]:
     value = _empty_to_none(value)
     if value is None:
         return None
+
     try:
         return float(value.replace(" ", "").replace(",", "."))
     except ValueError:
         return None
 
-def _normalize_numeric_value_for_validation(field_name: str, value: Any) -> Any:
-    """
-    Нормализует безопасные альтернативные форматы перед валидацией.
-
-    Важно:
-    эта функция НЕ должна делать опасные догадки.
-    Например:
-    - креатинин 100 не превращаем ни во что другое;
-    - глюкозу 55 не делим на 10;
-    - ферритин 1200 не меняем;
-    - тромбоциты 250 не меняем.
-
-    Сейчас здесь есть только однозначная нормализация удельного веса мочи:
-    - 1015 -> 1.015
-    - 1005 -> 1.005
-    - 1050 -> 1.050
-
-    Это нужно потому, что врачи могут вводить удельный вес мочи в обоих форматах:
-    лабораторном десятичном 1.015 и коротком привычном 1015.
-    Внутренний формат хранения и проверки — десятичный: 1.015.
-    """
-    value_text = _empty_to_none(value)
-    if value_text is None:
-        return value
-
-    if field_name != "specific_gravity":
-        return value
-
-    normalized_text = str(value_text).strip().replace(" ", "").replace(",", ".")
-
-    try:
-        number = float(normalized_text)
-    except ValueError:
-        return value
-
-    # Уже правильный формат: 1.015, 1.020, 1.030.
-    if 1.000 <= number <= 1.050:
-        return normalized_text
-
-    # Альтернативный формат: 1000–1050.
-    # Нормализуем только этот узкий и однозначный диапазон.
-    # Не нормализуем 1500, 900, 9999 и другие странные значения.
-    if number.is_integer() and 1000 <= number <= 1050:
-        return f"{number / 1000:.3f}"
-
-    return value
 
 def _to_date(value: Any) -> Optional[date]:
     value = _empty_to_none(value)
     if value is None:
         return None
+
     if isinstance(value, date):
         return value
+
     try:
         return datetime.strptime(value, "%Y-%m-%d").date()
     except ValueError:
@@ -83,6 +65,7 @@ def _to_date(value: Any) -> Optional[date]:
 def _getlist(form, field_name: str) -> List[Any]:
     if hasattr(form, "getlist"):
         return list(form.getlist(field_name))
+
     value = form.get(field_name)
     if value is None:
         return []
@@ -91,61 +74,69 @@ def _getlist(form, field_name: str) -> List[Any]:
     return [value]
 
 
-def _add_error(errors: List[ValidationError], field: str, message: str, index: Optional[int] = None) -> None:
-    errors.append({
-        "field": field,
-        "message": message,
-        "index": index,
-    })
+def _add_error(
+    errors: List[ValidationError],
+    field: str,
+    message: str,
+    index: Optional[int] = None,
+) -> None:
+    errors.append(
+        {
+            "field": field,
+            "message": message,
+            "index": index,
+        }
+    )
 
 
-# Диапазоны ниже — не референсные интервалы нормы, а широкие технические пределы,
-# чтобы не сохранять очевидно невозможные / ошибочно введённые значения.
+# Технические пределы для отсечения абсурдных значений.
+# Сообщение во всех случаях намеренно короткое: врач не должен видеть диапазоны.
 NUMERIC_RULES = {
     # Осмотр
-    "height": (50, 250, "Рост должен быть в диапазоне 50–250 см."),
-    "weight": (30, 300, "Вес должен быть в диапазоне 30–300 кг."),
-    "systolic_pressure": (50, 300, "Систолическое АД должно быть в диапазоне 50–300 мм рт. ст."),
-    "diastolic_pressure": (30, 200, "Диастолическое АД должно быть в диапазоне 30–200 мм рт. ст."),
-    "heart_rate": (20, 250, "ЧСС должна быть в диапазоне 20–250 уд/мин."),
+    "height": (50, 250, ERROR_INVALID_VALUE),
+    "weight": (30, 300, ERROR_INVALID_VALUE),
+    "systolic_pressure": (50, 300, ERROR_INVALID_VALUE),
+    "diastolic_pressure": (30, 200, ERROR_INVALID_VALUE),
+    "heart_rate": (20, 250, ERROR_INVALID_VALUE),
 
     # ОАК
-    "hemoglobin": (20, 250, "Гемоглобин должен быть в диапазоне 20–250 г/л."),
-    "erythrocytes": (0.5, 10, "Эритроциты должны быть в диапазоне 0,5–10."),
-    "leukocytes": (0.1, 300, "Лейкоциты должны быть в диапазоне 0,1–300."),
-    "platelets": (5, 1500, "Тромбоциты должны быть в диапазоне 5–1500."),
-    "esr": (0, 150, "СОЭ должна быть в диапазоне 0–150 мм/ч."),
-    "mcv": (40, 140, "MCV должен быть в диапазоне 40–140 фл."),
-    "hematocrit": (5, 70, "Гематокрит должен быть в диапазоне 5–70 %."),
+    "hemoglobin": (20, 250, ERROR_INVALID_VALUE),
+    "erythrocytes": (0.5, 10, ERROR_INVALID_VALUE),
+    "leukocytes": (0.1, 300, ERROR_INVALID_VALUE),
+    "platelets": (5, 1500, ERROR_INVALID_VALUE),
+    "esr": (0, 150, ERROR_INVALID_VALUE),
+    "mcv": (40, 140, ERROR_INVALID_VALUE),
+    "hematocrit": (5, 70, ERROR_INVALID_VALUE),
 
     # Биохимия
-    "creatinine": (15, 3000, "Неверное значение креатинина крови: допустимо 15–3000 мкмоль/л."),
-    "urea": (0.5, 80, "Мочевина должна быть в диапазоне 0,5–80 ммоль/л."),
-    "uric_acid": (50, 1500, "Мочевая кислота должна быть в диапазоне 50–1500 мкмоль/л."),
-    "glucose": (0.5, 40, "Глюкоза должна быть в диапазоне 0,5–40 ммоль/л."),
-    "total_protein": (20, 120, "Общий белок должен быть в диапазоне 20–120 г/л."),
-    "albumin": (10, 70, "Альбумин крови должен быть в диапазоне 10–70 г/л."),
-    "potassium": (1, 10, "Калий должен быть в диапазоне 1–10 ммоль/л."),
-    "calcium": (1, 4, "Кальций должен быть в диапазоне 1–4 ммоль/л."),
-    "phosphorus": (0.2, 5, "Фосфор должен быть в диапазоне 0,2–5 ммоль/л."),
-    "ferritin": (0, 10000, "Ферритин должен быть в диапазоне 0–10000."),
-    "ptg": (0, 10000, "ПТГ должен быть в диапазоне 0–10000."),
+    "creatinine": (15, 3000, ERROR_INVALID_VALUE),
+    "urea": (0.5, 80, ERROR_INVALID_VALUE),
+    "uric_acid": (50, 1500, ERROR_INVALID_VALUE),
+    "glucose": (0.5, 40, ERROR_INVALID_VALUE),
+    "total_protein": (20, 120, ERROR_INVALID_VALUE),
+    "albumin": (10, 70, ERROR_INVALID_VALUE),
+    "potassium": (1, 10, ERROR_INVALID_VALUE),
+    "calcium": (1, 4, ERROR_INVALID_VALUE),
+    "phosphorus": (0.2, 5, ERROR_INVALID_VALUE),
+    "ferritin": (0, 10000, ERROR_INVALID_VALUE),
+    "ptg": (0, 10000, ERROR_INVALID_VALUE),
 
     # ОАМ
-    "specific_gravity": (1.000, 1.050, "Удельный вес мочи должен быть в диапазоне 1,000–1,050."),
-    "urine_protein": (0, 20, "Белок в моче должен быть в диапазоне 0–20 г/л."),
-    "urine_leukocytes": (0, 10000, "Лейкоциты в моче должны быть неотрицательным числом до 10000."),
-    "urine_erythrocytes": (0, 10000, "Эритроциты в моче должны быть неотрицательным числом до 10000."),
-    "bacteria": (0, 100, "Бактерии должны быть неотрицательным числом."),
+    "specific_gravity": (1.000, 1.050, ERROR_INVALID_VALUE),
+    "urine_protein": (0, 20, ERROR_INVALID_VALUE),
+    "urine_leukocytes": (0, 10000, ERROR_INVALID_VALUE),
+    "urine_erythrocytes": (0, 10000, ERROR_INVALID_VALUE),
+    "bacteria": (0, 100, ERROR_INVALID_VALUE),
 
     # Альбуминурия
-    "urine_albumin": (0, 100000, "Недопустимое значение"),
-    "urine_creatinine": (0.000001, 1000000, "Недопустимое значение"),
+    "urine_albumin": (0, 100000, ERROR_INVALID_VALUE),
+    "urine_creatinine": (0.000001, 1000000, ERROR_INVALID_VALUE),
 
     # УЗИ
-    "left_parenchyma": (1, 50, "Толщина паренхимы левой почки должна быть в диапазоне 1–50 мм."),
-    "right_parenchyma": (1, 50, "Толщина паренхимы правой почки должна быть в диапазоне 1–50 мм."),
+    "left_parenchyma": (1, 50, ERROR_INVALID_VALUE),
+    "right_parenchyma": (1, 50, ERROR_INVALID_VALUE),
 }
+
 
 DATE_FIELDS = [
     "cbc_investigation_date",
@@ -155,20 +146,77 @@ DATE_FIELDS = [
     "ultrasound_investigation_date",
 ]
 
+
 ALLOWED_UNITS = {
     "urine_albumin_unit": {"mg_l", "g_l"},
     "urine_creatinine_unit": {"mmol_l", "umol_l"},
 }
 
 
-def validate_appointment_form(form, appointment_date_value: Any) -> List[ValidationError]:
-    """Проверяет медицинские числовые поля формы перед сохранением приёма.
+def validate_patient_and_visit_dates(
+    form,
+    *,
+    current_date: Optional[date] = None,
+) -> List[ValidationError]:
+    """
+    Проверяет базовую связку дат пациента и визита.
 
-    Функция не требует заполнения необязательных полей. Пустые поля считаются допустимыми.
-    Если поле заполнено, оно должно быть числом и попадать в широкий технический диапазон.
+    Функция отдельная, чтобы её можно было подключить к созданию нового пациента,
+    не меняя медицинскую валидацию приёма. На фронте такие же проверки выполняет
+    simple_form_guard.js, но серверная проверка нужна как второй рубеж защиты.
     """
     errors: List[ValidationError] = []
+    today = current_date or date.today()
+
+    birth_date = _to_date(form.get("birth_date"))
+    appointment_date = _to_date(form.get("appointment_date"))
+    next_control_date = _to_date(form.get("next_control_date"))
+
+    if _empty_to_none(form.get("birth_date")) and birth_date is None:
+        _add_error(errors, "birth_date", ERROR_INVALID_DATE)
+    if _empty_to_none(form.get("appointment_date")) and appointment_date is None:
+        _add_error(errors, "appointment_date", ERROR_INVALID_DATE)
+    if _empty_to_none(form.get("next_control_date")) and next_control_date is None:
+        _add_error(errors, "next_control_date", ERROR_INVALID_DATE)
+
+    if birth_date and birth_date > today:
+        _add_error(errors, "birth_date", DATE_OF_BIRTH_IN_FUTURE)
+
+    if birth_date and appointment_date and appointment_date < birth_date:
+        _add_error(errors, "appointment_date", APPOINTMENT_BEFORE_BIRTH)
+
+    if next_control_date and appointment_date and next_control_date < appointment_date:
+        _add_error(errors, "next_control_date", NEXT_VISIT_BEFORE_APPOINTMENT)
+
+    if next_control_date and next_control_date < today:
+        _add_error(errors, "next_control_date", NEXT_VISIT_BEFORE_TODAY)
+
+    return errors
+
+
+def validate_appointment_form(
+    form,
+    appointment_date_value: Any,
+    *,
+    birth_date_value: Any = None,
+    current_date: Optional[date] = None,
+) -> List[ValidationError]:
+    """
+    Проверяет медицинские поля формы перед сохранением приёма.
+
+    Пустые необязательные поля допустимы. Если поле заполнено, оно должно быть
+    числом и попадать в широкий технический диапазон. Наружу выводится только
+    короткое сообщение "Неверное значение".
+
+    Перед проверкой форма нормализуется:
+    - 5,1 -> 5.1;
+    - 1015 -> 1.015 для удельного веса мочи;
+    - 0.39 -> 39 для гематокрита.
+    """
+    form = normalize_appointment_form_values(form)
+    errors: List[ValidationError] = []
     appointment_date = _to_date(appointment_date_value)
+    today = current_date or date.today()
 
     for field_name, (min_value, max_value, message) in NUMERIC_RULES.items():
         values = _getlist(form, field_name)
@@ -177,22 +225,31 @@ def validate_appointment_form(form, appointment_date_value: Any) -> List[Validat
             if value_text is None:
                 continue
 
-            normalized_value = _normalize_numeric_value_for_validation(field_name, value_text)
-
-            number = _to_float(normalized_value)
+            number = _to_float(value_text)
             if number is None:
-                _add_error(errors, field_name, f"Поле должно быть числом. {message}", index)
+                _add_error(errors, field_name, message, index)
                 continue
 
             if number < min_value or number > max_value:
                 _add_error(errors, field_name, message, index)
 
-    # АД: систолическое должно быть больше диастолического.
+    # АД: если оба значения заполнены, систолическое должно быть больше диастолического.
     systolic = _to_float(form.get("systolic_pressure"))
     diastolic = _to_float(form.get("diastolic_pressure"))
     if systolic is not None and diastolic is not None and systolic <= diastolic:
-        _add_error(errors, "systolic_pressure", "Систолическое АД должно быть больше диастолического.")
-        _add_error(errors, "diastolic_pressure", "Диастолическое АД должно быть меньше систолического.")
+        _add_error(errors, "systolic_pressure", ERROR_INVALID_VALUE)
+        _add_error(errors, "diastolic_pressure", ERROR_INVALID_VALUE)
+
+    # Дата рождения и дата приёма проверяются только если birth_date_value передан.
+    birth_date = _to_date(birth_date_value)
+    if birth_date_value is not None:
+        if _empty_to_none(birth_date_value) and birth_date is None:
+            _add_error(errors, "birth_date", ERROR_INVALID_DATE)
+        elif birth_date and birth_date > today:
+            _add_error(errors, "birth_date", DATE_OF_BIRTH_IN_FUTURE)
+
+        if birth_date and appointment_date and appointment_date < birth_date:
+            _add_error(errors, "appointment_date", APPOINTMENT_BEFORE_BIRTH)
 
     # Даты исследований не должны быть позже даты приёма.
     if appointment_date:
@@ -201,36 +258,34 @@ def validate_appointment_form(form, appointment_date_value: Any) -> List[Validat
                 value_text = _empty_to_none(raw_value)
                 if value_text is None:
                     continue
+
                 investigation_date = _to_date(value_text)
                 if investigation_date is None:
-                    _add_error(errors, field_name, "Некорректная дата исследования.", index)
+                    _add_error(errors, field_name, ERROR_INVALID_DATE, index)
                     continue
+
                 if investigation_date > appointment_date:
-                    _add_error(errors, field_name, "Дата исследования не может быть позже даты приёма.", index)
+                    _add_error(errors, field_name, INVESTIGATION_AFTER_APPOINTMENT, index)
 
         next_control_date = _to_date(form.get("next_control_date"))
         if next_control_date and next_control_date < appointment_date:
-            _add_error(errors, "next_control_date", "Дата следующего контроля не должна быть раньше даты приёма.")
+            _add_error(errors, "next_control_date", NEXT_VISIT_BEFORE_APPOINTMENT)
+        if next_control_date and next_control_date < today:
+            _add_error(errors, "next_control_date", NEXT_VISIT_BEFORE_TODAY)
 
     # Единицы измерения — только из разрешённого списка.
+    # Сообщение короткое, без перечисления внутренних значений.
     for field_name, allowed in ALLOWED_UNITS.items():
         for index, raw_value in enumerate(_getlist(form, field_name)):
             value = _empty_to_none(raw_value)
             if value is None:
                 continue
             if value not in allowed:
-                _add_error(errors, field_name, "Некорректная единица измерения.", index)
+                _add_error(errors, field_name, ERROR_INVALID_VALUE, index)
 
-    # Для ACR нужны обе части: альбумин и креатинин мочи.
-    urine_albumin_values = _getlist(form, "urine_albumin")
-    urine_creatinine_values = _getlist(form, "urine_creatinine")
-    max_len = max(len(urine_albumin_values), len(urine_creatinine_values))
-    for index in range(max_len):
-        albumin = _empty_to_none(urine_albumin_values[index] if index < len(urine_albumin_values) else None)
-        creatinine = _empty_to_none(urine_creatinine_values[index] if index < len(urine_creatinine_values) else None)
-        if albumin and not creatinine:
-            _add_error(errors, "urine_creatinine", "Для расчёта ACR нужен креатинин мочи.", index)
-        if creatinine and not albumin:
-            _add_error(errors, "urine_albumin", "Для расчёта ACR нужен альбумин мочи.", index)
+    # ВАЖНО: частично заполненную альбуминурию больше не блокируем.
+    # Если введён только альбумин или только креатинин мочи, форма сохраняется,
+    # а ACR просто не рассчитывается. Врач увидит спокойную подсказку под таблицей,
+    # какие поля нужны для расчёта.
 
     return errors

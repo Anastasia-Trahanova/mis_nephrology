@@ -3,7 +3,9 @@
 Файл выделен при разделении большой формы приёма на структурные части.
 Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
 #}
+
 {% if appointment_form_mode == 'new_appointment' %}
+{% from "appointment_form/_calculation_hints.html" import egfr_hint %}
 <hr>
 
             <!-- ===================================================== -->
@@ -11,6 +13,7 @@
             <!-- ===================================================== -->
             <div class="d-flex justify-content-between align-items-center mb-2">
                 <h5 class="mb-0">Расчётные показатели</h5>
+                {{ egfr_hint() }}
                 <button type="button" class="btn btn-outline-primary btn-sm" id="updateMetricsTableBtn">
                     🔄 Обновить
                 </button>

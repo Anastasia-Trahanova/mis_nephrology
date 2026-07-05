@@ -28,7 +28,6 @@
 </style>
 
 <h2>➕ Добавление нового приёма</h2>
-<p class="text-muted">Пациент уже есть в базе. Персональные данные подгружены автоматически, данные прошлого приёма можно отредактировать.</p>
 
 <form method="post" action="/api/patients/{{ patient.id }}/appointments/new">
     <!-- ===================================================== -->
@@ -58,8 +57,13 @@
             <input type="hidden" name="gender" value="{{ 'true' if patient.gender_str == 'Мужской' else 'false' }}">
 
             {% if last_appointment %}
-            <div class="alert alert-info mb-0">
-                Данные ниже автоматически подставлены из последнего приёма. Их можно изменить перед сохранением нового приёма.
+            <div class="alert alert-info mis-form-info mb-3">
+            В форму подгружены данные последнего приёма
+            {% if last_appointment.appointment_date %}
+                ({{ last_appointment.appointment_date.strftime('%d.%m.%Y') }}).
+            {% else %}
+                .
+            {% endif %}
             </div>
             {% endif %}
         </div>

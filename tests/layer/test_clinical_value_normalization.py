@@ -105,4 +105,4 @@ def test_validation_rejects_specific_gravity_when_value_is_not_safely_normalizab
 
     assert errors
     assert errors[0]["field"] == "specific_gravity"
-    assert "1.015" in errors[0]["message"] or "1015" in errors[0]["message"]
+    assert errors[0]["message"] == "Неверное значение"
