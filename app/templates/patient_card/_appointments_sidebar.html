@@ -1,0 +1,34 @@
+{#
+Назначение файла:
+Левая панель истории приёмов.
+
+Что делает:
+- показывает список приёмов пациента;
+- подсвечивает выбранный приём;
+- оставляет кнопку «➕ Добавить приём» в card-footer левой панели.
+
+Важно:
+Это исходное место кнопки добавления приёма. Не переносить кнопку в шапку или правую карточку.
+#}
+<!-- ЛЕВАЯ ПАНЕЛЬ: СПИСОК ПРИЁМОВ (без изменений) -->
+<div class="card">
+  <div class="card-header bg-primary text-white">
+    <h5 class="mb-0"> История приёмов</h5>
+  </div>
+
+  <div class="list-group list-group-flush" id="appointmentsList">
+    {% for app in appointments %}
+      <a href="/patient/{{ patient.id }}?appointment_id={{ app.appointment_id }}"
+         class="list-group-item list-group-item-action {% if selected_appointment and selected_appointment.id == app.appointment_id %}active{% endif %}">
+        <strong>{{ app.appointment_date.strftime('%d.%m.%Y') if app.appointment_date else '—' }}</strong><br>
+        <small>{{ app.doctor_name }}</small>
+      </a>
+    {% else %}
+      <div class="list-group-item text-muted">Нет приёмов</div>
+    {% endfor %}
+  </div>
+
+  <div class="card-footer">
+    <a href="/new-appointment/{{ patient.id }}" class="btn btn-success w-100">➕ Добавить приём</a>
+  </div>
+</div>

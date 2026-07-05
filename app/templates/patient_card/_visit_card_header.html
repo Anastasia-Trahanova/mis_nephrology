@@ -1,0 +1,12 @@
+{#
+Назначение файла:
+Заголовок правой карточки выбранного приёма.
+
+Что делает:
+- выводит дату и время выбранного приёма;
+- сохраняет исходный стиль: card-header bg-secondary text-white.
+#}
+<!-- КОД ОТОБРАЖЕНИЯ ПРИЁМА -->
+<div class="card-header bg-secondary text-white">
+  <h5 class="mb-0">Приём от {{ selected_appointment.appointment_date.strftime('%d.%m.%Y %H:%M') if selected_appointment.appointment_date else '—' }}</h5>
+</div>

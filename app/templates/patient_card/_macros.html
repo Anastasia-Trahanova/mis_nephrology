@@ -1,0 +1,33 @@
+{#
+Назначение файла:
+Небольшие Jinja-macro для карточки пациента.
+
+Что делает:
+- единообразно выводит пустые значения как «—»;
+- форматирует даты;
+- формирует ячейки таблиц с клиническими значениями.
+
+Зачем нужен:
+В карточке много повторяющихся таблиц. Эти macro уменьшают дублирование
+и помогают не писать разные варианты «—», "---", пустой строки и None.
+#}
+
+{% macro value_or_dash(value) -%}
+  {%- if value is not none and value|string|trim != '' -%}
+    {{ value }}
+  {%- else -%}
+    —
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro date_or_dash(value, fmt='%d.%m.%Y') -%}
+  {%- if value -%}
+    {{ value.strftime(fmt) if value.strftime is defined else value }}
+  {%- else -%}
+    —
+  {%- endif -%}
+{%- endmacro %}
+
+{% macro table_value(value) -%}
+  <td>{{ value_or_dash(value) }}</td>
+{%- endmacro %}

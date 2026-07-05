@@ -1,0 +1,76 @@
+{#
+Назначение файла:
+История прогноза ХБП по KDIGO и текущий прогноз в заключении.
+
+Что делает:
+- выводит таблицу истории прогноза ХБП;
+- выводит текущий прогноз перед диагнозами;
+- сохраняет исходную визуальную логику с alert-классами по уровню риска.
+#}
+<!-- История прогноза ХБП -->
+<h5 class="mt-3">История прогноза ХБП по KDIGO</h5>
+{% if ckd_prognosis_history %}
+  <div class="table-responsive">
+    <table class="table table-bordered table-sm table-hover">
+      <thead class="table-light">
+        <tr>
+          <th>Дата оценки</th>
+          <th>Категория СКФ</th>
+          <th>Категория альбуминурии</th>
+          <th>Итоговая категория</th>
+          <th>Прогноз</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for item in ckd_prognosis_history %}
+          <tr>
+            <td>{{ item.assessment_date.strftime('%d.%m.%Y') if item.assessment_date else '—' }}</td>
+            <td>{{ item.gfr_category or '—' }}</td>
+            <td>{{ item.albuminuria_category or '—' }}</td>
+            <td>{{ item.combined_category or '—' }}</td>
+            <td>
+              {% if item.prognosis_level == 'low' %}
+                <span class="badge bg-success">{{ item.prognosis_text }}</span>
+              {% elif item.prognosis_level == 'moderate' %}
+                <span class="badge bg-warning text-dark">{{ item.prognosis_text }}</span>
+              {% elif item.prognosis_level == 'high' %}
+                <span class="badge bg-warning text-dark">{{ item.prognosis_text }}</span>
+              {% elif item.prognosis_level == 'very_high' %}
+                <span class="badge bg-danger">{{ item.prognosis_text }}</span>
+              {% else %}
+                —
+              {% endif %}
+            </td>
+          </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="text-muted">История прогноза ХБП отсутствует.</p>
+{% endif %}
+
+<!-- Заключение: текущий прогноз -->
+<h5 class="mt-3">Заключение</h5>
+{% if ckd_prognosis_current %}
+  {% set prognosis_class = 'alert-secondary' %}
+  {% if ckd_prognosis_current.prognosis_level == 'low' %}
+    {% set prognosis_class = 'alert-success' %}
+  {% elif ckd_prognosis_current.prognosis_level == 'moderate' %}
+    {% set prognosis_class = 'alert-warning' %}
+  {% elif ckd_prognosis_current.prognosis_level == 'high' %}
+    {% set prognosis_class = 'alert-warning border border-warning' %}
+  {% elif ckd_prognosis_current.prognosis_level == 'very_high' %}
+    {% set prognosis_class = 'alert-danger' %}
+  {% endif %}
+  <div class="alert {{ prognosis_class }}">
+    <strong>Прогноз ХБП по KDIGO</strong>
+    на {{ ckd_prognosis_current.assessment_date.strftime('%d.%m.%Y') if ckd_prognosis_current.assessment_date else '—' }}:
+    {{ ckd_prognosis_current.prognosis_text }}
+    {% if ckd_prognosis_current.combined_category %}
+      <span class="badge bg-light text-dark ms-2">{{ ckd_prognosis_current.combined_category }}</span>
+    {% endif %}
+  </div>
+{% else %}
+  <div class="alert alert-secondary">Прогноз ХБП по KDIGO: недостаточно данных для оценки.</div>
+{% endif %}

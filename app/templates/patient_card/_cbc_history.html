@@ -1,0 +1,35 @@
+{#
+Назначение файла:
+Таблица истории общего анализа крови.
+
+Что делает:
+- выводит ОАК в исходном табличном виде: показатели строками, даты колонками;
+- сохраняет классы table-responsive, table table-bordered table-sm table-hover, thead table-light.
+#}
+<!-- Общий анализ крови (ОАК) - таблица с историей -->
+<h5 class="mt-3">Общий анализ крови</h5>
+{% if cbc_history %}
+  <div class="table-responsive">
+    <table class="table table-bordered table-sm table-hover">
+      <thead class="table-light">
+        <tr>
+          <th style="min-width: 150px;">Показатель / Дата</th>
+          {% for item in cbc_history %}
+            <th class="text-center" style="min-width: 100px;">{{ item.investigation_date.strftime('%d.%m.%Y') }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Гемоглобин, г/л</strong></td>{% for item in cbc_history %}<td class="text-center">{{ item.hemoglobin or '---' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Эритроциты, ×10¹²/л</strong></td>{% for item in cbc_history %}<td class="text-center">{{ item.erythrocytes or '---' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Лейкоциты, ×10⁹/л</strong></td>{% for item in cbc_history %}<td class="text-center">{{ item.leukocytes or '---' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Тромбоциты, ×10⁹/л</strong></td>{% for item in cbc_history %}<td class="text-center">{{ item.platelets or '---' }}</td>{% endfor %}</tr>
+        <tr><td><strong>СОЭ, мм/ч</strong></td>{% for item in cbc_history %}<td class="text-center">{{ item.esr or '---' }}</td>{% endfor %}</tr>
+        <tr><td><strong>MCV, фл</strong></td>{% for item in cbc_history %}<td class="text-center">{{ item.mcv or '---' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Гематокрит, %</strong></td>{% for item in cbc_history %}<td class="text-center">{{ item.hematocrit or '---' }}</td>{% endfor %}</tr>
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="text-muted">Общий анализ крови не предоставлен.</p>
+{% endif %}

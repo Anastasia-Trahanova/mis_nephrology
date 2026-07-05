@@ -1,0 +1,26 @@
+{#
+Назначение файла:
+Краткая информация о пациенте внутри выбранного приёма.
+
+Что делает:
+- выводит дату рождения, возраст на момент приёма и пол;
+- сохраняет исходную трёхколоночную разметку row mb-3 / col-md-4.
+#}
+<!-- Информация о пациенте (кратко) -->
+<div class="row mb-3">
+  <div class="col-md-4">
+    <p><strong>Дата рождения:</strong> {{ patient.birth_date.strftime('%d.%m.%Y') if patient.birth_date else '—' }}</p>
+  </div>
+  <div class="col-md-4">
+    <p><strong>Возраст на момент приёма:</strong>
+      {% if selected_appointment.age_at_appointment %}
+        {{ selected_appointment.age_at_appointment }} лет
+      {% else %}
+        —
+      {% endif %}
+    </p>
+  </div>
+  <div class="col-md-4">
+    <p><strong>Пол:</strong> {{ patient.gender_str if patient.gender_str else '—' }}</p>
+  </div>
+</div>

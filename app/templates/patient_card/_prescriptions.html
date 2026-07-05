@@ -1,0 +1,33 @@
+{#
+Назначение файла:
+Блок назначений.
+
+Что делает:
+- выводит диету, рекомендации, лекарства и дату следующего контроля;
+- сохраняет исходное место блока: после заключения и перед кнопкой Word-экспорта.
+#}
+<!-- Назначения -->
+<h5 class="mt-3">Назначения</h5>
+<p><strong>Диета:</strong> {{ diet_info.diet if diet_info and diet_info.diet else '—' }}</p>
+<p><strong>Рекомендации:</strong> {{ diet_info.recommendations if diet_info and diet_info.recommendations else '—' }}</p>
+<p><strong>Лекарства:</strong></p>
+{% if medications %}
+  <ul>
+    {% for med in medications %}
+      <li>
+        <strong>{{ med.medication or '—' }}</strong>
+        {% if med.dosage %} — {{ med.dosage }}{% endif %}
+        {% if med.schedule %} ({{ med.schedule }}){% endif %}
+      </li>
+    {% endfor %}
+  </ul>
+{% else %}
+  <p>—</p>
+{% endif %}
+<p><strong>Дата следующего контроля:</strong>
+  {% if diet_info and diet_info.next_control_date %}
+    {{ diet_info.next_control_date.strftime('%d.%m.%Y') }}
+  {% else %}
+    —
+  {% endif %}
+</p>

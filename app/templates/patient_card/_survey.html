@@ -1,0 +1,24 @@
+{#
+Назначение файла:
+Блок «Опрос» в карточке пациента.
+
+Что делает:
+- показывает анамнез жизни, анамнез заболевания, жалобы, наследственность и сопутствующие заболевания;
+- сохраняет исходный порядок и двухколоночную разметку.
+#}
+<!-- Опрос (анамнез) -->
+<h5 class="mt-3">Опрос</h5>
+<div class="row mb-3">
+  <div class="col-md-6">
+    <p><strong>Анамнез жизни:</strong> {{ selected_appointment.life_anamnesis or '—' }}</p>
+    <p><strong>Анамнез заболевания:</strong> {{ selected_appointment.disease_anamnesis or '—' }}</p>
+  </div>
+  <div class="col-md-6">
+    <p><strong>Жалобы:</strong> {{ selected_appointment.complaints or '—' }}</p>
+    <p><strong>Наследственность:</strong> {{ 'Отягощена' if selected_appointment.heredity else 'Не отягощена' }}</p>
+    {% if selected_appointment.heredity_description %}
+      <p><strong>Описание наследственности:</strong> {{ selected_appointment.heredity_description }}</p>
+    {% endif %}
+    <p><strong>Сопутствующие заболевания:</strong> {{ selected_appointment.comorbidities or '—' }}</p>
+  </div>
+</div>

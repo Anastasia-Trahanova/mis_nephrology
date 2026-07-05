@@ -1,0 +1,39 @@
+{#
+Назначение файла:
+Таблица истории биохимического анализа крови.
+
+Что делает:
+- выводит биохимию в исходном табличном виде: показатели строками, даты колонками;
+- сохраняет Bootstrap-классы исходной карточки.
+#}
+<!-- Биохимический анализ крови - таблица с историей -->
+<h5 class="mt-3">Биохимический анализ крови</h5>
+{% if biochemistry_history %}
+  <div class="table-responsive">
+    <table class="table table-bordered table-sm table-hover">
+      <thead class="table-light">
+        <tr>
+          <th style="min-width: 180px;">Показатель / Дата</th>
+          {% for item in biochemistry_history %}
+            <th class="text-center" style="min-width: 100px;">{{ item.investigation_date.strftime('%d.%m.%Y') }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Креатинин, мкмоль/л</strong></td>{% for item in biochemistry_history %}<td class="text-center">{{ item.creatinine or '—' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Мочевина, ммоль/л</strong></td>{% for item in biochemistry_history %}<td class="text-center">{{ item.urea or '—' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Мочевая кислота, мкмоль/л</strong></td>{% for item in biochemistry_history %}<td class="text-center">{{ item.uric_acid or '—' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Глюкоза, ммоль/л</strong></td>{% for item in biochemistry_history %}<td class="text-center">{{ item.glucose or '—' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Общий белок, г/л</strong></td>{% for item in biochemistry_history %}<td class="text-center">{{ item.total_protein or '—' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Альбумин, г/л</strong></td>{% for item in biochemistry_history %}<td class="text-center">{{ item.albumin or '—' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Калий, ммоль/л</strong></td>{% for item in biochemistry_history %}<td class="text-center">{{ item.potassium or '—' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Кальций, ммоль/л</strong></td>{% for item in biochemistry_history %}<td class="text-center">{{ item.calcium or '—' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Фосфор, ммоль/л</strong></td>{% for item in biochemistry_history %}<td class="text-center">{{ item.phosphorus or '—' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Ферритин, нг/мл</strong></td>{% for item in biochemistry_history %}<td class="text-center">{{ item.ferritin or '—' }}</td>{% endfor %}</tr>
+        <tr><td><strong>ПТГ, пг/мл</strong></td>{% for item in biochemistry_history %}<td class="text-center">{{ item.ptg or '—' }}</td>{% endfor %}</tr>
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="text-muted">Биохимический анализ крови не предоставлен.</p>
+{% endif %}

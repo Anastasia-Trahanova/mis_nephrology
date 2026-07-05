@@ -1,0 +1,30 @@
+{#
+Назначение файла:
+Блок диеты, рекомендаций и даты следующего контроля.
+
+Что делает:
+- показывает диету;
+- показывает рекомендации врача;
+- показывает дату следующего контроля.
+
+Зачем нужен:
+Диета и рекомендации относятся к плану ведения пациента, но не являются
+лекарственными назначениями. Поэтому они вынесены отдельно.
+#}
+{% import "patient_card/_macros.html" as pc %}
+
+<section class="card mb-3" data-testid="diet-section">
+  <div class="card-header fw-semibold">Диета и рекомендации</div>
+  <div class="card-body">
+    <dl class="row mb-0">
+      <dt class="col-sm-4">Диета</dt>
+      <dd class="col-sm-8">{{ pc.value_or_dash(diet_info.diet if diet_info else none) }}</dd>
+
+      <dt class="col-sm-4">Рекомендации</dt>
+      <dd class="col-sm-8">{{ pc.value_or_dash(diet_info.recommendations if diet_info else none) }}</dd>
+
+      <dt class="col-sm-4">Дата следующего контроля</dt>
+      <dd class="col-sm-8">{{ pc.date_or_dash(diet_info.next_control_date if diet_info else none) }}</dd>
+    </dl>
+  </div>
+</section>

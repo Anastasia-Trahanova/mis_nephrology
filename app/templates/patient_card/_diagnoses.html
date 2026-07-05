@@ -1,0 +1,53 @@
+{#
+Назначение файла:
+Блок диагнозов и МКБ-10 в заключении.
+
+Что делает:
+- выводит структурированные МКБ-10 диагнозы по типам;
+- выводит текстовые диагнозы из старой таблицы diagnoses;
+- сохраняет исходное расположение: после прогноза ХБП и перед назначениями.
+#}
+<!-- Диагнозы -->
+{% if icd10_diagnoses %}
+  <div class="mb-3">
+    <h6>Основной диагноз</h6>
+    <ul>
+      {% set has_main = namespace(value=false) %}
+      {% for item in icd10_diagnoses %}
+        {% if item.diagnosis_type == 'main' %}
+          {% set has_main.value = true %}
+          <li>{{ item.icd10_diagnosis }}{% if item.doctor_note %}<br><small class="text-muted">Уточнение: {{ item.doctor_note }}</small>{% endif %}</li>
+        {% endif %}
+      {% endfor %}
+      {% if not has_main.value %}<li>—</li>{% endif %}
+    </ul>
+
+    <h6>Осложнения основного диагноза</h6>
+    <ul>
+      {% set has_complications = namespace(value=false) %}
+      {% for item in icd10_diagnoses %}
+        {% if item.diagnosis_type == 'complication' %}
+          {% set has_complications.value = true %}
+          <li>{{ item.icd10_diagnosis }}{% if item.doctor_note %}<br><small class="text-muted">Уточнение: {{ item.doctor_note }}</small>{% endif %}</li>
+        {% endif %}
+      {% endfor %}
+      {% if not has_complications.value %}<li>—</li>{% endif %}
+    </ul>
+
+    <h6>Сопутствующие заболевания</h6>
+    <ul>
+      {% set has_comorbidities = namespace(value=false) %}
+      {% for item in icd10_diagnoses %}
+        {% if item.diagnosis_type == 'comorbidity' %}
+          {% set has_comorbidities.value = true %}
+          <li>{{ item.icd10_diagnosis }}{% if item.doctor_note %}<br><small class="text-muted">Уточнение: {{ item.doctor_note }}</small>{% endif %}</li>
+        {% endif %}
+      {% endfor %}
+      {% if not has_comorbidities.value %}<li>—</li>{% endif %}
+    </ul>
+  </div>
+{% endif %}
+
+<p><strong>Основной диагноз:</strong> {{ selected_appointment.main_diagnosis or '—' }}</p>
+<p><strong>Осложнения:</strong> {{ selected_appointment.complications or '—' }}</p>
+<p><strong>Сопутствующие диагнозы:</strong> {{ selected_appointment.diag_comorbidities or '—' }}</p>

@@ -1,0 +1,33 @@
+{#
+Назначение файла:
+Таблица истории УЗИ почек.
+
+Что делает:
+- выводит размеры почек, паренхиму и описание;
+- сохраняет исходный табличный формат карточки.
+#}
+<!-- УЗИ почек -->
+<h5 class="mt-3">УЗИ почек</h5>
+{% if ultrasound_history %}
+  <div class="table-responsive">
+    <table class="table table-bordered table-sm table-hover">
+      <thead class="table-light">
+        <tr>
+          <th style="min-width: 180px;">Показатель / Дата</th>
+          {% for item in ultrasound_history %}
+            <th class="text-center" style="min-width: 100px;">{{ item.investigation_date.strftime('%d.%m.%Y') }}</th>
+          {% endfor %}
+        </tr>
+      </thead>
+      <tbody>
+        <tr><td><strong>Левая почка (размер)</strong></td>{% for item in ultrasound_history %}<td class="text-center">{{ item.left_kidney_size or '---' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Правая почка (размер)</strong></td>{% for item in ultrasound_history %}<td class="text-center">{{ item.right_kidney_size or '---' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Паренхима левой, мм</strong></td>{% for item in ultrasound_history %}<td class="text-center">{{ item.left_parenchyma or '---' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Паренхима правой, мм</strong></td>{% for item in ultrasound_history %}<td class="text-center">{{ item.right_parenchyma or '---' }}</td>{% endfor %}</tr>
+        <tr><td><strong>Описание</strong></td>{% for item in ultrasound_history %}<td class="text-center">{{ item.description or '---' }}</td>{% endfor %}</tr>
+      </tbody>
+    </table>
+  </div>
+{% else %}
+  <p class="text-muted">УЗИ почек не предоставлено.</p>
+{% endif %}
