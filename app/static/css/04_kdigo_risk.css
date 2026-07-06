@@ -2,13 +2,14 @@
 Назначение файла: визуальное оформление live-блока и матрицы KDIGO.
 
 Что выполняет файл:
-- подсвечивает весь блок оценки риска в форме приёма;
-- подсвечивает ячейки матрицы KDIGO в карте пациента;
+- подсвечивает весь блок оценки риска в форме приёма по выбранной категории;
+- подсвечивает варианты radio-выбора по уровню риска;
+- подсвечивает ячейки исторической матрицы KDIGO;
 - не подсвечивает устаревшие/невозможные оценки: они остаются нейтральными.
 
 Что редактировать здесь:
 - цвета и отступы блока KDIGO;
-- внешний вид кнопки ✖;
+- внешний вид radio-вариантов;
 - размер ячеек матрицы.
 
 Что не редактировать здесь:
@@ -18,69 +19,106 @@
 */
 
 .kdigo-risk-preview {
-    border: 1px solid #dee2e6;
-    border-radius: 0.5rem;
-    padding: 0.75rem 1rem;
-    background: #f8f9fa;
+  border: 1px solid #dee2e6;
+  border-radius: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: #f8f9fa;
+  transition: background-color 0.15s ease, border-color 0.15s ease;
 }
 
 .kdigo-risk-empty {
-    background: #f8f9fa;
-    border-color: #dee2e6;
+  background: #f8f9fa;
+  border-color: #dee2e6;
 }
 
-.kdigo-risk-low {
-    background: #d1e7dd;
-    border-color: #badbcc;
+.kdigo-risk-low,
+.kdigo-choice-low,
+.kdigo-matrix-risk-low {
+  background: #d1e7dd;
+  border-color: #badbcc;
 }
 
-.kdigo-risk-moderate {
-    background: #fff3cd;
-    border-color: #ffecb5;
+.kdigo-risk-moderate,
+.kdigo-choice-moderate,
+.kdigo-matrix-risk-moderate {
+  background: #fff3cd;
+  border-color: #ffecb5;
 }
 
-.kdigo-risk-high {
-    background: #ffe5b4;
-    border-color: #ffcc80;
+.kdigo-risk-high,
+.kdigo-choice-high,
+.kdigo-matrix-risk-high {
+  background: #ffe5b4;
+  border-color: #ffcc80;
 }
 
-.kdigo-risk-very_high {
-    background: #f8d7da;
-    border-color: #f5c2c7;
+.kdigo-risk-very_high,
+.kdigo-choice-very_high,
+.kdigo-matrix-risk-very_high {
+  background: #f8d7da;
+  border-color: #f5c2c7;
+}
+
+.kdigo-current-options {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.kdigo-choice {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.45rem;
+  padding: 0.5rem 0.65rem;
+  cursor: pointer;
+  margin: 0;
+}
+
+.kdigo-choice input[type="radio"] {
+  margin-top: 0.2rem;
+  flex: 0 0 auto;
+}
+
+.kdigo-choice:hover {
+  filter: brightness(0.98);
 }
 
 .kdigo-risk-line {
-    display: flex;
-    justify-content: space-between;
-    align-items: flex-start;
-    gap: 0.75rem;
-    padding: 0.25rem 0;
+  padding: 0.35rem 0;
 }
 
-.kdigo-risk-remove-btn {
-    border: 0;
-    background: transparent;
-    color: #dc3545;
-    font-weight: 700;
-    line-height: 1;
-    padding: 0.1rem 0.25rem;
+.kdigo-risk-line-empty {
+  color: #212529;
 }
 
-.kdigo-risk-remove-btn:hover {
-    color: #a71d2a;
+.kdigo-conclusion-text {
+  background: #fff8d6;
+}
+
+.kdigo-history-panel {
+  border-top: 1px solid rgba(0, 0, 0, 0.08);
+  padding-top: 0.75rem;
 }
 
 .kdigo-risk-matrix .kdigo-matrix-cell {
-    min-width: 160px;
-    vertical-align: middle;
+  min-width: 160px;
+  vertical-align: middle;
 }
 
 .kdigo-matrix-risk {
-    border-radius: 0.35rem;
-    padding: 0.35rem 0.5rem;
-    margin-bottom: 0.25rem;
+  border: 1px solid #dee2e6;
+  border-radius: 0.35rem;
+  padding: 0.35rem 0.5rem;
+  margin-bottom: 0.25rem;
 }
 
 .kdigo-matrix-risk:last-child {
-    margin-bottom: 0;
+  margin-bottom: 0;
+}
+
+.kdigo-matrix-risk-empty {
+  background: #f8f9fa;
+  border-color: #dee2e6;
 }
