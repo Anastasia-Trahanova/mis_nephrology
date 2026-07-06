@@ -10,14 +10,14 @@
 - app/repositories/patients.py — пациенты;
 - app/repositories/appointments.py — приёмы;
 - app/repositories/lab_history.py — чтение историй анализов;
-- app/repositories/ckd_prognosis.py — сохранённый прогноз ХБП;
+- app/repositories/ckd_prognosis.py — сохранённые оценки риска KDIGO;
 - app/services/patient_card_context_service.py — context карточки пациента;
 - app/services/appointment_form_context_service.py — context форм.
 
 Зачем файл оставлен:
-старые роуты и сервисы всё ещё импортируют функции из app.database.
-Чтобы не ломать проект одним большим рефакторингом, app.database теперь
-только переэкспортирует функции из новых модулей.
+старые внешние импорты могут всё ещё брать функции из app.database.
+Чтобы не ломать проект одним большим рефакторингом, app.database только
+переэкспортирует функции из новых модулей.
 
 Что редактировать здесь:
 - только список импортов, если новая функция переезжает в новый модуль.
@@ -52,11 +52,13 @@ from app.repositories.appointments import (
 )
 from app.repositories.ckd_prognosis import (
     _fetch_appointment_ckd_prognosis,
-    _fetch_latest_albuminuria_category_for_prognosis,
-    _fetch_latest_gfr_category_for_prognosis,
+    _fetch_appointment_ckd_prognosis_results,
     _fetch_patient_ckd_prognosis_history,
+    build_kdigo_assessments_for_appointment,
     get_appointment_ckd_prognosis,
+    get_appointment_ckd_prognosis_results,
     get_patient_ckd_prognosis_history,
+    hide_ckd_prognosis_result,
     recalculate_ckd_prognosis_for_appointment,
     save_ckd_prognosis_for_appointment,
 )
@@ -145,7 +147,10 @@ __all__ = [
     "save_calculated_metrics",
     "save_ckd_prognosis_for_appointment",
     "recalculate_ckd_prognosis_for_appointment",
+    "build_kdigo_assessments_for_appointment",
+    "hide_ckd_prognosis_result",
     "get_appointment_ckd_prognosis",
+    "get_appointment_ckd_prognosis_results",
     "get_patient_ckd_prognosis_history",
     "get_patient_card_context",
     "get_new_appointment_context",

@@ -1,76 +1,75 @@
 {#
-Назначение файла:
-История прогноза ХБП по KDIGO и текущий прогноз в заключении.
+Назначение файла: матрица и заключение по сохранённым оценкам риска KDIGO.
 
 Что делает:
-- выводит таблицу истории прогноза ХБП;
-- выводит текущий прогноз перед диагнозами;
-- сохраняет исходную визуальную логику с alert-классами по уровню риска.
+- показывает матрицу сохранённых комбинаций: строки = даты СКФ + категория СКФ,
+  столбцы = даты альбуминурии + категория альбуминурии;
+- в ячейках отображает только уровень риска и цвет, без повторения общей
+  категории вида С3аA2;
+- выводит полные фразы для заключения по выбранному приёму;
+- подсвечивает только рассчитанные риски. Устаревшие/невозможные оценки сюда
+  не попадают и не подсвечиваются.
 #}
-<!-- История прогноза ХБП -->
-<h5 class="mt-3">История прогноза ХБП по KDIGO</h5>
-{% if ckd_prognosis_history %}
-  <div class="table-responsive">
-    <table class="table table-bordered table-sm table-hover">
-      <thead class="table-light">
+
+<h5 class="mt-3">Матрица риска по KDIGO</h5>
+
+{% if ckd_prognosis_matrix and ckd_prognosis_matrix.has_values %}
+<div class="table-responsive">
+    <table class="table table-bordered table-sm table-hover align-middle kdigo-risk-matrix">
+        <thead class="table-light">
         <tr>
-          <th>Дата оценки</th>
-          <th>Категория СКФ</th>
-          <th>Категория альбуминурии</th>
-          <th>Итоговая категория</th>
-          <th>Прогноз</th>
+            <th style="min-width: 170px;">СКФ \ Альбуминурия</th>
+            {% for column in ckd_prognosis_matrix.albuminuria_columns %}
+                <th class="text-center" style="min-width: 170px;">
+                    <div>{{ column.date.strftime('%d.%m.%Y') }}</div>
+                    <div class="small text-muted">{{ column.categories|join(', ') if column.categories else '—' }}</div>
+                </th>
+            {% endfor %}
         </tr>
-      </thead>
-      <tbody>
-        {% for item in ckd_prognosis_history %}
-          <tr>
-            <td>{{ item.assessment_date.strftime('%d.%m.%Y') if item.assessment_date else '—' }}</td>
-            <td>{{ item.gfr_category or '—' }}</td>
-            <td>{{ item.albuminuria_category or '—' }}</td>
-            <td>{{ item.combined_category or '—' }}</td>
-            <td>
-              {% if item.prognosis_level == 'low' %}
-                <span class="badge bg-success">{{ item.prognosis_text }}</span>
-              {% elif item.prognosis_level == 'moderate' %}
-                <span class="badge bg-warning text-dark">{{ item.prognosis_text }}</span>
-              {% elif item.prognosis_level == 'high' %}
-                <span class="badge bg-warning text-dark">{{ item.prognosis_text }}</span>
-              {% elif item.prognosis_level == 'very_high' %}
-                <span class="badge bg-danger">{{ item.prognosis_text }}</span>
-              {% else %}
-                —
-              {% endif %}
-            </td>
-          </tr>
+        </thead>
+        <tbody>
+        {% for row in ckd_prognosis_matrix.rows %}
+            <tr>
+                <th class="table-light">
+                    <div>{{ row.gfr_date.strftime('%d.%m.%Y') }}</div>
+                    <div class="small text-muted">{{ row.gfr_categories|join(', ') if row.gfr_categories else '—' }}</div>
+                </th>
+                {% for cell in row.cells %}
+                    <td class="text-center kdigo-matrix-cell">
+                        {% if cell["items"] %}
+                            {% for item in cell["items"] %}
+                                <div class="kdigo-matrix-risk kdigo-risk-{{ item.prognosis_level }}">
+                                    {{ item.prognosis_text }}
+                                </div>
+                            {% endfor %}
+                        {% else %}
+                            <span class="text-muted">—</span>
+                        {% endif %}
+                    </td>
+                {% endfor %}
+            </tr>
         {% endfor %}
-      </tbody>
+        </tbody>
     </table>
-  </div>
+</div>
 {% else %}
-  <p class="text-muted">История прогноза ХБП отсутствует.</p>
+<p class="text-muted">Сохранённые оценки риска по KDIGO отсутствуют.</p>
 {% endif %}
 
-<!-- Заключение: текущий прогноз -->
 <h5 class="mt-3">Заключение</h5>
-{% if ckd_prognosis_current %}
-  {% set prognosis_class = 'alert-secondary' %}
-  {% if ckd_prognosis_current.prognosis_level == 'low' %}
-    {% set prognosis_class = 'alert-success' %}
-  {% elif ckd_prognosis_current.prognosis_level == 'moderate' %}
-    {% set prognosis_class = 'alert-warning' %}
-  {% elif ckd_prognosis_current.prognosis_level == 'high' %}
-    {% set prognosis_class = 'alert-warning border border-warning' %}
-  {% elif ckd_prognosis_current.prognosis_level == 'very_high' %}
-    {% set prognosis_class = 'alert-danger' %}
-  {% endif %}
-  <div class="alert {{ prognosis_class }}">
-    <strong>Прогноз ХБП по KDIGO</strong>
-    на {{ ckd_prognosis_current.assessment_date.strftime('%d.%m.%Y') if ckd_prognosis_current.assessment_date else '—' }}:
-    {{ ckd_prognosis_current.prognosis_text }}
-    {% if ckd_prognosis_current.combined_category %}
-      <span class="badge bg-light text-dark ms-2">{{ ckd_prognosis_current.combined_category }}</span>
-    {% endif %}
-  </div>
+
+{% if ckd_prognosis_current_results %}
+    {% for item in ckd_prognosis_current_results %}
+        <div class="kdigo-risk-preview kdigo-risk-{{ item.prognosis_level }} mb-2">
+            {{ item.display_text }}
+        </div>
+    {% endfor %}
+{% elif ckd_prognosis_current %}
+    <div class="kdigo-risk-preview kdigo-risk-{{ ckd_prognosis_current.prognosis_level }} mb-2">
+        {{ ckd_prognosis_current.display_text if ckd_prognosis_current.display_text else 'По KDIGO: ' ~ ckd_prognosis_current.combined_category ~ ' — ' ~ ckd_prognosis_current.prognosis_text }}
+    </div>
 {% else %}
-  <div class="alert alert-secondary">Прогноз ХБП по KDIGO: недостаточно данных для оценки.</div>
+    <div class="kdigo-risk-preview kdigo-risk-empty mb-2">
+        Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены.
+    </div>
 {% endif %}

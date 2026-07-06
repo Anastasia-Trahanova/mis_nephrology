@@ -259,7 +259,7 @@ def test_patient_card_template_renders_medical_blocks_without_changing_layout():
     assert "Общий анализ мочи" in html
     assert "Альбуминурия по KDIGO" in html
     assert "УЗИ почек" in html
-    assert "История прогноза ХБП по KDIGO" in html
+    assert "Матрица риска по KDIGO" in html
     assert "Заключение" in html
     assert "Назначения" in html
 

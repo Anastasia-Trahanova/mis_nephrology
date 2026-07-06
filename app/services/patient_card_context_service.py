@@ -1,15 +1,16 @@
 """
 Назначение файла: сборка context для карточки пациента.
 
-Этот сервис не содержит SQL напрямую. Он собирает данные из repository-функций
-и формирует единый словарь для шаблона patient_card.html.
+Этот сервис не содержит SQL напрямую. Он вызывает repository-функции и собирает
+единый словарь для шаблона patient_card.html.
 
 Что выполняет файл:
 - загружает пациента;
 - загружает список приёмов пациента;
 - выбирает текущий/предыдущий приём для отображения;
 - загружает лекарства, диету, МКБ-10 диагнозы выбранного приёма;
-- загружает истории анализов и прогнозов до даты выбранного приёма;
+- загружает истории анализов до даты выбранного приёма;
+- загружает сохранённые оценки риска KDIGO и строит матрицу для карточки;
 - возвращает совместимый context для существующего шаблона.
 
 Что редактировать здесь:
@@ -34,6 +35,7 @@ from app.repositories.appointments import (
 )
 from app.repositories.ckd_prognosis import (
     _fetch_appointment_ckd_prognosis,
+    _fetch_appointment_ckd_prognosis_results,
     _fetch_patient_ckd_prognosis_history,
 )
 from app.repositories.lab_history import (
@@ -46,6 +48,7 @@ from app.repositories.lab_history import (
 )
 from app.repositories.patients import _fetch_patient_by_id
 from app.repositories.reference_data import _fetch_appointment_icd10_diagnoses
+from app.services.kdigo_risk_matrix_service import build_kdigo_risk_matrix
 
 
 def get_patient_card_context(
@@ -80,18 +83,25 @@ def get_patient_card_context(
 
             if selected_appointment_id and not appointment_data:
                 appointment_data = _fetch_appointment_full_data(cur, int(selected_appointment_id))
-
                 if appointment_data and appointment_data.get("patient_id") != patient_id:
                     return {"patient": patient, "forbidden": True}
 
-                if appointment_data:
-                    medications = _fetch_appointment_medications(cur, int(selected_appointment_id))
-                    diet_info = _fetch_appointment_diet(cur, int(selected_appointment_id))
-                    icd10_diagnoses = _fetch_appointment_icd10_diagnoses(cur, int(selected_appointment_id))
+            if appointment_data and selected_appointment_id:
+                medications = _fetch_appointment_medications(cur, int(selected_appointment_id))
+                diet_info = _fetch_appointment_diet(cur, int(selected_appointment_id))
+                icd10_diagnoses = _fetch_appointment_icd10_diagnoses(cur, int(selected_appointment_id))
 
             until_date = None
             if not show_form and appointment_data and appointment_data.get("appointment_date"):
                 until_date = appointment_data["appointment_date"].date()
+
+            ckd_prognosis_history = _fetch_patient_ckd_prognosis_history(cur, patient_id, until_date)
+            ckd_prognosis_matrix = build_kdigo_risk_matrix(ckd_prognosis_history)
+            ckd_prognosis_current_results = (
+                _fetch_appointment_ckd_prognosis_results(cur, int(selected_appointment_id))
+                if selected_appointment_id
+                else []
+            )
 
             return {
                 "patient": patient,
@@ -106,8 +116,14 @@ def get_patient_card_context(
                 "metrics_history": _fetch_patient_metrics_history(cur, patient_id, until_date),
                 "ultrasound_history": _fetch_patient_ultrasound_history(cur, patient_id, until_date),
                 "albuminuria_history": _fetch_patient_albuminuria_history(cur, patient_id, until_date),
-                "ckd_prognosis_current": _fetch_appointment_ckd_prognosis(cur, int(selected_appointment_id)) if selected_appointment_id else None,
-                "ckd_prognosis_history": _fetch_patient_ckd_prognosis_history(cur, patient_id, until_date),
+                "ckd_prognosis_current": (
+                    _fetch_appointment_ckd_prognosis(cur, int(selected_appointment_id))
+                    if selected_appointment_id
+                    else None
+                ),
+                "ckd_prognosis_current_results": ckd_prognosis_current_results,
+                "ckd_prognosis_history": ckd_prognosis_history,
+                "ckd_prognosis_matrix": ckd_prognosis_matrix,
                 # Ключи ниже оставлены для совместимости с шаблонами/старым кодом.
                 # В обычной карточке они не создают дополнительные запросы.
                 "branches": [],

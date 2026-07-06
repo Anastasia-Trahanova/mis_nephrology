@@ -1,0 +1,57 @@
+{#
+Назначение файла: live-блок оценки риска по KDIGO внутри формы приёма.
+
+Что выполняет файл:
+- показывает врачу короткую фразу "По KDIGO: ..." до сохранения приёма;
+- передаёт JavaScript историю СКФ и альбуминурии пациента для fallback-логики;
+- хранит скрытые поля kdigo_excluded_pair, если врач нажал крестик у лишней
+  комбинации и не хочет сохранять её в БД.
+
+Что редактировать здесь:
+- место расположения live-блока в заключении;
+- внешний текст заголовка;
+- какие исторические поля передаются JavaScript.
+
+Что не редактировать здесь:
+- медицинскую матрицу риска;
+- SQL и сохранение в ckd_prognosis_results;
+- расчёт eGFR и ACR.
+#}
+
+<div id="kdigoRiskPreview"
+     class="kdigo-risk-preview kdigo-risk-empty mt-3 mb-3"
+     data-kdigo-preview="1">
+    <div class="d-flex justify-content-between align-items-start gap-2">
+        <div class="fw-bold">Оценка риска по KDIGO</div>
+    </div>
+    <div id="kdigoRiskLines" class="mt-2">
+        Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены.
+    </div>
+    <div id="kdigoExcludedPairs"></div>
+</div>
+
+<script type="application/json" id="kdigoPreviousGfrData">
+[
+{% for item in metrics_history|default([]) if item.ckd_stage %}
+  {
+    "date": "{{ item.investigation_date.isoformat() if item.investigation_date else '' }}",
+    "category": "{{ item.ckd_stage|e }}",
+    "source": "previous_appointment"
+  }{% if not loop.last %},{% endif %}
+{% endfor %}
+]
+</script>
+
+<script type="application/json" id="kdigoPreviousAlbuminuriaData">
+[
+{% for item in albuminuria_history|default([]) if item.albuminuria_category %}
+  {
+    "date": "{{ item.investigation_date.isoformat() if item.investigation_date else '' }}",
+    "category": "{{ item.albuminuria_category|e }}",
+    "source": "previous_appointment"
+  }{% if not loop.last %},{% endif %}
+{% endfor %}
+]
+</script>
+
+<script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}"></script>

@@ -432,4 +432,8 @@ def save_appointment_details(
     save_prescriptions(cur, appointment_id, appointment_data["prescriptions"])
 
     # Пересчитываем прогноз после сохранения метрик и альбуминурии.
-    save_ckd_prognosis_for_appointment(appointment_id, cur=cur)
+    save_ckd_prognosis_for_appointment(
+        appointment_id,
+        cur=cur,
+        excluded_pairs=appointment_data.get("kdigo_excluded_pairs", []),
+    )

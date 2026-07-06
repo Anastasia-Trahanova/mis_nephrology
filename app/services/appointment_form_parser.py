@@ -198,4 +198,5 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
             "schedules": form.getlist("schedule"),
         },
         "appointment_date_default": appointment_datetime.date(),
+        "kdigo_excluded_pairs": form.getlist("kdigo_excluded_pair"),
     }
