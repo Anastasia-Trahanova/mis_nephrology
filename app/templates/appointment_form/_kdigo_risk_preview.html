@@ -1,87 +1,95 @@
 {#
-Назначение файла: live-блок оценки риска по KDIGO внутри формы приёма.
+Назначение файла: блок оценки риска по KDIGO внутри формы приёма.
 
 Что выполняет файл:
-- показывает врачу варианты прогноза именно для текущего приёма;
-- даёт выбрать один вариант, который попадёт в заключение;
-- показывает полную формулировку для заключения;
-- по кнопке раскрывает историю прошлых прогнозов KDIGO отдельно от текущего приёма;
-- передаёт JavaScript историю СКФ и альбуминурии пациента для fallback-логики.
+- показывает варианты риска на момент текущего приёма до сохранения;
+- даёт врачу выбрать один вариант, который попадёт в заключение;
+- передаёт JavaScript историю СКФ и альбуминурии пациента для fallback-логики;
+- показывает историю прошлых сохранённых прогнозов по кнопке;
+- не смешивает текущий приём с историей прошлых приёмов.
 
 Что редактировать здесь:
-- внешний текст заголовков и кнопок;
+- подписи кнопок;
+- внешний текст заголовка;
 - расположение блока внутри заключения;
-- состав данных, которые передаются в JavaScript.
+- состав таблицы истории.
 
 Что не редактировать здесь:
 - медицинскую матрицу риска;
-- SQL и сохранение ckd_prognosis_results;
+- SQL и сохранение в ckd_prognosis_results;
 - расчёт eGFR и ACR.
 #}
 
-<div id="kdigoRiskPreview" class="kdigo-risk-preview kdigo-risk-empty mt-3 mb-3">
+<link rel="stylesheet" href="{{ url_for('static', path='css/04_kdigo_risk.css') }}">
+
+<section id="kdigoRiskPreview" class="kdigo-risk-preview kdigo-risk-empty my-3" aria-live="polite">
   <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
     <div>
-      <strong>Оценка риска по KDIGO</strong>
-      <div class="small text-muted">
-        Выберите вариант прогноза, который попадёт в заключение.
-      </div>
+      <div class="fw-bold">Оценка риска по KDIGO</div>
+      <div class="small text-muted">Выберите вариант прогноза, который попадёт в заключение.</div>
     </div>
-    <button type="button" id="kdigoRefreshButton" class="btn btn-outline-secondary btn-sm">
+    <button type="button" id="kdigoRefreshButton" class="btn btn-sm btn-outline-secondary">
       Обновить
     </button>
   </div>
 
-  <div id="kdigoCurrentVisitOptions" class="kdigo-current-options">
-    <div class="kdigo-risk-line kdigo-risk-line-empty">
-      Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены.
-    </div>
-  </div>
+  <div id="kdigoCurrentVisitOptions" class="kdigo-current-options mb-2"></div>
+
+  <label for="kdigoSelectedConclusionText" class="form-label mb-1">
+    Формулировка для заключения
+  </label>
+  <textarea
+    id="kdigoSelectedConclusionText"
+    name="kdigo_selected_conclusion_text"
+    class="form-control kdigo-conclusion-text"
+    rows="3"
+    readonly
+  >Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены.</textarea>
+
+  <div id="kdigoExcludedPairs" hidden></div>
 
   <div class="mt-3">
-    <label for="kdigoConclusionText" class="form-label mb-1">Формулировка для заключения</label>
-    <textarea
-      id="kdigoConclusionText"
-      name="kdigo_conclusion_text"
-      class="form-control kdigo-conclusion-text"
-      rows="3"
-      readonly
-    >Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены.</textarea>
-  </div>
-
-  <div id="kdigoExcludedPairs"></div>
-  <input type="hidden" id="kdigoSelectedPair" name="kdigo_selected_pair" value="">
-
-  <div class="mt-3">
-    <button type="button" id="kdigoHistoryToggleButton" class="btn btn-outline-secondary btn-sm">
+    <button type="button" id="kdigoToggleHistoryButton" class="btn btn-sm btn-outline-primary">
       Посмотреть историю прогнозов по KDIGO
     </button>
   </div>
 
-  <div id="kdigoHistoryPanel" class="kdigo-history-panel mt-3 d-none">
-    {% set matrix = kdigo_history_matrix or {} %}
-    {% if matrix.has_values %}
+  <div id="kdigoHistoryPanel" class="kdigo-history-panel mt-3" hidden>
+    <div class="fw-bold mb-2">История прогнозов по KDIGO</div>
+
+    {% set history_matrix = kdigo_previous_history_matrix if kdigo_previous_history_matrix is defined else None %}
+    {% if history_matrix and history_matrix.has_values %}
       <div class="table-responsive">
-        <table class="table table-bordered table-sm align-middle kdigo-risk-matrix mb-0">
+        <table class="table table-sm table-bordered align-middle kdigo-risk-matrix">
           <thead>
             <tr>
               <th>СКФ \ Альбуминурия</th>
-              {% for column in matrix.albuminuria_columns %}
-                <th>{{ column.label }}</th>
+              {% for column in history_matrix.albuminuria_columns %}
+                <th class="text-center">
+                  <div>{{ column.date.strftime('%d.%m.%Y') }}</div>
+                  <div class="small text-muted">{{ column.categories|join(', ') if column.categories else '—' }}</div>
+                </th>
               {% endfor %}
             </tr>
           </thead>
           <tbody>
-            {% for row in matrix.rows %}
+            {% for row in history_matrix.rows %}
               <tr>
-                <th>{{ row.label }}</th>
+                <th>
+                  <div>{{ row.gfr_date.strftime('%d.%m.%Y') }}</div>
+                  <div class="small text-muted">{{ row.gfr_categories|join(', ') if row.gfr_categories else '—' }}</div>
+                </th>
                 {% for cell in row.cells %}
                   <td class="kdigo-matrix-cell">
-                    {% for item in cell["items"] %}
-                      <div class="kdigo-matrix-risk kdigo-matrix-risk-{{ item.prognosis_level or 'empty' }}">
-                        {{ item.prognosis_text or '—' }}
-                      </div>
-                    {% endfor %}
+                    {% if cell["items"] %}
+                      {% for item in cell["items"] %}
+                        <div class="kdigo-matrix-risk kdigo-risk-{{ item.prognosis_level }}">
+                          {{ item.prognosis_text }}
+                        </div>
+                      {% endfor %}
+                    {% else %}
+                      <span class="text-muted">—</span>
+                    {% endif %}
                   </td>
                 {% endfor %}
               </tr>
@@ -90,33 +98,15 @@
         </table>
       </div>
     {% else %}
-      <div class="text-muted small">
-        История прогнозов по KDIGO пока отсутствует.
-      </div>
+      <div class="text-muted small">Сохранённые прогнозы по прошлым приёмам отсутствуют.</div>
     {% endif %}
   </div>
+</section>
 
-  <script type="application/json" id="kdigoPreviousGfrData">
-  [
-    {% for item in metrics_history or [] %}
-      {
-        "date": "{{ item.investigation_date.isoformat() if item.investigation_date else '' }}",
-        "category": "{{ item.ckd_stage or '' }}"
-      }{% if not loop.last %},{% endif %}
-    {% endfor %}
-  ]
-  </script>
-
-  <script type="application/json" id="kdigoPreviousAlbuminuriaData">
-  [
-    {% for item in albuminuria_history or [] %}
-      {
-        "date": "{{ item.investigation_date.isoformat() if item.investigation_date else '' }}",
-        "category": "{{ item.albuminuria_category or '' }}"
-      }{% if not loop.last %},{% endif %}
-    {% endfor %}
-  ]
-  </script>
-
-  <script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}" defer></script>
-</div>
+<script type="application/json" id="kdigoPreviousGfrData">
+{{ kdigo_previous_gfr_data|default([], true)|tojson }}
+</script>
+<script type="application/json" id="kdigoPreviousAlbuminuriaData">
+{{ kdigo_previous_albuminuria_data|default([], true)|tojson }}
+</script>
+<script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}" defer></script>

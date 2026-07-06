@@ -1,18 +1,20 @@
 /*
-Назначение файла: live-предпросмотр риска по KDIGO в форме приёма.
+Назначение файла: live-расчёт KDIGO внутри формы приёма.
 
 Что выполняет файл:
-- читает текущие СКФ и альбуминурию из формы;
-- если одного показателя нет, берёт последний подходящий показатель из истории пациента;
-- показывает варианты прогноза текущего приёма через radio-выбор;
-- записывает в поле заключения только выбранную врачом фразу;
-- передаёт backend скрытые kdigo_excluded_pair для невыбранных рассчитанных вариантов;
-- раскрывает/скрывает историю прошлых прогнозов по KDIGO.
+- читает текущие СКФ из блока биохимии и текущие категории альбуминурии;
+- если одного показателя нет, использует последний подходящий показатель из прошлых приёмов;
+- показывает варианты прогноза именно для текущего приёма;
+- даёт врачу выбрать один вариант radio-кнопкой;
+- записывает выбранную фразу в поле заключения;
+- для невыбранных рассчитанных вариантов создаёт hidden kdigo_excluded_pair,
+  чтобы backend сохранил только выбранный вариант;
+- раскрывает/скрывает историю прошлых прогнозов по кнопке.
 
 Что редактировать здесь:
 - правила чтения полей формы;
 - точные короткие фразы для врача;
-- поведение кнопок «Обновить» и «Посмотреть историю».
+- поведение выбора варианта.
 
 Что не редактировать здесь:
 - серверное сохранение ckd_prognosis_results;
@@ -23,10 +25,8 @@
 (function () {
   "use strict";
 
-  if (window.__kdigoRiskPreviewLoaded) {
-    return;
-  }
-  window.__kdigoRiskPreviewLoaded = true;
+  if (window.__kdigoCurrentVisitSelectionInitialized) return;
+  window.__kdigoCurrentVisitSelectionInitialized = true;
 
   const RISK_MATRIX = {
     "С1": { A1: ["low", "низкий риск"], A2: ["moderate", "умеренно повышенный риск"], A3: ["high", "высокий риск"] },
@@ -34,14 +34,21 @@
     "С3а": { A1: ["moderate", "умеренно повышенный риск"], A2: ["high", "высокий риск"], A3: ["very_high", "очень высокий риск"] },
     "С3б": { A1: ["high", "высокий риск"], A2: ["very_high", "очень высокий риск"], A3: ["very_high", "очень высокий риск"] },
     "С4": { A1: ["very_high", "очень высокий риск"], A2: ["very_high", "очень высокий риск"], A3: ["very_high", "очень высокий риск"] },
-    "С5": { A1: ["very_high", "очень высокий риск"], A2: ["very_high", "очень высокий риск"], A3: ["very_high", "очень высокий риск"] },
+    "С5": { A1: ["very_high", "очень высокий риск"], A2: ["very_high", "очень высокий риск"], A3: ["very_high", "очень высокий риск"] }
   };
 
   const MAX_INTERVAL_BY_RISK = {
     low: 365,
     moderate: 180,
     high: 90,
-    very_high: 90,
+    very_high: 90
+  };
+
+  const RISK_ORDER = {
+    low: 1,
+    moderate: 2,
+    high: 3,
+    very_high: 4
   };
 
   function readJsonScript(id) {
@@ -67,10 +74,6 @@
     if (!value) return "";
     const text = String(value).trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
-    if (/^\d{2}\.\d{2}\.\d{4}$/.test(text)) {
-      const [day, month, year] = text.split(".");
-      return `${year}-${month}-${day}`;
-    }
     return "";
   }
 
@@ -88,13 +91,6 @@
     return Math.abs(Math.round((dateA.getTime() - dateB.getTime()) / 86400000));
   }
 
-  function dateDistance(a, b) {
-    const dateA = parseIsoDate(a);
-    const dateB = parseIsoDate(b);
-    if (!dateA || !dateB) return Number.MAX_SAFE_INTEGER;
-    return Math.abs(dateA.getTime() - dateB.getTime());
-  }
-
   function formatRuDate(value) {
     const normalized = normalizeDate(value);
     if (!normalized) return "—";
@@ -105,10 +101,11 @@
   function normalizeGfrCategory(value) {
     if (!value) return "";
     let text = String(value).trim();
-    text = text.replace(/^G/i, "С").replace(/^C/i, "С");
-    text = text.replace("3A", "3а").replace("3a", "3а").replace("3А", "3а");
-    text = text.replace("3B", "3б").replace("3b", "3б").replace("3Б", "3б");
-    return ["С1", "С2", "С3а", "С3б", "С4", "С5"].includes(text) ? text : "";
+    text = text.replace(/^G/i, "С").replace(/^C/, "С");
+    text = text.replace("3A", "3а").replace("3a", "3а");
+    text = text.replace("3B", "3б").replace("3b", "3б");
+    if (["С1", "С2", "С3а", "С3б", "С4", "С5"].includes(text)) return text;
+    return "";
   }
 
   function gfrCategoryFromEgfr(value) {
@@ -140,15 +137,14 @@
     const gfr = normalizeGfrCategory(gfrCategory);
     const albuminuria = normalizeAlbuminuriaCategory(albuminuriaCategory);
     if (!gfr || !albuminuria) return null;
-    const row = RISK_MATRIX[gfr] || {};
-    const risk = row[albuminuria];
+    const risk = RISK_MATRIX[gfr] && RISK_MATRIX[gfr][albuminuria];
     if (!risk) return null;
     return {
       gfrCategory: gfr,
       albuminuriaCategory: albuminuria,
       combinedCategory: `${gfr}${albuminuria}`,
       level: risk[0],
-      text: risk[1],
+      text: risk[1]
     };
   }
 
@@ -172,7 +168,7 @@
       normalizeDate(gfrDate),
       normalizeGfrCategory(gfrCategory),
       normalizeDate(albuminuriaDate),
-      normalizeAlbuminuriaCategory(albuminuriaCategory),
+      normalizeAlbuminuriaCategory(albuminuriaCategory)
     ].join("|");
   }
 
@@ -209,7 +205,7 @@
         result.push({ date, category, source: "current_appointment" });
       }
     });
-    return deduplicateSources(result);
+    return dedupeSources(result);
   }
 
   function readCurrentAlbuminuriaSources() {
@@ -224,7 +220,19 @@
         result.push({ date, category, source: "current_appointment" });
       }
     });
-    return deduplicateSources(result);
+    return dedupeSources(result);
+  }
+
+  function dedupeSources(sources) {
+    const seen = new Set();
+    const result = [];
+    sources.forEach((item) => {
+      const key = `${item.date}|${item.category}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      result.push(item);
+    });
+    return result;
   }
 
   function loadPreviousGfrSources() {
@@ -232,7 +240,7 @@
       .map((item) => ({
         date: normalizeDate(item.date),
         category: normalizeGfrCategory(item.category),
-        source: "previous_appointment",
+        source: "previous_appointment"
       }))
       .filter((item) => item.date && item.category);
   }
@@ -242,215 +250,209 @@
       .map((item) => ({
         date: normalizeDate(item.date),
         category: normalizeAlbuminuriaCategory(item.category),
-        source: "previous_appointment",
+        source: "previous_appointment"
       }))
       .filter((item) => item.date && item.category);
-  }
-
-  function deduplicateSources(sources) {
-    const result = [];
-    const seen = new Set();
-    sources.forEach((source) => {
-      const key = `${source.date}|${source.category}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      result.push(source);
-    });
-    return result;
   }
 
   function latestPreviousBeforeOrOn(sources, targetDate) {
     const target = parseIsoDate(targetDate);
     if (!target) return null;
     return sources
-      .filter((item) => normalizeDate(item.date) && parseIsoDate(item.date) <= target)
+      .filter((item) => {
+        const date = parseIsoDate(item.date);
+        return date && date <= target;
+      })
       .sort((a, b) => parseIsoDate(b.date) - parseIsoDate(a.date))[0] || null;
   }
 
-  function closestCurrentSource(sources, targetDate) {
-    if (!sources.length) return null;
-    return [...sources].sort((a, b) => dateDistance(a.date, targetDate) - dateDistance(b.date, targetDate))[0];
+  function closestSourceByDate(sources, targetDate) {
+    const target = parseIsoDate(targetDate);
+    if (!target || !sources.length) return null;
+    return sources
+      .map((item) => ({ item, diff: Math.abs(parseIsoDate(item.date) - target) }))
+      .filter((entry) => Number.isFinite(entry.diff))
+      .sort((a, b) => a.diff - b.diff)[0]?.item || null;
   }
 
-  function buildAssessment(gfrSource, albuminuriaSource, staleSourceWhenOld) {
+  function assessmentFromPair(gfrSource, albuminuriaSource, staleSourceWhenOld) {
     const risk = calculateRisk(gfrSource.category, albuminuriaSource.category);
     if (!risk) return null;
     const intervalDays = daysBetween(gfrSource.date, albuminuriaSource.date);
     const maxDays = MAX_INTERVAL_BY_RISK[risk.level] || 90;
     const key = pairKey(gfrSource.date, risk.gfrCategory, albuminuriaSource.date, risk.albuminuriaCategory);
+
     if (intervalDays === null || intervalDays > maxDays) {
       return {
         status: "stale",
         key,
         level: null,
-        text: stalePhrase(staleSourceWhenOld, intervalDays),
+        text: stalePhrase(staleSourceWhenOld, intervalDays)
       };
     }
+
     return {
       status: "calculated",
       key,
       level: risk.level,
-      text: riskPhrase(risk, gfrSource.date, albuminuriaSource.date),
-      gfrDate: gfrSource.date,
-      gfrCategory: risk.gfrCategory,
-      albuminuriaDate: albuminuriaSource.date,
-      albuminuriaCategory: risk.albuminuriaCategory,
+      text: riskPhrase(risk, gfrSource.date, albuminuriaSource.date)
     };
   }
 
-  function buildCurrentVisitOptions() {
+  function buildCurrentVisitAssessments() {
     const currentGfr = readCurrentGfrSources();
     const currentAlbuminuria = readCurrentAlbuminuriaSources();
     const previousGfr = loadPreviousGfrSources();
     const previousAlbuminuria = loadPreviousAlbuminuriaSources();
-    const options = [];
+    const assessments = [];
 
-    if (currentGfr.length) {
+    if (currentGfr.length && currentAlbuminuria.length) {
       currentGfr.forEach((gfr) => {
-        const albuminuria = closestCurrentSource(currentAlbuminuria, gfr.date) || latestPreviousBeforeOrOn(previousAlbuminuria, gfr.date);
-        if (!albuminuria) {
-          options.push({ status: "missing", level: null, text: missingPhrase("albuminuria") });
-          return;
-        }
-        const staleSource = albuminuria.source === "previous_appointment" ? "albuminuria" : "albuminuria";
-        const option = buildAssessment(gfr, albuminuria, staleSource);
-        if (option) options.push(option);
+        const albuminuria = closestSourceByDate(currentAlbuminuria, gfr.date);
+        const assessment = albuminuria ? assessmentFromPair(gfr, albuminuria, "albuminuria") : null;
+        if (assessment) assessments.push(assessment);
       });
-    } else if (currentAlbuminuria.length) {
-      currentAlbuminuria.forEach((albuminuria) => {
-        const gfr = latestPreviousBeforeOrOn(previousGfr, albuminuria.date);
-        if (!gfr) {
-          options.push({ status: "missing", level: null, text: missingPhrase("gfr") });
+    } else if (currentGfr.length && !currentAlbuminuria.length) {
+      currentGfr.forEach((gfr) => {
+        const previous = latestPreviousBeforeOrOn(previousAlbuminuria, gfr.date);
+        if (!previous) {
+          assessments.push({ status: "missing", key: `missing-albuminuria-${gfr.date}-${gfr.category}`, level: null, text: missingPhrase("albuminuria") });
           return;
         }
-        const option = buildAssessment(gfr, albuminuria, "gfr");
-        if (option) options.push(option);
+        const assessment = assessmentFromPair(gfr, previous, "albuminuria");
+        if (assessment) assessments.push(assessment);
+      });
+    } else if (!currentGfr.length && currentAlbuminuria.length) {
+      currentAlbuminuria.forEach((albuminuria) => {
+        const previous = latestPreviousBeforeOrOn(previousGfr, albuminuria.date);
+        if (!previous) {
+          assessments.push({ status: "missing", key: `missing-gfr-${albuminuria.date}-${albuminuria.category}`, level: null, text: missingPhrase("gfr") });
+          return;
+        }
+        const assessment = assessmentFromPair(previous, albuminuria, "gfr");
+        if (assessment) assessments.push(assessment);
       });
     } else {
-      options.push({ status: "missing", level: null, text: missingPhrase("both") });
+      assessments.push({ status: "missing", key: "missing-both", level: null, text: missingPhrase("both") });
     }
 
-    const deduplicated = [];
+    return dedupeAssessments(assessments);
+  }
+
+  function dedupeAssessments(assessments) {
     const seen = new Set();
-    options.forEach((option) => {
-      const key = option.key || option.text;
+    const result = [];
+    assessments.forEach((assessment) => {
+      const key = assessment.key || assessment.text;
       if (seen.has(key)) return;
       seen.add(key);
-      deduplicated.push(option);
+      result.push(assessment);
     });
-    return deduplicated;
+    return result;
   }
 
-  function selectedPairValue() {
-    return document.querySelector('input[name="kdigo_current_choice"]:checked')?.value || "";
+  function bestCalculatedIndex(assessments) {
+    let bestIndex = -1;
+    let bestLevel = 0;
+    assessments.forEach((assessment, index) => {
+      if (assessment.status !== "calculated") return;
+      const level = RISK_ORDER[assessment.level] || 0;
+      if (bestIndex === -1 || level > bestLevel) {
+        bestIndex = index;
+        bestLevel = level;
+      }
+    });
+    return bestIndex;
   }
 
-  function setSelectedPair(value) {
-    const selectedInput = document.getElementById("kdigoSelectedPair");
-    if (selectedInput) selectedInput.value = value || "";
-  }
-
-  function updateExcludedPairs(options, selectedKey) {
-    const container = document.getElementById("kdigoExcludedPairs");
-    if (!container) return;
-    container.innerHTML = "";
-    options
-      .filter((option) => option.status === "calculated" && option.key && option.key !== selectedKey)
-      .forEach((option) => {
-        const input = document.createElement("input");
-        input.type = "hidden";
-        input.name = "kdigo_excluded_pair";
-        input.value = option.key;
-        container.appendChild(input);
-      });
-  }
-
-  function updateConclusion(text) {
-    const textarea = document.getElementById("kdigoConclusionText");
-    if (textarea) textarea.value = text || "";
-  }
-
-  function updateBlockColor(level) {
-    const block = document.getElementById("kdigoRiskPreview");
-    if (!block) return;
-    block.classList.remove(
-      "kdigo-risk-empty",
-      "kdigo-risk-low",
-      "kdigo-risk-moderate",
-      "kdigo-risk-high",
-      "kdigo-risk-very_high"
-    );
+  function setBlockRiskClass(block, level) {
+    block.classList.remove("kdigo-risk-empty", "kdigo-risk-low", "kdigo-risk-moderate", "kdigo-risk-high", "kdigo-risk-very_high");
     block.classList.add(level ? `kdigo-risk-${level}` : "kdigo-risk-empty");
   }
 
-  function renderCurrentVisitOptions(preferredSelectedKey) {
-    const container = document.getElementById("kdigoCurrentVisitOptions");
+  function writeExcludedPairs(assessments, selectedKey) {
+    const container = document.getElementById("kdigoExcludedPairs");
     if (!container) return;
-
-    const options = buildCurrentVisitOptions();
-    const calculatedOptions = options.filter((option) => option.status === "calculated" && option.key);
-    let selectedKey = preferredSelectedKey || selectedPairValue();
-
-    if (!calculatedOptions.some((option) => option.key === selectedKey)) {
-      selectedKey = calculatedOptions[0]?.key || "";
-    }
-
     container.innerHTML = "";
-
-    if (!calculatedOptions.length) {
-      const option = options[0] || { text: missingPhrase("both"), level: null };
-      const row = document.createElement("div");
-      row.className = "kdigo-risk-line kdigo-risk-line-empty";
-      row.textContent = option.text;
-      container.appendChild(row);
-      updateConclusion(option.text);
-      setSelectedPair("");
-      updateExcludedPairs(options, "");
-      updateBlockColor(null);
-      return;
-    }
-
-    calculatedOptions.forEach((option, index) => {
-      const label = document.createElement("label");
-      label.className = `kdigo-choice kdigo-choice-${option.level}`;
-
+    assessments.forEach((assessment) => {
+      if (assessment.status !== "calculated" || !assessment.key) return;
+      if (assessment.key === selectedKey) return;
       const input = document.createElement("input");
-      input.type = "radio";
-      input.name = "kdigo_current_choice";
-      input.value = option.key;
-      input.checked = option.key === selectedKey;
-      input.addEventListener("change", () => {
-        renderCurrentVisitOptions(option.key);
-      });
-
-      const text = document.createElement("span");
-      text.textContent = option.text;
-
-      label.appendChild(input);
-      label.appendChild(text);
-      container.appendChild(label);
+      input.type = "hidden";
+      input.name = "kdigo_excluded_pair";
+      input.value = assessment.key;
+      container.appendChild(input);
     });
-
-    const selectedOption = calculatedOptions.find((option) => option.key === selectedKey) || calculatedOptions[0];
-    updateConclusion(selectedOption.text);
-    setSelectedPair(selectedOption.key);
-    updateExcludedPairs(calculatedOptions, selectedOption.key);
-    updateBlockColor(selectedOption.level);
   }
 
-  function toggleHistoryPanel() {
+  function selectedRadioValue() {
+    const selected = document.querySelector('input[name="kdigo_selected_current_option"]:checked');
+    return selected ? selected.value : "";
+  }
+
+  function renderAssessments(preferredSelectedKey) {
+    const block = document.getElementById("kdigoRiskPreview");
+    const optionsContainer = document.getElementById("kdigoCurrentVisitOptions");
+    const conclusionText = document.getElementById("kdigoSelectedConclusionText");
+    if (!block || !optionsContainer || !conclusionText) return;
+
+    const previousSelectedKey = preferredSelectedKey || selectedRadioValue();
+    const assessments = buildCurrentVisitAssessments();
+    const calculatedAssessments = assessments.filter((item) => item.status === "calculated");
+    const bestIndex = bestCalculatedIndex(assessments);
+    let selectedKey = "";
+
+    if (calculatedAssessments.some((item) => item.key === previousSelectedKey)) {
+      selectedKey = previousSelectedKey;
+    } else if (bestIndex >= 0) {
+      selectedKey = assessments[bestIndex].key;
+    }
+
+    optionsContainer.innerHTML = "";
+
+    assessments.forEach((assessment, index) => {
+      const row = document.createElement("label");
+      row.className = "kdigo-current-option";
+      if (assessment.status === "calculated" && assessment.level) {
+        row.classList.add(`kdigo-risk-${assessment.level}`);
+      } else {
+        row.classList.add("kdigo-current-option-neutral");
+      }
+
+      if (assessment.status === "calculated") {
+        const radio = document.createElement("input");
+        radio.type = "radio";
+        radio.name = "kdigo_selected_current_option";
+        radio.value = assessment.key;
+        radio.checked = assessment.key === selectedKey;
+        radio.addEventListener("change", () => renderAssessments(assessment.key));
+        row.appendChild(radio);
+      }
+
+      const text = document.createElement("div");
+      text.className = "kdigo-current-option-text";
+      text.textContent = assessment.text;
+      row.appendChild(text);
+      optionsContainer.appendChild(row);
+    });
+
+    const selectedAssessment = assessments.find((item) => item.key === selectedKey) || assessments[0];
+    conclusionText.value = selectedAssessment ? selectedAssessment.text : missingPhrase("both");
+    setBlockRiskClass(block, selectedAssessment && selectedAssessment.status === "calculated" ? selectedAssessment.level : null);
+    writeExcludedPairs(assessments, selectedKey);
+  }
+
+  function toggleHistory() {
     const panel = document.getElementById("kdigoHistoryPanel");
-    const button = document.getElementById("kdigoHistoryToggleButton");
+    const button = document.getElementById("kdigoToggleHistoryButton");
     if (!panel || !button) return;
-    const willShow = panel.classList.contains("d-none");
-    panel.classList.toggle("d-none", !willShow);
-    button.textContent = willShow
-      ? "Скрыть историю прогнозов по KDIGO"
-      : "Посмотреть историю прогнозов по KDIGO";
+    const shouldShow = panel.hidden;
+    panel.hidden = !shouldShow;
+    button.textContent = shouldShow ? "Скрыть историю прогнозов по KDIGO" : "Посмотреть историю прогнозов по KDIGO";
   }
 
   function scheduleRender() {
-    window.setTimeout(() => renderCurrentVisitOptions(), 0);
+    window.setTimeout(() => renderAssessments(), 0);
   }
 
   function init() {
@@ -458,12 +460,12 @@
 
     const refreshButton = document.getElementById("kdigoRefreshButton");
     if (refreshButton) {
-      refreshButton.addEventListener("click", () => renderCurrentVisitOptions());
+      refreshButton.addEventListener("click", () => renderAssessments());
     }
 
-    const historyButton = document.getElementById("kdigoHistoryToggleButton");
+    const historyButton = document.getElementById("kdigoToggleHistoryButton");
     if (historyButton) {
-      historyButton.addEventListener("click", toggleHistoryPanel);
+      historyButton.addEventListener("click", toggleHistory);
     }
 
     document.addEventListener("input", scheduleRender, true);
@@ -483,7 +485,7 @@
       }
     }, true);
 
-    renderCurrentVisitOptions();
+    renderAssessments();
   }
 
   if (document.readyState === "loading") {

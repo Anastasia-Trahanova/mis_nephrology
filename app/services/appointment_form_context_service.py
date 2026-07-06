@@ -8,7 +8,7 @@
 - get_new_patient_context() — context для страницы добавления нового пациента;
 - get_new_appointment_context(patient_id) — context для нового приёма существующего пациента;
 - _group_icd10_diagnoses_for_form() — группировка МКБ-10 диагнозов для формы;
-- передаёт в форму историю прогнозов KDIGO, чтобы врач мог раскрыть её отдельной кнопкой.
+- готовит данные истории СКФ/альбуминурии для live-блока KDIGO.
 
 Что редактировать здесь:
 - какие справочники передаются в формы;
@@ -22,6 +22,9 @@
 """
 
 from __future__ import annotations
+
+from datetime import date, datetime
+from typing import Any
 
 from app.db.connection import get_db_connection
 from app.repositories.appointments import (
@@ -70,6 +73,66 @@ def _group_icd10_diagnoses_for_form(icd10_diagnoses):
     return result
 
 
+def _row_get(row: Any, key: str, default: Any = None) -> Any:
+    """Читает поле из dict/RealDictRow/объекта."""
+    if isinstance(row, dict):
+        return row.get(key, default)
+    try:
+        return row[key]
+    except Exception:
+        return getattr(row, key, default)
+
+
+def _date_to_iso(value: Any) -> str | None:
+    """Готовит дату для JSON, который читает JavaScript формы."""
+    if value is None:
+        return None
+    if isinstance(value, datetime):
+        return value.date().isoformat()
+    if isinstance(value, date):
+        return value.isoformat()
+    text = str(value).strip()
+    return text[:10] if text else None
+
+
+def _prepare_kdigo_previous_gfr_data(metrics_history) -> list[dict[str, str]]:
+    """Готовит историю СКФ для fallback-расчёта KDIGO в форме."""
+    result: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for item in metrics_history or []:
+        current_date = _date_to_iso(_row_get(item, "investigation_date"))
+        category = _row_get(item, "ckd_stage")
+        if not current_date or not category:
+            continue
+        key = (current_date, str(category))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append({"date": current_date, "category": str(category)})
+
+    return result
+
+
+def _prepare_kdigo_previous_albuminuria_data(albuminuria_history) -> list[dict[str, str]]:
+    """Готовит историю альбуминурии для fallback-расчёта KDIGO в форме."""
+    result: list[dict[str, str]] = []
+    seen: set[tuple[str, str]] = set()
+
+    for item in albuminuria_history or []:
+        current_date = _date_to_iso(_row_get(item, "investigation_date"))
+        category = _row_get(item, "albuminuria_category")
+        if not current_date or not category:
+            continue
+        key = (current_date, str(category))
+        if key in seen:
+            continue
+        seen.add(key)
+        result.append({"date": current_date, "category": str(category)})
+
+    return result
+
+
 def get_new_appointment_context(patient_id: int):
     """Собирает данные для формы нового приёма одним соединением к БД."""
     with get_db_connection() as conn:
@@ -92,7 +155,9 @@ def get_new_appointment_context(patient_id: int):
                 last_icd10_diagnoses = _fetch_appointment_icd10_diagnoses(cur, last_appointment_id)
                 last_icd10_diagnoses_grouped = _group_icd10_diagnoses_for_form(last_icd10_diagnoses)
 
-            ckd_prognosis_history = _fetch_patient_ckd_prognosis_history(cur, patient_id)
+            metrics_history = _fetch_patient_metrics_history(cur, patient_id)
+            albuminuria_history = _fetch_patient_albuminuria_history(cur, patient_id)
+            kdigo_previous_history = _fetch_patient_ckd_prognosis_history(cur, patient_id)
 
             return {
                 "patient": patient,
@@ -103,22 +168,19 @@ def get_new_appointment_context(patient_id: int):
                 "last_appointment": last_appointment,
                 "last_icd10_diagnoses": last_icd10_diagnoses,
                 "last_icd10_diagnoses_grouped": last_icd10_diagnoses_grouped,
-                "last_medications": _fetch_appointment_medications(cur, last_appointment_id)
-                if last_appointment_id
-                else [],
-                "last_diet_info": _fetch_appointment_diet(cur, last_appointment_id)
-                if last_appointment_id
-                else None,
+                "last_medications": _fetch_appointment_medications(cur, last_appointment_id) if last_appointment_id else [],
+                "last_diet_info": _fetch_appointment_diet(cur, last_appointment_id) if last_appointment_id else None,
                 "cbc_history": _fetch_patient_cbc_history(cur, patient_id),
                 "biochemistry_history": _fetch_patient_biochemistry_history(cur, patient_id),
                 "urinalysis_history": _fetch_patient_urinalysis_history(cur, patient_id),
-                "albuminuria_history": _fetch_patient_albuminuria_history(cur, patient_id),
+                "albuminuria_history": albuminuria_history,
                 "ultrasound_history": _fetch_patient_ultrasound_history(cur, patient_id),
-                "metrics_history": _fetch_patient_metrics_history(cur, patient_id),
-                "ckd_prognosis_history": ckd_prognosis_history,
-                "kdigo_history_matrix": build_kdigo_risk_matrix(ckd_prognosis_history),
+                "metrics_history": metrics_history,
                 "icd10_diagnoses": _fetch_icd10_diagnoses(cur),
                 "medications_dictionary": _fetch_medications_dictionary(cur),
+                "kdigo_previous_gfr_data": _prepare_kdigo_previous_gfr_data(metrics_history),
+                "kdigo_previous_albuminuria_data": _prepare_kdigo_previous_albuminuria_data(albuminuria_history),
+                "kdigo_previous_history_matrix": build_kdigo_risk_matrix(kdigo_previous_history),
             }
 
 
@@ -132,8 +194,7 @@ def get_new_patient_context():
                 "locations": _fetch_locations_by_branch(cur),
                 "icd10_diagnoses": _fetch_icd10_diagnoses(cur),
                 "medications_dictionary": _fetch_medications_dictionary(cur),
-                "metrics_history": [],
-                "albuminuria_history": [],
-                "ckd_prognosis_history": [],
-                "kdigo_history_matrix": build_kdigo_risk_matrix([]),
+                "kdigo_previous_gfr_data": [],
+                "kdigo_previous_albuminuria_data": [],
+                "kdigo_previous_history_matrix": build_kdigo_risk_matrix([]),
             }
