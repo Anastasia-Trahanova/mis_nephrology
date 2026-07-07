@@ -1,14 +1,15 @@
 """
-Парсер HTML-формы приёма.
+Назначение файла: парсер HTML-формы приёма.
 
-Этот модуль нужен, чтобы patients.py и appointments.py не знали имена всех
-полей формы. Здесь собраны правила:
-- какие поля относятся к опросу;
-- какие поля относятся к осмотру;
-- какие поля относятся к ОАК, биохимии, ОАМ, альбуминурии и УЗИ;
-- какие поля относятся к диагнозам, диете, рекомендациям и лекарствам.
+Что редактировать:
+- имена полей формы, если меняется HTML-шаблон;
+- состав структурированных секций, которые потом сохраняются в БД;
+- правила нормализации значений перед сохранением.
 
-Здесь нет SQL. Модуль только читает форму и возвращает структурированный словарь.
+Что не редактировать здесь:
+- SQL-запросы;
+- медицинские алгоритмы расчёта СКФ, ACR и KDIGO;
+- внешний вид формы.
 """
 
 from __future__ import annotations
@@ -35,11 +36,7 @@ except ImportError:  # fallback на случай, если calculate_bmi ещё
 
 
 def parse_required_appointment_fields(form: Any) -> dict[str, Any]:
-    """
-    Забирает обязательные поля приёма и формирует appointment_datetime.
-
-    Используется и для первого приёма нового пациента, и для повторного приёма.
-    """
+    """Забирает обязательные поля приёма и формирует appointment_datetime."""
     doctor_id = empty_to_none(form.get("doctor_id"))
     location_id = empty_to_none(form.get("location_id"))
     appointment_date = empty_to_none(form.get("appointment_date"))
@@ -100,12 +97,8 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
     """
     Разбирает все поля формы приёма в структурированный словарь.
 
-    appointment_datetime нужен как дата по умолчанию для анализов, если врач не
-    заполнил отдельную дату исследования.
-
-    Перед разбором форма проходит нормализацию клинических числовых значений.
-    Это важно для случаев вроде удельного веса мочи: врач может ввести 1015,
-    а внутренняя модель хранит 1.015.
+    Свободные текстовые диагнозы больше не разбираются: источник истины по диагнозам —
+    МКБ-10 блок appointment_icd10_diagnoses.
     """
     form = normalize_appointment_form_values(form)
 
@@ -179,12 +172,6 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
             "left_parenchyma": get_numeric_list(form, "left_parenchyma"),
             "right_parenchyma": get_numeric_list(form, "right_parenchyma"),
             "ultrasound_desc": get_text_list(form, "ultrasound_desc"),
-        },
-        "diagnoses": {
-            # Старые свободные текстовые поля пока оставляем для совместимости.
-            "main_diagnosis": empty_to_none(form.get("main_diagnosis")),
-            "complications": empty_to_none(form.get("complications")),
-            "comorbidities": empty_to_none(form.get("comorbidities_diag")),
         },
         "icd10": parse_icd10_diagnoses_from_form(form),
         "diet": {

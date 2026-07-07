@@ -5,12 +5,7 @@
 - parse_appointment_form;
 - сохранение порядка списков анализов;
 - серверный расчёт BMI при парсинге формы;
-- разбор чекбоксов и свободных текстовых полей.
-
-Зачем:
-после дробления patients.py именно этот модуль знает имена HTML-полей. Если в
-шаблоне изменится name="...", этот тест должен подсветить проблему раньше, чем
-она попадёт к врачу.
+- переход на структурированные диагнозы МКБ-10 без старых свободных диагнозов.
 """
 
 from __future__ import annotations
@@ -76,12 +71,12 @@ def test_parse_appointment_form_returns_structured_sections_and_bmi():
         "urinalysis",
         "albuminuria",
         "ultrasound",
-        "diagnoses",
         "icd10",
         "diet",
         "prescriptions",
         "appointment_date_default",
     }
+    assert "diagnoses" not in data
 
     assert data["survey"]["complaints"] == "Жалобы из автотеста"
     assert data["examination"]["height"] == "170"
@@ -89,7 +84,6 @@ def test_parse_appointment_form_returns_structured_sections_and_bmi():
     assert data["examination"]["bmi"] == 24.22
     assert "Окраска" in data["examination"]["skin_condition"]
     assert "Периферические отёки" in data["examination"]["edema_location"]
-
     assert data["cbc"]["hemoglobin"] == ["130", None]
     assert data["biochemistry"]["creatinine"] == ["100", None]
     # В фабрике намеренно используется привычная запись удельного веса мочи 1015.

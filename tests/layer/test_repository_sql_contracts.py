@@ -3,15 +3,8 @@
 - repository-функции вызывают cur.execute(...);
 - INSERT/SELECT идут в ожидаемые таблицы;
 - параметры передаются в правильном порядке;
-- create_patient/create_appointment возвращают id из RETURNING id.
-
-Зачем:
-после выноса SQL из сервисов в app/repositories/*.py важно быстро понять, что
-сервис вызывает стабильный слой доступа к данным, а сами repository-функции не
-потеряли нужные поля.
-
-Эти тесты НЕ подключаются к реальной БД. Они проверяют SQL-контракт через
-FakeCursor.
+- create_patient/create_appointment возвращают id из RETURNING id;
+- старой таблицы свободных диагнозов diagnoses больше нет в repository-контракте.
 """
 
 from __future__ import annotations
@@ -22,7 +15,6 @@ from app.repositories.appointments import create_appointment
 from app.repositories.diagnoses import (
     find_active_icd10_diagnosis_id,
     insert_appointment_icd10_diagnosis_row,
-    insert_text_diagnoses,
 )
 from app.repositories.examinations import insert_examination
 from app.repositories.labs import (
@@ -46,7 +38,6 @@ def _normalized_sql(sql: str) -> str:
 
 def test_create_patient_sql_contract():
     cur = FakeCursor({"id": 101})
-
     patient_id = create_patient(
         cur,
         {
@@ -80,7 +71,6 @@ def test_create_appointment_sql_contract():
 
 def test_get_patient_for_appointment_sql_contract():
     cur = FakeCursor({"id": 101, "birth_date": date(1980, 1, 15), "gender": True})
-
     row = get_patient_for_appointment(cur, 101)
 
     assert row["id"] == 101
@@ -153,19 +143,8 @@ def test_insert_lab_sql_contracts():
     assert "insert into ultrasound_results" in _normalized_sql(cur.last_query)
 
 
-def test_insert_diagnoses_and_prescriptions_sql_contracts():
+def test_insert_icd10_diagnoses_and_prescriptions_sql_contracts():
     cur = FakeCursor({"id": 501})
-
-    insert_text_diagnoses(
-        cur,
-        202,
-        {
-            "main_diagnosis": "main",
-            "complications": "comp",
-            "comorbidities": "comorb",
-        },
-    )
-    assert "insert into diagnoses" in _normalized_sql(cur.last_query)
 
     diagnosis_id = find_active_icd10_diagnosis_id(cur, "N18 — ХБП")
     assert diagnosis_id == 501
@@ -173,6 +152,7 @@ def test_insert_diagnoses_and_prescriptions_sql_contracts():
 
     insert_appointment_icd10_diagnosis_row(cur, 202, "main", 501, "note", 1)
     assert "insert into appointment_icd10_diagnoses" in _normalized_sql(cur.last_query)
+    assert "insert into diagnoses" not in _normalized_sql(cur.last_query)
 
     insert_diet_and_recommendations(
         cur,

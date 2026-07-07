@@ -5,14 +5,8 @@
 - что пустые строки анализов пропускаются;
 - что по креатинину создаётся calculated_metric;
 - что по альбумину/креатинину мочи сохраняется ACR и категория;
-- что лекарства с пустыми строками не сохраняются;
+- что диагнозы сохраняются только через МКБ-10;
 - что после сохранения вызывается пересчёт прогноза ХБП.
-
-Зачем:
-это главный слой после дробления patients.py. Если он сломается, форма может
-открываться, но данные не будут попадать в нужные таблицы.
-
-Тест НЕ пишет в реальную БД: repository-функции заменяются monkeypatch-ами.
 """
 
 from __future__ import annotations
@@ -30,6 +24,7 @@ def test_save_appointment_details_saves_all_sections_and_skips_empty_rows(monkey
     def record(name):
         def _inner(*args, **kwargs):
             calls.append((name, {"args": args, "kwargs": kwargs}))
+
         return _inner
 
     monkeypatch.setattr(svc, "insert_survey", record("survey"))
@@ -40,12 +35,10 @@ def test_save_appointment_details_saves_all_sections_and_skips_empty_rows(monkey
     monkeypatch.setattr(svc, "insert_urinalysis_result", record("urinalysis"))
     monkeypatch.setattr(svc, "insert_albuminuria_result", record("albuminuria"))
     monkeypatch.setattr(svc, "insert_ultrasound_result", record("ultrasound"))
-    monkeypatch.setattr(svc, "insert_text_diagnoses", record("diagnoses"))
     monkeypatch.setattr(svc, "save_appointment_icd10_diagnoses", record("icd10"))
     monkeypatch.setattr(svc, "insert_diet_and_recommendations", record("diet"))
     monkeypatch.setattr(svc, "insert_prescription", record("prescription"))
     monkeypatch.setattr(svc, "save_ckd_prognosis_for_appointment", record("prognosis"))
-
     monkeypatch.setattr(
         svc,
         "calculate_all_metrics",
@@ -66,6 +59,7 @@ def test_save_appointment_details_saves_all_sections_and_skips_empty_rows(monkey
     )
 
     appointment_data = minimal_appointment_data()
+    appointment_data.pop("diagnoses", None)
 
     svc.save_appointment_details(
         cur=FakeCursor(),
@@ -85,7 +79,7 @@ def test_save_appointment_details_saves_all_sections_and_skips_empty_rows(monkey
     assert call_names.count("urinalysis") == 1
     assert call_names.count("albuminuria") == 1
     assert call_names.count("ultrasound") == 1
-    assert call_names.count("diagnoses") == 1
+    assert "diagnoses" not in call_names
     assert call_names.count("icd10") == 1
     assert call_names.count("diet") == 1
     assert call_names.count("prescription") == 1

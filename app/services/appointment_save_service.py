@@ -1,15 +1,15 @@
 """
-Сохранение деталей приёма в БД.
+Назначение файла: сохранение деталей приёма в БД.
 
-Этот модуль отвечает за бизнес-логику сохранения одного приёма:
-- пройти по данным формы;
-- понять, какие строки анализов заполнены;
-- посчитать медицинские показатели;
-- вызвать repository-функции для INSERT-запросов;
-- пересчитать прогноз ХБП после сохранения метрик и альбуминурии.
+Что редактировать:
+- порядок сохранения разделов приёма;
+- правила пропуска пустых строк анализов;
+- вызовы repository-функций при добавлении новых клинических блоков.
 
-SQL-запросы вынесены из этого файла в app/repositories/*.py.
-Здесь остаётся оркестрация и медицинская логика сохранения.
+Что не редактировать здесь:
+- SQL-запросы;
+- HTML-форму;
+- медицинские формулы расчёта СКФ, ACR и KDIGO.
 """
 
 from __future__ import annotations
@@ -22,7 +22,6 @@ from ..calculations import (
     calculate_all_metrics,
 )
 from app.repositories.ckd_prognosis import save_ckd_prognosis_for_appointment
-from ..repositories.diagnoses import insert_text_diagnoses
 from ..repositories.examinations import insert_examination
 from ..repositories.labs import (
     insert_albuminuria_result,
@@ -74,7 +73,6 @@ def save_cbc_results(
         cbc_data.get("mcv", []),
         cbc_data.get("hematocrit", []),
     ]
-
     max_count = max_list_length(cbc_data.get("dates", []), *value_lists)
 
     for index in range(max_count):
@@ -120,7 +118,6 @@ def save_biochemistry_results(
         biochemistry_data.get("ferritin", []),
         biochemistry_data.get("ptg", []),
     ]
-
     max_count = max_list_length(biochemistry_data.get("dates", []), *value_lists)
     metric_sources: list[dict[str, Any]] = []
 
@@ -179,7 +176,6 @@ def save_calculated_metrics(
             appointment_date_default,
         )
         current_creatinine = metric_source.get("creatinine")
-
         metrics = calculate_all_metrics(
             creatinine_umol_l=current_creatinine,
             birth_date=birth_date,
@@ -223,7 +219,6 @@ def save_urinalysis_results(
         urinalysis_data.get("urine_erythrocytes", []),
         urinalysis_data.get("bacteria", []),
     ]
-
     max_count = max_list_length(urinalysis_data.get("dates", []), *value_lists)
 
     for index in range(max_count):
@@ -253,7 +248,6 @@ def save_albuminuria_results(
         albuminuria_data.get("urine_albumin", []),
         albuminuria_data.get("urine_creatinine", []),
     ]
-
     max_count = max_list_length(
         albuminuria_data.get("dates", []),
         albuminuria_data.get("urine_albumin", []),
@@ -308,7 +302,6 @@ def save_ultrasound_results(
         ultrasound_data.get("right_parenchyma", []),
         ultrasound_data.get("ultrasound_desc", []),
     ]
-
     max_count = max_list_length(ultrasound_data.get("dates", []), *value_lists)
 
     for index in range(max_count):
@@ -327,33 +320,16 @@ def save_ultrasound_results(
         )
 
 
-def save_diagnoses(cur: Any, appointment_id: int, diagnoses_data: dict[str, Any]) -> None:
-    """
-    Сохраняет старые свободные текстовые диагнозы.
-
-    Таблицу diagnoses пока оставляем для совместимости с карточкой пациента и
-    Word-экспортом.
-    """
-    insert_text_diagnoses(cur, appointment_id, diagnoses_data)
-
-
 def save_diet_and_recommendations(cur: Any, appointment_id: int, diet_data: dict[str, Any]) -> None:
     """Сохраняет диету, рекомендации и дату следующего контроля."""
     insert_diet_and_recommendations(cur, appointment_id, diet_data)
 
 
 def save_prescriptions(cur: Any, appointment_id: int, prescriptions_data: dict[str, list[Any]]) -> None:
-    """
-    Сохраняет лекарственные назначения.
-
-    Пока medication сохраняется текстом в prescriptions.medication, даже если
-    врач выбирает препарат из справочника. Привязку к medications.id лучше делать
-    отдельной миграцией позже.
-    """
+    """Сохраняет лекарственные назначения."""
     medications = prescriptions_data.get("medications", [])
     dosages = prescriptions_data.get("dosages", [])
     schedules = prescriptions_data.get("schedules", [])
-
     max_count = max_list_length(medications, dosages, schedules)
 
     for index in range(max_count):
@@ -380,11 +356,7 @@ def save_appointment_details(
     patient_birth_date: Any,
     patient_gender: bool,
 ) -> None:
-    """
-    Главная функция сохранения содержимого приёма.
-
-    Вызывается после того, как сам appointment уже создан и у него есть id.
-    """
+    """Главная функция сохранения содержимого приёма."""
     appointment_date_default = appointment_data["appointment_date_default"]
     examination_data = appointment_data["examination"]
 
@@ -426,7 +398,8 @@ def save_appointment_details(
         appointment_date_default,
         appointment_data["ultrasound"],
     )
-    save_diagnoses(cur, appointment_id, appointment_data["diagnoses"])
+
+    # Единственный источник диагнозов — структурированный МКБ-10 блок.
     save_appointment_icd10_diagnoses(cur, appointment_id, appointment_data["icd10"])
     save_diet_and_recommendations(cur, appointment_id, appointment_data["diet"])
     save_prescriptions(cur, appointment_id, appointment_data["prescriptions"])

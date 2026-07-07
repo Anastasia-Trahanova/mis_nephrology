@@ -1,34 +1,19 @@
 """
-Repository для диагнозов приёма.
+Назначение файла: repository для структурированных диагнозов приёма по МКБ-10.
 
-Файл работает с двумя видами диагнозов:
-- свободные текстовые диагнозы в таблице diagnoses;
-- структурированные диагнозы МКБ-10 через справочник icd10_diagnoses и таблицу
-  appointment_icd10_diagnoses.
+Что редактировать:
+- SQL для поиска активного диагноза в справочнике icd10_diagnoses;
+- SQL для сохранения связи appointment -> icd10_diagnosis.
 
-Здесь нет разбора формы и нет проверки бизнес-правил. Сервис выше решает, какие
-диагнозы сохранять, а repository только выполняет SQL.
+Что не редактировать здесь:
+- разбор HTML-формы;
+- автоподстановку диагноза по стадии СКФ;
+- свободные текстовые диагнозы: таблица diagnoses удалена отдельной миграцией.
 """
 
 from __future__ import annotations
 
 from typing import Any
-
-
-def insert_text_diagnoses(cur: Any, appointment_id: int, diagnoses_data: dict[str, Any]) -> None:
-    """Сохраняет старые свободные текстовые диагнозы для совместимости."""
-    cur.execute(
-        """
-        INSERT INTO diagnoses (appointment_id, main_diagnosis, complications, comorbidities)
-        VALUES (%s, %s, %s, %s)
-        """,
-        (
-            appointment_id,
-            diagnoses_data.get("main_diagnosis"),
-            diagnoses_data.get("complications"),
-            diagnoses_data.get("comorbidities"),
-        ),
-    )
 
 
 def find_active_icd10_diagnosis_id(cur: Any, diagnosis_text: str) -> int | None:

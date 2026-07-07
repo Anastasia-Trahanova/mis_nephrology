@@ -1,96 +1,86 @@
 {#
-Назначение файла: блок «Заключение»: диагнозы, диета, рекомендации, лекарства и дата следующего контроля.
+Назначение файла: блок «Заключение»: KDIGO-прогноз, структурированные диагнозы МКБ-10, диета, рекомендации, лекарства и дата следующего контроля.
+
 Файл выделен при разделении большой формы приёма на структурные части.
-Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
+
+Важно: свободные текстовые диагнозы main_diagnosis/complications/comorbidities_diag удалены.
+Источник истины по диагнозам — блок МКБ-10 и таблица appointment_icd10_diagnoses.
 #}
+
 <hr>
-            <h5>Заключение</h5>
 
- {% include "appointment_form/_kdigo_risk_preview.html" %}
-            <div class="row">
+<h5>Заключение</h5>
 
-{% include "icd10_diagnosis_block.html" %}               
-                           
-                <div class="col-12">
-                    <label class="form-label fw-bold">Основной диагноз</label>
-                    <textarea name="main_diagnosis" class="form-control" rows="2">{{ last_appointment.main_diagnosis if last_appointment and last_appointment.main_diagnosis else '' }}</textarea></div>
-                <div class="col-12 mt-2">
-                    <label class="form-label fw-bold">Осложнения основного диагноза</label>
-                    <textarea name="complications" class="form-control" rows="2">{{ last_appointment.complications if last_appointment and last_appointment.complications else '' }}</textarea></div>
-                <div class="col-12 mt-2">
-                    <label class="form-label fw-bold">Сопутствующие диагнозы</label>
-                    <textarea name="comorbidities_diag" class="form-control" rows="2">{{ last_appointment.diag_comorbidities if last_appointment and last_appointment.diag_comorbidities else '' }}</textarea></div>
-                <div class="col-12">
-                    <label class="form-label fw-bold">Диета</label>
-                    <textarea name="diet" class="form-control" rows="2">{{ last_diet_info.diet if last_diet_info and last_diet_info.diet else '' }}</textarea>
-                </div>
-                
+{% include "appointment_form/_kdigo_risk_preview.html" %}
 
-                <div class="col-12 mt-3">
-                    <label class="form-label fw-bold">Рекомендации</label>
-                    <textarea name="recommendations" class="form-control" rows="3" placeholder="Например: контроль креатинина и ACR через 3 месяца, дневник АД, консультация нефролога при ухудшении СКФ">{{ last_diet_info.recommendations if last_diet_info and last_diet_info.recommendations else '' }}</textarea>
-                </div>
-                
-                <datalist id="medicationsDictionary">
-                    {% for medication_item in medications_dictionary or [] %}
-                    <option value="{{ medication_item.display_name }}"></option>
-                    {% endfor %}
-                </datalist>
+<div class="row">
+    {% include "icd10_diagnosis_block.html" %}
 
-                <div class="col-12 mt-3">
-                    <label class="form-label fw-bold">Лекарства</label>
-                    <div id="medicationsContainer">
-                        {% if last_medications %}
-                            {% for med in last_medications %}
-                            <div class="row mb-2 medication-row" data-row-id="{{ loop.index }}">
-                                <div class="col-md-4">
-                                    <input type="text" name="medication" class="form-control" value="{{ med.medication or '' }}" list="medicationsDictionary" autocomplete="off" placeholder="Название препарата">
-                                </div>
-                                <div class="col-md-3">
-                                    <input type="text" name="dosage" class="form-control" value="{{ med.dosage or '' }}" placeholder="Дозировка">
-                                </div>
-                                <div class="col-md-4">
-                                    <input type="text" name="schedule" class="form-control" value="{{ med.schedule or '' }}" placeholder="Режим приёма">
-                                </div>
-                                <div class="col-md-1">
-                                    <button type="button" class="btn btn-sm btn-outline-danger remove-medication-btn" title="Удалить препарат" style="border: none; background: none; color: #dc3545;">
-                                        ✖
-                                    </button>
-                                </div>
-                            </div>
-                            {% endfor %}
-                            {% else %}
-                                <div class="row mb-2 medication-row">
-                                    <div class="col-md-4">
-                                        <input type="text" name="medication" class="form-control" list="medicationsDictionary" autocomplete="off" placeholder="Название препарата">
-                                    </div>
-                                    <div class="col-md-3">
-                                        <input type="text" name="dosage" class="form-control" placeholder="Дозировка">
-                                    </div>
-                                    <div class="col-md-4">
-                                        <input type="text" name="schedule" class="form-control" placeholder="Режим приёма">
-                                    </div>
-                                    <div class="col-md-1 d-flex align-items-center">
-                                        <button type="button"
-                                                class="btn btn-sm btn-outline-danger remove-medication-btn"
-                                                title="Удалить препарат"
-                                                style="border: none; background: none; color: #dc3545;">
-                                            ✖
-                                        </button>
-                                    </div>
-                                </div>
-                        {% endif %}
+    <div class="col-12">
+        <label class="form-label fw-bold">Диета</label>
+        <textarea name="diet" class="form-control" rows="2">{{ last_diet_info.diet if last_diet_info and last_diet_info.diet else '' }}</textarea>
+    </div>
+
+    <div class="col-12 mt-3">
+        <label class="form-label fw-bold">Рекомендации</label>
+        <textarea name="recommendations" class="form-control" rows="3" placeholder="Например: контроль креатинина и ACR через 3 месяца, дневник АД, консультация нефролога при ухудшении СКФ">{{ last_diet_info.recommendations if last_diet_info and last_diet_info.recommendations else '' }}</textarea>
+    </div>
+
+    <datalist id="medicationsDictionary">
+        {% for medication_item in medications_dictionary or [] %}
+        <option value="{{ medication_item.display_name }}"></option>
+        {% endfor %}
+    </datalist>
+
+    <div class="col-12 mt-3">
+        <label class="form-label fw-bold">Лекарства</label>
+
+        <div id="medicationsContainer">
+            {% if last_medications %}
+                {% for med in last_medications %}
+                <div class="row mb-2 medication-row" data-row-id="{{ loop.index }}">
+                    <div class="col-md-4">
+                        <input type="text" name="medication" class="form-control" value="{{ med.medication or '' }}" list="medicationsDictionary" autocomplete="off" placeholder="Название препарата">
                     </div>
-                    <button type="button" id="addMedicationBtn" class="btn btn-sm btn-secondary mt-2">➕ Добавить ещё лекарство</button>
+                    <div class="col-md-3">
+                        <input type="text" name="dosage" class="form-control" value="{{ med.dosage or '' }}" placeholder="Дозировка">
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" name="schedule" class="form-control" value="{{ med.schedule or '' }}" placeholder="Режим приёма">
+                    </div>
+                    <div class="col-md-1 d-flex align-items-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-medication-btn" title="Удалить препарат" style="border: none; background: none; color: #dc3545;">✖</button>
+                    </div>
                 </div>
-                
-                <div class="col-md-6 mt-3">
-                    <label class="form-label fw-bold">Дата следующего контроля</label>
-                    {# Дата следующего контроля относится к НОВОМУ приёму. Не подставляем сюда дату из прошлого приёма/диеты: она остаётся только историческим текстом в верхнем сообщении формы. #}
-<input type="date" name="next_control_date" class="form-control" value="">
+                {% endfor %}
+            {% else %}
+                <div class="row mb-2 medication-row">
+                    <div class="col-md-4">
+                        <input type="text" name="medication" class="form-control" list="medicationsDictionary" autocomplete="off" placeholder="Название препарата">
+                    </div>
+                    <div class="col-md-3">
+                        <input type="text" name="dosage" class="form-control" placeholder="Дозировка">
+                    </div>
+                    <div class="col-md-4">
+                        <input type="text" name="schedule" class="form-control" placeholder="Режим приёма">
+                    </div>
+                    <div class="col-md-1 d-flex align-items-center">
+                        <button type="button" class="btn btn-sm btn-outline-danger remove-medication-btn" title="Удалить препарат" style="border: none; background: none; color: #dc3545;">✖</button>
+                    </div>
                 </div>
-            </div>
+            {% endif %}
+        </div>
 
-            <div class="mt-4">
-                <button type="submit" class="btn btn-primary">💾 Сохранить прием </button>
-            </div>
+        <button type="button" id="addMedicationBtn" class="btn btn-sm btn-secondary mt-2">➕ Добавить ещё лекарство</button>
+    </div>
+
+    <div class="col-md-6 mt-3">
+        <label class="form-label fw-bold">Дата следующего контроля</label>
+        {# Дата следующего контроля относится к НОВОМУ приёму. Не подставляем сюда дату из прошлого приёма/диеты: она остаётся только историческим текстом в верхнем сообщении формы. #}
+        <input type="date" name="next_control_date" class="form-control" value="">
+    </div>
+</div>
+
+<div class="mt-4">
+    <button type="submit" class="btn btn-primary">Сохранить прием</button>
+</div>

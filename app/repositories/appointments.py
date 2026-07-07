@@ -1,16 +1,7 @@
 """
 Назначение файла: repository для таблицы appointments и близких данных приёма.
 
-Этот файл содержит SQL для:
-- создания приёма;
-- списка приёмов;
-- приёмов конкретного пациента;
-- полного набора данных выбранного приёма;
-- последнего приёма пациента для автоподстановки;
-- лекарств конкретного приёма;
-- диеты/рекомендаций конкретного приёма.
-
-Что редактировать здесь:
+Что редактировать:
 - SQL по appointments;
 - JOIN-ы, которые нужны для выбранного приёма;
 - состав данных последнего приёма.
@@ -43,7 +34,8 @@ def create_appointment(
             doctor_id,
             location_id,
             appointment_date
-        ) VALUES (%s, %s, %s, %s)
+        )
+        VALUES (%s, %s, %s, %s)
         RETURNING id
         """,
         (
@@ -59,7 +51,6 @@ def create_appointment(
 def get_all_appointments(filters: dict | None = None):
     """Возвращает список приёмов с фильтрацией, сортировкой и пагинацией."""
     filters = filters or {}
-
     query = """
         SELECT
             a.id AS appointment_id,
@@ -82,15 +73,12 @@ def get_all_appointments(filters: dict | None = None):
     if filters.get("branch_id"):
         query += " AND b.id = %s"
         params.append(filters["branch_id"])
-
     if filters.get("location_id"):
         query += " AND l.id = %s"
         params.append(filters["location_id"])
-
     if filters.get("doctor_id"):
         query += " AND d.id = %s"
         params.append(filters["doctor_id"])
-
     if filters.get("search"):
         query += """
             AND (
@@ -101,11 +89,9 @@ def get_all_appointments(filters: dict | None = None):
         """
         search = f"%{filters['search']}%"
         params.extend([search, search, search])
-
     if filters.get("date_from"):
         query += " AND a.appointment_date >= %s"
         params.append(filters["date_from"])
-
     if filters.get("date_to"):
         query += " AND a.appointment_date < (%s::date + INTERVAL '1 day')"
         params.append(filters["date_to"])
@@ -164,7 +150,13 @@ def get_patient_appointments(patient_id: int):
 
 
 def _fetch_appointment_full_data(cur: Any, appointment_id: int):
-    """Возвращает основные данные одного приёма через уже открытый cursor."""
+    """
+    Возвращает основные данные одного приёма через уже открытый cursor.
+
+    Поля main_diagnosis/complications/diag_comorbidities оставлены как NULL-алиасы
+    на переходный период, чтобы старые шаблоны/экспорт не падали после удаления
+    таблицы diagnoses. Источник истины по диагнозам — appointment_icd10_diagnoses_view.
+    """
     cur.execute(
         """
         SELECT
@@ -193,9 +185,9 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
             e.height,
             e.weight,
             e.bmi,
-            diag.main_diagnosis,
-            diag.complications,
-            diag.comorbidities AS diag_comorbidities,
+            NULL::text AS main_diagnosis,
+            NULL::text AS complications,
+            NULL::text AS diag_comorbidities,
             ad.diet,
             ad.next_control_date,
             ad.recommendations
@@ -206,7 +198,6 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
         JOIN branches b ON l.branch_id = b.id
         LEFT JOIN surveys s ON a.id = s.appointment_id
         LEFT JOIN examinations e ON a.id = e.appointment_id
-        LEFT JOIN diagnoses diag ON a.id = diag.appointment_id
         LEFT JOIN appointment_diets ad ON a.id = ad.appointment_id
         WHERE a.id = %s
         """,
@@ -223,7 +214,12 @@ def get_appointment_full_data(appointment_id: int):
 
 
 def _fetch_last_appointment_data(cur: Any, patient_id: int):
-    """Возвращает данные последнего приёма пациента для автоподстановки."""
+    """
+    Возвращает данные последнего приёма пациента для автоподстановки.
+
+    Старые свободные текстовые диагнозы больше не читаются из diagnoses. Для формы
+    повторного приёма используется МКБ-10 история из appointment_icd10_diagnoses_view.
+    """
     cur.execute(
         """
         SELECT
@@ -246,16 +242,15 @@ def _fetch_last_appointment_data(cur: Any, patient_id: int):
             e.height,
             e.weight,
             e.bmi,
-            diag.main_diagnosis,
-            diag.complications,
-            diag.comorbidities AS diag_comorbidities,
+            NULL::text AS main_diagnosis,
+            NULL::text AS complications,
+            NULL::text AS diag_comorbidities,
             ad.diet,
             ad.next_control_date,
             ad.recommendations
         FROM appointments a
         LEFT JOIN surveys s ON a.id = s.appointment_id
         LEFT JOIN examinations e ON a.id = e.appointment_id
-        LEFT JOIN diagnoses diag ON a.id = diag.appointment_id
         LEFT JOIN appointment_diets ad ON a.id = ad.appointment_id
         WHERE a.patient_id = %s
         ORDER BY a.appointment_date DESC
