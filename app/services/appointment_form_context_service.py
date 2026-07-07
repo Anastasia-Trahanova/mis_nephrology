@@ -13,7 +13,7 @@
 - этот service собирает их в один словарь context для Jinja-шаблона;
 - JavaScript в app/static/js/kdigo_risk_preview.js читает kdigo_previous_gfr_data и kdigo_previous_albuminuria_data из JSON в шаблоне.
 
-Что можно редактировать:
+Что редактировать:
 - какие справочники и истории передаются в форму;
 - какие прошлые данные доступны для fallback-расчёта KDIGO;
 - состав context для Jinja.
