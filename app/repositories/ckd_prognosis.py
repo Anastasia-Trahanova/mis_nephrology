@@ -5,7 +5,8 @@
 - ищет новые СКФ и альбуминурию внутри текущего приёма;
 - если одного показателя нет, ищет последний подходящий показатель пациента
   в предыдущих приёмах;
-- сохраняет все допустимые комбинации СКФ × альбуминурия в ckd_prognosis_results;
+- сохраняет построчные пары СКФ и альбуминурии в ckd_prognosis_results;
+- создаёт отдельную KDIGO-строку, если врач добавил второй анализ только одного типа;
 - хранит строгие источники расчёта: id строки СКФ, дату СКФ, id строки
   альбуминурии, дату альбуминурии, итоговую категорию и уровень риска;
 - возвращает текущую оценку и историю оценок для карточки пациента;
@@ -200,19 +201,25 @@ def _build_pair_assessment(
         assessment["albuminuria_investigation_date"],
         assessment["albuminuria_category"],
     )
+    assessment["row_key"] = f"row|{display_order}|{assessment['pair_key']}"
     return assessment
 
 
 def _deduplicate_assessments(assessments: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Убирает одинаковые пары дат/категорий, сохраняя порядок."""
+    """Убирает только полностью одинаковые пары источников, не схлопывая разные анализы одной категории."""
     result: list[dict[str, Any]] = []
-    seen: set[str] = set()
+    seen: set[tuple[Any, Any, str]] = set()
     for assessment in assessments:
-        key = assessment.get("pair_key")
-        if not key or key in seen:
+        key = (
+            assessment.get("gfr_metric_id"),
+            assessment.get("albuminuria_result_id"),
+            assessment.get("pair_key") or "",
+        )
+        if key in seen:
             continue
         seen.add(key)
         assessment["display_order"] = len(result)
+        assessment["row_key"] = f"row|{assessment['display_order']}|{assessment.get('pair_key', '')}"
         result.append(assessment)
     return result
 
@@ -223,11 +230,18 @@ def build_kdigo_assessments_for_appointment(
     excluded_pairs: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
     """
-    Строит все рассчитанные KDIGO-комбинации для приёма.
+    Строит рассчитанные KDIGO-пары для приёма.
 
-    Правила:
-    - если в текущем приёме есть и СКФ, и альбуминурия — считаем все текущие
-      комбинации СКФ × альбуминурия;
+    Правила синхронизированы с live-блоком формы:
+    - если в текущем приёме есть и СКФ, и альбуминурия — считаем построчные пары:
+      первая СКФ с первой альбуминурией, вторая СКФ со второй альбуминурией;
+    - если врач добавил второй показатель только одного типа, создаём вторую строку
+      с первой доступной парой второго типа;
+    - если для новой СКФ ещё нет своей альбуминурии, временно берём первую
+      текущую альбуминурию, чтобы строка прогноза обновлялась, а не плодила
+      декартовы комбинации;
+    - если для новой альбуминурии ещё нет своей СКФ, временно берём первую
+      текущую СКФ;
     - если текущая СКФ есть, а альбуминурии нет — берём последнюю подходящую
       альбуминурию из предыдущих приёмов;
     - если текущая альбуминурия есть, а СКФ нет — берём последнюю подходящую
@@ -247,17 +261,28 @@ def build_kdigo_assessments_for_appointment(
     raw_assessments: list[dict[str, Any]] = []
 
     if current_gfr_sources and current_albuminuria_sources:
-        for gfr_source in current_gfr_sources:
-            for albuminuria_source in current_albuminuria_sources:
-                assessment = _build_pair_assessment(
-                    appointment_id,
-                    appointment_date,
-                    gfr_source,
-                    albuminuria_source,
-                    display_order=len(raw_assessments),
-                )
-                if assessment:
-                    raw_assessments.append(assessment)
+        row_count = max(len(current_gfr_sources), len(current_albuminuria_sources))
+        for index in range(row_count):
+            gfr_source = (
+                current_gfr_sources[index]
+                if index < len(current_gfr_sources)
+                else current_gfr_sources[0]
+            )
+            albuminuria_source = (
+                current_albuminuria_sources[index]
+                if index < len(current_albuminuria_sources)
+                else current_albuminuria_sources[0]
+            )
+
+            assessment = _build_pair_assessment(
+                appointment_id,
+                appointment_date,
+                gfr_source,
+                albuminuria_source,
+                display_order=len(raw_assessments),
+            )
+            if assessment:
+                raw_assessments.append(assessment)
 
     elif current_gfr_sources and not current_albuminuria_sources:
         for gfr_source in current_gfr_sources:
@@ -304,10 +329,13 @@ def build_kdigo_assessments_for_appointment(
     assessments = _deduplicate_assessments(raw_assessments)
     if excluded_pairs_set:
         assessments = [
-            item for item in assessments if item.get("pair_key") not in excluded_pairs_set
+            item for item in assessments
+            if item.get("row_key") not in excluded_pairs_set
+            and item.get("pair_key") not in excluded_pairs_set
         ]
         for index, item in enumerate(assessments):
             item["display_order"] = index
+            item["row_key"] = f"row|{index}|{item.get('pair_key', '')}"
     return assessments
 
 

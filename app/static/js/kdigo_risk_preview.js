@@ -1,475 +1,906 @@
 /*
-Назначение файла: live-расчёт прогноза KDIGO в формах нового пациента и повторного приёма.
+Назначение файла: live-просмотр прогноза KDIGO в формах первого и повторного приёма.
 
-Что делает этот файл:
-- читает текущие значения СКФ/категории СКФ прямо из заполняемой формы до сохранения в БД;
-- читает текущие значения альбуминурии/категории A1-A3 прямо из формы до сохранения в БД;
-- если в текущем приёме есть только СКФ, берёт последнюю подходящую альбуминурию из прошлых данных пациента;
-- если в текущем приёме есть только альбуминурия, берёт последнюю подходящую СКФ из прошлых данных пациента;
-- если в текущем приёме нет ни СКФ, ни альбуминурии, показывает одну нейтральную фразу о невозможности оценки;
-- при изменении полей формы автоматически пересчитывает прогноз без кнопки «Обновить»;
-- если вариантов несколько, даёт врачу выбрать один radio-кружочком;
-- выбранную фразу записывает в textarea «Формулировка для заключения»;
-- для невыбранных рассчитанных вариантов создаёт hidden-поля kdigo_excluded_pair, чтобы backend не сохранял шум;
-- раскрывает/скрывает историю прошлых прогнозов по кнопке.
+Что делает файл:
+- держит в интерфейсе одну строку «невозможно оценить…», пока данных недостаточно;
+- пересчитывает эту строку при вводе СКФ/альбуминурии без накопления дублей;
+- создаёт новую строку прогноза для каждой новой строки/колонки СКФ или альбуминурии;
+- подсвечивает только строки прогноза цветами KDIGO;
+- даёт врачу выбрать radio-кружочком один рассчитанный прогноз;
+- передаёт backend hidden-поля kdigo_excluded_pair для рассчитанных строк, которые врач не выбрал;
+- раскрывает историю прошлых прогнозов только по кнопке и не смешивает её с текущим заключением.
 
-Как это работает:
-- текущий приём никогда не строится как полная матрица СКФ × альбуминурия;
-- один текущий показатель СКФ даёт один вариант прогноза;
-- две текущие СКФ дают два варианта прогноза;
-- если текущих альбуминурий несколько, они сопоставляются с СКФ по порядку строк, а не создают все пересечения;
-- старые данные используются только как fallback для отсутствующего показателя, но не создают прогнозы сами по себе при открытии формы.
-
-Что можно редактировать:
-- точные короткие фразы для врача;
-- правила выбора текущей альбуминурии для текущей СКФ;
-- CSS-классы вариантов.
-
-Что не редактировать здесь:
-- серверное сохранение ckd_prognosis_results;
-- SQL-запросы;
-- расчёт eGFR и ACR, который выполняется существующими скриптами формы.
+Правило сопоставления текущих данных:
+- первая текущая СКФ сопоставляется с первой текущей альбуминурией;
+- вторая текущая СКФ сопоставляется со второй текущей альбуминурией;
+- если добавлен второй показатель только одного типа, создаётся вторая строка с первой доступной парой второго типа;
+- если для новой СКФ ещё нет своей альбуминурии, временно берётся первая текущая альбуминурия;
+- если для новой альбуминурии ещё нет своей СКФ, временно берётся первая текущая СКФ;
+- если в текущем приёме есть только один тип показателя, второй берётся из последнего подходящего прошлого исследования;
+- если данных недостаточно, строка остаётся нейтральной и обновляется, а не дублируется.
 */
 (function () {
-  "use strict";
+    "use strict";
 
-  if (window.__kdigoLiveCurrentVisitV2Initialized) return;
-  window.__kdigoLiveCurrentVisitV2Initialized = true;
-
-  const RISK_MATRIX = {
-    "С1": { A1: ["low", "низкий риск"], A2: ["moderate", "умеренно повышенный риск"], A3: ["high", "высокий риск"] },
-    "С2": { A1: ["low", "низкий риск"], A2: ["moderate", "умеренно повышенный риск"], A3: ["high", "высокий риск"] },
-    "С3а": { A1: ["moderate", "умеренно повышенный риск"], A2: ["high", "высокий риск"], A3: ["very_high", "очень высокий риск"] },
-    "С3б": { A1: ["high", "высокий риск"], A2: ["very_high", "очень высокий риск"], A3: ["very_high", "очень высокий риск"] },
-    "С4": { A1: ["very_high", "очень высокий риск"], A2: ["very_high", "очень высокий риск"], A3: ["very_high", "очень высокий риск"] },
-    "С5": { A1: ["very_high", "очень высокий риск"], A2: ["very_high", "очень высокий риск"], A3: ["very_high", "очень высокий риск"] }
-  };
-
-  const MAX_INTERVAL_BY_RISK = {
-    low: 365,
-    moderate: 180,
-    high: 90,
-    very_high: 90
-  };
-
-  const RISK_ORDER = { low: 1, moderate: 2, high: 3, very_high: 4 };
-  const EMPTY_TEXT = "Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены.";
-
-  function readJsonScript(id) {
-    const node = document.getElementById(id);
-    if (!node) return [];
-    try {
-      const parsed = JSON.parse(node.textContent || "[]");
-      return Array.isArray(parsed) ? parsed : [];
-    } catch (error) {
-      return [];
-    }
-  }
-
-  function normalizeNumber(value) {
-    if (value === null || value === undefined) return null;
-    const text = String(value).trim().replace(/\s+/g, "").replace(",", ".");
-    if (!text) return null;
-    const number = Number(text);
-    return Number.isFinite(number) ? number : null;
-  }
-
-  function normalizeDate(value) {
-    if (!value) return "";
-    const text = String(value).trim();
-    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
-    const ru = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
-    if (ru) return `${ru[3]}-${ru[2]}-${ru[1]}`;
-    return "";
-  }
-
-  function parseIsoDate(value) {
-    const normalized = normalizeDate(value);
-    if (!normalized) return null;
-    const parts = normalized.split("-").map(Number);
-    return new Date(parts[0], parts[1] - 1, parts[2]);
-  }
-
-  function daysBetween(a, b) {
-    const dateA = parseIsoDate(a);
-    const dateB = parseIsoDate(b);
-    if (!dateA || !dateB) return null;
-    return Math.abs(Math.round((dateA.getTime() - dateB.getTime()) / 86400000));
-  }
-
-  function formatRuDate(value) {
-    const normalized = normalizeDate(value);
-    if (!normalized) return "—";
-    const [year, month, day] = normalized.split("-");
-    return `${day}.${month}.${year}`;
-  }
-
-  function normalizeGfrCategory(value) {
-    if (!value) return "";
-    let text = String(value).trim();
-    text = text.replace(/^G/i, "С").replace(/^C/, "С");
-    text = text.replace("3A", "3а").replace("3a", "3а");
-    text = text.replace("3B", "3б").replace("3b", "3б");
-    return ["С1", "С2", "С3а", "С3б", "С4", "С5"].includes(text) ? text : "";
-  }
-
-  function gfrCategoryFromEgfr(value) {
-    const egfr = normalizeNumber(value);
-    if (egfr === null) return "";
-    if (egfr >= 90) return "С1";
-    if (egfr >= 60) return "С2";
-    if (egfr >= 45) return "С3а";
-    if (egfr >= 30) return "С3б";
-    if (egfr >= 15) return "С4";
-    return "С5";
-  }
-
-  function normalizeAlbuminuriaCategory(value) {
-    if (!value) return "";
-    const text = String(value).trim().toUpperCase().replace("А", "A");
-    return ["A1", "A2", "A3"].includes(text) ? text : "";
-  }
-
-  function albuminuriaCategoryFromAcr(value) {
-    const acr = normalizeNumber(value);
-    if (acr === null) return "";
-    if (acr < 3) return "A1";
-    if (acr <= 30) return "A2";
-    return "A3";
-  }
-
-  function calculateRisk(gfrCategory, albuminuriaCategory) {
-    const gfr = normalizeGfrCategory(gfrCategory);
-    const albuminuria = normalizeAlbuminuriaCategory(albuminuriaCategory);
-    if (!gfr || !albuminuria) return null;
-    const risk = RISK_MATRIX[gfr] && RISK_MATRIX[gfr][albuminuria];
-    if (!risk) return null;
-    return {
-      gfrCategory: gfr,
-      albuminuriaCategory: albuminuria,
-      combinedCategory: `${gfr}${albuminuria}`,
-      level: risk[0],
-      text: risk[1]
-    };
-  }
-
-  function monthWord(months) {
-    const lastTwo = months % 100;
-    if (lastTwo >= 11 && lastTwo <= 14) return "месяцев";
-    const last = months % 10;
-    if (last === 1) return "месяц";
-    if (last >= 2 && last <= 4) return "месяца";
-    return "месяцев";
-  }
-
-  function elapsedMonthsText(intervalDays) {
-    if (!Number.isFinite(intervalDays)) return "давно";
-    const months = Math.max(1, Math.round(intervalDays / 30.44));
-    return `${months} ${monthWord(months)} назад`;
-  }
-
-  function missingPhrase(missing) {
-    if (missing === "both") return EMPTY_TEXT;
-    if (missing === "gfr") return "Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по СКФ не предоставлены.";
-    return "Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии не предоставлены.";
-  }
-
-  function stalePhrase(source, intervalDays) {
-    if (source === "gfr") {
-      return `Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по СКФ были получены ${elapsedMonthsText(intervalDays)}, рекомендовано повторить исследование.`;
-    }
-    return `Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии были получены ${elapsedMonthsText(intervalDays)}, рекомендовано повторить исследование.`;
-  }
-
-  function riskPhrase(risk, gfrDate, albuminuriaDate) {
-    return `По KDIGO: ${risk.combinedCategory} — ${risk.text} прогрессирования ХБП и развития ХПН (рассчитано по СКФ от ${formatRuDate(gfrDate)}, альбуминурия от ${formatRuDate(albuminuriaDate)})`;
-  }
-
-  function pairKey(gfrDate, gfrCategory, albuminuriaDate, albuminuriaCategory) {
-    return [normalizeDate(gfrDate), normalizeGfrCategory(gfrCategory), normalizeDate(albuminuriaDate), normalizeAlbuminuriaCategory(albuminuriaCategory)].join("|");
-  }
-
-  function getEditableCards(containerSelector, dateName, valueSelectors) {
-    const container = document.querySelector(containerSelector);
-    if (!container) return [];
-
-    const dateInputs = Array.from(container.querySelectorAll(`input[name="${dateName}"]`));
-    return dateInputs
-      .map((dateInput) => {
-        const card = dateInput.closest(".lab-analysis-card, .biochemistry-block, .albuminuria-block, .card, .border, div") || dateInput.parentElement;
-        return { card, dateInput };
-      })
-      .filter(({ card }) => card && valueSelectors.some((selector) => card.querySelector(selector)));
-  }
-
-  function dedupeSources(sources) {
-    const seen = new Set();
-    const result = [];
-    sources.forEach((item) => {
-      const key = `${item.date}|${item.category}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      result.push(item);
-    });
-    return result;
-  }
-
-  function readCurrentGfrSources() {
-    const cards = getEditableCards(
-      "#biochemistryContainer",
-      "biochemistry_investigation_date",
-      [".biochemistry-egfr", ".biochemistry-stage"]
-    );
-
-    const result = cards.map(({ card, dateInput }, index) => {
-      const date = normalizeDate(dateInput.value);
-      const stageInput = card.querySelector(".biochemistry-stage");
-      const egfrInput = card.querySelector(".biochemistry-egfr");
-      const category = normalizeGfrCategory(stageInput && stageInput.value) || gfrCategoryFromEgfr(egfrInput && egfrInput.value);
-      return date && category ? { date, category, index, source: "current_appointment" } : null;
-    }).filter(Boolean);
-
-    return dedupeSources(result);
-  }
-
-  function readCurrentAlbuminuriaSources() {
-    const cards = getEditableCards(
-      "#albuminuriaContainer",
-      "albuminuria_investigation_date",
-      [".albuminuria-category", ".albuminuria-acr"]
-    );
-
-    const result = cards.map(({ card, dateInput }, index) => {
-      const date = normalizeDate(dateInput.value);
-      const categoryInput = card.querySelector(".albuminuria-category");
-      const acrInput = card.querySelector(".albuminuria-acr");
-      const category = normalizeAlbuminuriaCategory(categoryInput && categoryInput.value) || albuminuriaCategoryFromAcr(acrInput && acrInput.value);
-      return date && category ? { date, category, index, source: "current_appointment" } : null;
-    }).filter(Boolean);
-
-    return dedupeSources(result);
-  }
-
-  function loadPreviousGfrSources() {
-    return readJsonScript("kdigoPreviousGfrData")
-      .map((item) => ({ date: normalizeDate(item.date), category: normalizeGfrCategory(item.category), source: "previous_appointment" }))
-      .filter((item) => item.date && item.category);
-  }
-
-  function loadPreviousAlbuminuriaSources() {
-    return readJsonScript("kdigoPreviousAlbuminuriaData")
-      .map((item) => ({ date: normalizeDate(item.date), category: normalizeAlbuminuriaCategory(item.category), source: "previous_appointment" }))
-      .filter((item) => item.date && item.category);
-  }
-
-  function latestPreviousBeforeOrOn(sources, targetDate) {
-    const target = parseIsoDate(targetDate);
-    if (!target) return null;
-    return sources
-      .filter((item) => {
-        const date = parseIsoDate(item.date);
-        return date && date <= target;
-      })
-      .sort((a, b) => parseIsoDate(b.date) - parseIsoDate(a.date))[0] || null;
-  }
-
-  function albuminuriaForGfr(gfrSource, currentAlbuminuria, previousAlbuminuria) {
-    if (currentAlbuminuria.length) {
-      return currentAlbuminuria[gfrSource.index] || currentAlbuminuria[0] || null;
-    }
-    return latestPreviousBeforeOrOn(previousAlbuminuria, gfrSource.date);
-  }
-
-  function gfrForAlbuminuria(albuminuriaSource, previousGfr) {
-    return latestPreviousBeforeOrOn(previousGfr, albuminuriaSource.date);
-  }
-
-  function assessmentFromPair(gfrSource, albuminuriaSource, staleSourceWhenOld) {
-    const risk = calculateRisk(gfrSource.category, albuminuriaSource.category);
-    if (!risk) return null;
-
-    const intervalDays = daysBetween(gfrSource.date, albuminuriaSource.date);
-    const maxDays = MAX_INTERVAL_BY_RISK[risk.level] || 90;
-    const key = pairKey(gfrSource.date, risk.gfrCategory, albuminuriaSource.date, risk.albuminuriaCategory);
-
-    if (intervalDays === null || intervalDays > maxDays) {
-      return {
-        status: "stale",
-        key,
-        level: null,
-        text: stalePhrase(staleSourceWhenOld, intervalDays)
-      };
-    }
-
-    return {
-      status: "calculated",
-      key,
-      level: risk.level,
-      text: riskPhrase(risk, gfrSource.date, albuminuriaSource.date)
-    };
-  }
-
-  function buildCurrentVisitAssessments() {
-    const currentGfr = readCurrentGfrSources();
-    const currentAlbuminuria = readCurrentAlbuminuriaSources();
-    const previousGfr = loadPreviousGfrSources();
-    const previousAlbuminuria = loadPreviousAlbuminuriaSources();
-    const assessments = [];
-
-    if (!currentGfr.length && !currentAlbuminuria.length) {
-      return [{ status: "missing", key: "missing-both", level: null, text: missingPhrase("both") }];
-    }
-
-    if (currentGfr.length) {
-      currentGfr.forEach((gfr) => {
-        const albuminuria = albuminuriaForGfr(gfr, currentAlbuminuria, previousAlbuminuria);
-        if (!albuminuria) {
-          assessments.push({ status: "missing", key: `missing-albuminuria-${gfr.date}-${gfr.category}`, level: null, text: missingPhrase("albuminuria") });
-          return;
-        }
-        const assessment = assessmentFromPair(gfr, albuminuria, "albuminuria");
-        if (assessment) assessments.push(assessment);
-      });
-      return dedupeAssessments(assessments);
-    }
-
-    currentAlbuminuria.forEach((albuminuria) => {
-      const previous = gfrForAlbuminuria(albuminuria, previousGfr);
-      if (!previous) {
-        assessments.push({ status: "missing", key: `missing-gfr-${albuminuria.date}-${albuminuria.category}`, level: null, text: missingPhrase("gfr") });
+    if (window.__kdigoLiveCurrentVisitV7Initialized) {
         return;
-      }
-      const assessment = assessmentFromPair(previous, albuminuria, "gfr");
-      if (assessment) assessments.push(assessment);
-    });
+    }
+    window.__kdigoLiveCurrentVisitV7Initialized = true;
 
-    return dedupeAssessments(assessments);
-  }
+    const EMPTY_BOTH_TEXT = "Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены.";
+    const MISSING_ALBUMINURIA_TEXT = "Невозможно оценить риск прогрессирования ХБП и развития ХПН: добавьте стадию альбуминурии.";
+    const MISSING_GFR_TEXT = "Невозможно оценить риск прогрессирования ХБП и развития ХПН: добавьте стадию ХБП/СКФ.";
+    const STALE_TEXT = "Невозможно оценить риск прогрессирования ХБП и развития ХПН: интервал между СКФ и альбуминурией превышает допустимый.";
+    const UNKNOWN_RISK_TEXT = "Невозможно оценить риск прогрессирования ХБП и развития ХПН: проверьте категории СКФ и альбуминурии.";
 
-  function dedupeAssessments(assessments) {
-    const seen = new Set();
-    const result = [];
-    assessments.forEach((assessment) => {
-      const key = assessment.key || assessment.text;
-      if (seen.has(key)) return;
-      seen.add(key);
-      result.push(assessment);
-    });
-    return result;
-  }
+    const MAX_INTERVAL_DAYS = 180;
 
-  function bestCalculatedKey(assessments) {
-    let best = null;
-    assessments.forEach((assessment) => {
-      if (assessment.status !== "calculated") return;
-      if (!best || (RISK_ORDER[assessment.level] || 0) > (RISK_ORDER[best.level] || 0)) {
-        best = assessment;
-      }
-    });
-    return best ? best.key : "";
-  }
+    const RISK_MATRIX = {
+        "С1": { A1: "low", A2: "moderate", A3: "high" },
+        "С2": { A1: "low", A2: "moderate", A3: "high" },
+        "С3а": { A1: "moderate", A2: "high", A3: "very_high" },
+        "С3б": { A1: "high", A2: "very_high", A3: "very_high" },
+        "С4": { A1: "very_high", A2: "very_high", A3: "very_high" },
+        "С5": { A1: "very_high", A2: "very_high", A3: "very_high" }
+    };
 
-  function selectedRadioValue() {
-    const selected = document.querySelector('input[name="kdigo_selected_current_option"]:checked');
-    return selected ? selected.value : "";
-  }
+    const RISK_TEXT = {
+        low: "низкий риск прогрессирования ХБП и развития ХПН",
+        moderate: "умеренный риск прогрессирования ХБП и развития ХПН",
+        high: "высокий риск прогрессирования ХБП и развития ХПН",
+        very_high: "очень высокий риск прогрессирования ХБП и развития ХПН"
+    };
 
-  function writeExcludedPairs(assessments, selectedKey) {
-    const container = document.getElementById("kdigoHiddenFields");
-    if (!container) return;
-    container.innerHTML = "";
+    let renderTimer = null;
+    let lastSelectedKey = "";
 
-    assessments.forEach((assessment) => {
-      if (assessment.status !== "calculated" || !assessment.key || assessment.key === selectedKey) return;
-      const input = document.createElement("input");
-      input.type = "hidden";
-      input.name = "kdigo_excluded_pair";
-      input.value = assessment.key;
-      container.appendChild(input);
-    });
-  }
-
-  function renderAssessments(preferredSelectedKey) {
-    const optionsContainer = document.getElementById("kdigoCurrentVisitOptions");
-    const conclusionText = document.getElementById("kdigoSelectedConclusionText");
-    if (!optionsContainer || !conclusionText) return;
-
-    const previousSelectedKey = preferredSelectedKey || selectedRadioValue();
-    const assessments = buildCurrentVisitAssessments();
-    const hasCalculated = assessments.some((item) => item.status === "calculated");
-
-    let selectedKey = "";
-    if (hasCalculated && assessments.some((item) => item.status === "calculated" && item.key === previousSelectedKey)) {
-      selectedKey = previousSelectedKey;
-    } else if (hasCalculated) {
-      selectedKey = bestCalculatedKey(assessments);
-    } else {
-      selectedKey = assessments[0] ? assessments[0].key : "missing-both";
+    function root() {
+        return document.getElementById("kdigoRiskPreview");
     }
 
-    optionsContainer.innerHTML = "";
+    function normalizeNumber(value) {
+        if (value === null || value === undefined) {
+            return null;
+        }
+        const normalized = String(value).replace(",", ".").replace(/[^0-9.\-]/g, "");
+        if (normalized === "" || normalized === "." || normalized === "-") {
+            return null;
+        }
+        const number = Number(normalized);
+        return Number.isFinite(number) ? number : null;
+    }
 
-    assessments.forEach((assessment) => {
-      const row = document.createElement("label");
-      row.className = "kdigo-current-option";
-      if (assessment.status === "calculated" && assessment.level) {
-        row.classList.add(`kdigo-risk-${assessment.level}`);
-      } else {
-        row.classList.add("kdigo-current-option-neutral");
-      }
+    function normalizeDate(value) {
+        if (!value) {
+            return "";
+        }
+        const text = String(value).trim();
+        const match = text.match(/^(\d{4})-(\d{2})-(\d{2})/);
+        if (match) {
+            return `${match[1]}-${match[2]}-${match[3]}`;
+        }
+        const ruMatch = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        if (ruMatch) {
+            return `${ruMatch[3]}-${ruMatch[2]}-${ruMatch[1]}`;
+        }
+        return "";
+    }
 
-      const radio = document.createElement("input");
-      radio.type = "radio";
-      radio.name = "kdigo_selected_current_option";
-      radio.value = assessment.key;
-      radio.checked = assessment.key === selectedKey;
-      radio.addEventListener("change", () => renderAssessments(assessment.key));
-      row.appendChild(radio);
+    function todayIso() {
+        const now = new Date();
+        const year = now.getFullYear();
+        const month = String(now.getMonth() + 1).padStart(2, "0");
+        const day = String(now.getDate()).padStart(2, "0");
+        return `${year}-${month}-${day}`;
+    }
 
-      const text = document.createElement("div");
-      text.className = "kdigo-current-option-text";
-      text.textContent = assessment.text;
-      row.appendChild(text);
+    function fallbackInvestigationDate() {
+        const appointmentDate = document.querySelector("[name='appointment_date'], [name='visit_date'], [name='admission_date']");
+        return normalizeDate(appointmentDate ? appointmentDate.value : "") || todayIso();
+    }
 
-      optionsContainer.appendChild(row);
-    });
+    function parseIsoDate(value) {
+        const normalized = normalizeDate(value);
+        if (!normalized) {
+            return null;
+        }
+        const date = new Date(`${normalized}T00:00:00`);
+        return Number.isNaN(date.getTime()) ? null : date;
+    }
 
-    const selectedAssessment = assessments.find((item) => item.key === selectedKey) || assessments[0];
-    conclusionText.value = selectedAssessment ? selectedAssessment.text : EMPTY_TEXT;
-    writeExcludedPairs(assessments, selectedKey);
-  }
+    function daysBetween(first, second) {
+        const firstDate = parseIsoDate(first);
+        const secondDate = parseIsoDate(second);
+        if (!firstDate || !secondDate) {
+            return null;
+        }
+        return Math.round(Math.abs(secondDate.getTime() - firstDate.getTime()) / 86400000);
+    }
 
-  function toggleHistory() {
-    const panel = document.getElementById("kdigoHistoryPanel");
-    const button = document.getElementById("kdigoToggleHistoryButton");
-    if (!panel || !button) return;
-    const shouldShow = panel.hidden;
-    panel.hidden = !shouldShow;
-    button.textContent = shouldShow ? "Скрыть историю прогнозов по KDIGO" : "Посмотреть историю прогнозов по KDIGO";
-  }
+    function formatRuDate(value) {
+        const normalized = normalizeDate(value);
+        if (!normalized) {
+            return "—";
+        }
+        const parts = normalized.split("-");
+        return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    }
 
-  let renderTimer = null;
-  function scheduleRender() {
-    if (renderTimer) window.clearTimeout(renderTimer);
-    renderTimer = window.setTimeout(() => renderAssessments(), 80);
-  }
+    function controls(selector) {
+        const kdigoRoot = root();
+        return Array.from(document.querySelectorAll(selector)).filter((node) => {
+            if (kdigoRoot && kdigoRoot.contains(node)) {
+                return false;
+            }
+            return !node.disabled;
+        });
+    }
 
-  function init() {
-    if (!document.getElementById("kdigoRiskPreview")) return;
+    function readableNodes(selector) {
+        const kdigoRoot = root();
+        return Array.from(document.querySelectorAll(selector)).filter((node) => {
+            if (kdigoRoot && kdigoRoot.contains(node)) {
+                return false;
+            }
+            return !node.disabled;
+        });
+    }
 
-    const historyButton = document.getElementById("kdigoToggleHistoryButton");
-    if (historyButton) historyButton.addEventListener("click", toggleHistory);
+    function nodeValue(node) {
+        if (!node) {
+            return "";
+        }
+        const tag = String(node.tagName || "").toLowerCase();
+        if (tag === "input" || tag === "textarea" || tag === "select") {
+            if (node.type === "checkbox" || node.type === "radio") {
+                return node.checked ? node.value : "";
+            }
+            return node.value || "";
+        }
+        return node.textContent || node.getAttribute("data-value") || "";
+    }
 
-    document.addEventListener("input", scheduleRender, true);
-    document.addEventListener("change", scheduleRender, true);
-    document.addEventListener("click", scheduleRender, true);
+    function nodeValues(selector) {
+        return readableNodes(selector).map((node) => nodeValue(node));
+    }
 
-    renderAssessments();
-  }
+    function controlValues(selector) {
+        return controls(selector).map((node) => nodeValue(node));
+    }
 
-  if (document.readyState === "loading") {
-    document.addEventListener("DOMContentLoaded", init);
-  } else {
-    init();
-  }
+    function firstNonEmptyValues(selectors) {
+        for (const selector of selectors) {
+            const values = nodeValues(selector).map((value) => String(value || "").trim());
+            if (values.some((value) => value !== "" && value !== "—")) {
+                return values;
+            }
+        }
+        return [];
+    }
+
+    function firstValueIn(context, selectors) {
+        if (!context) {
+            return "";
+        }
+        for (const selector of selectors) {
+            const node = context.querySelector(selector);
+            const value = String(nodeValue(node) || "").trim();
+            if (value && value !== "—") {
+                return value;
+            }
+        }
+        return "";
+    }
+
+    function patientBirthDateValue() {
+        const kdigoRoot = root();
+        return normalizeDate(
+            (kdigoRoot && kdigoRoot.dataset.patientBirthDate) ||
+            firstValueIn(document, ["[name='birth_date']", "[name='patient_birth_date']"])
+        );
+    }
+
+    function patientGenderValue() {
+        const kdigoRoot = root();
+        return (
+            (kdigoRoot && kdigoRoot.dataset.patientGender) ||
+            firstValueIn(document, ["[name='gender']", "[name='patient_gender']"])
+        );
+    }
+
+    function normalizeGfrCategory(value) {
+        if (!value) {
+            return "";
+        }
+        let text = String(value).trim();
+        text = text.replace(/G/gi, "С").replace(/C/g, "С");
+        text = text.replace(/с/g, "С").replace(/a/gi, "а").replace(/b/gi, "б");
+        text = text.replace(/\s+/g, "");
+        const aliases = {
+            "1": "С1",
+            "2": "С2",
+            "3А": "С3а",
+            "3а": "С3а",
+            "3Б": "С3б",
+            "3б": "С3б",
+            "4": "С4",
+            "5": "С5"
+        };
+        if (aliases[text]) {
+            return aliases[text];
+        }
+        const match = text.match(/С?(1|2|3а|3б|4|5)/i);
+        if (!match) {
+            return "";
+        }
+        return `С${match[1].replace(/А/i, "а").replace(/Б/i, "б")}`;
+    }
+
+    function normalizeAlbuminuriaCategory(value) {
+        if (!value) {
+            return "";
+        }
+        let text = String(value).trim().toUpperCase().replace(/А/g, "A").replace(/\s+/g, "");
+        const match = text.match(/A(1|2|3)/);
+        return match ? `A${match[1]}` : "";
+    }
+
+    function gfrCategoryFromEgfr(value) {
+        const egfr = normalizeNumber(value);
+        if (egfr === null) {
+            return "";
+        }
+        if (egfr >= 90) {
+            return "С1";
+        }
+        if (egfr >= 60) {
+            return "С2";
+        }
+        if (egfr >= 45) {
+            return "С3а";
+        }
+        if (egfr >= 30) {
+            return "С3б";
+        }
+        if (egfr >= 15) {
+            return "С4";
+        }
+        return "С5";
+    }
+
+    function albuminuriaCategoryFromAcr(value) {
+        const acr = normalizeNumber(value);
+        if (acr === null) {
+            return "";
+        }
+        if (acr < 30) {
+            return "A1";
+        }
+        if (acr <= 300) {
+            return "A2";
+        }
+        return "A3";
+    }
+
+    function yearsBetween(birthDate, investigationDate) {
+        const birth = parseIsoDate(birthDate);
+        const investigation = parseIsoDate(investigationDate) || new Date();
+        if (!birth) {
+            return null;
+        }
+        let years = investigation.getFullYear() - birth.getFullYear();
+        const monthDelta = investigation.getMonth() - birth.getMonth();
+        if (monthDelta < 0 || (monthDelta === 0 && investigation.getDate() < birth.getDate())) {
+            years -= 1;
+        }
+        return years;
+    }
+
+    function normalizeGender(value) {
+        const text = String(value || "").trim().toLowerCase();
+        if (["м", "муж", "мужской", "male", "m"].includes(text)) {
+            return "male";
+        }
+        if (["ж", "жен", "женский", "female", "f"].includes(text)) {
+            return "female";
+        }
+        return "";
+    }
+
+    function calculateEgfrCkdEpiCreatinine(creatinineRaw, investigationDate) {
+        const kdigoRoot = root();
+        const creatinine = normalizeNumber(creatinineRaw);
+        if (creatinine === null || !kdigoRoot) {
+            return null;
+        }
+        const age = yearsBetween(patientBirthDateValue(), investigationDate);
+        const gender = normalizeGender(patientGenderValue());
+        if (!age || age <= 0 || !gender) {
+            return null;
+        }
+        const creatinineMgDl = creatinine > 20 ? creatinine / 88.4 : creatinine;
+        const kappa = gender === "female" ? 0.7 : 0.9;
+        const alpha = gender === "female" ? -0.241 : -0.302;
+        const minPart = Math.min(creatinineMgDl / kappa, 1) ** alpha;
+        const maxPart = Math.max(creatinineMgDl / kappa, 1) ** -1.2;
+        const sexMultiplier = gender === "female" ? 1.012 : 1;
+        return 142 * minPart * maxPart * (0.9938 ** age) * sexMultiplier;
+    }
+
+    function calculateAcr(albuminRaw, creatinineRaw, unitRaw) {
+        const albumin = normalizeNumber(albuminRaw);
+        const creatinine = normalizeNumber(creatinineRaw);
+        if (albumin === null || creatinine === null || creatinine === 0) {
+            return null;
+        }
+        const unit = String(unitRaw || "").trim().toLowerCase();
+        if (unit.includes("ммоль") || unit.includes("mmol")) {
+            return albumin / creatinine * 8.84;
+        }
+        return albumin / creatinine;
+    }
+
+    function radioGroupValueByIndex(name, index) {
+        const checked = controls(`input[name='${name}']:checked`);
+        if (checked[index]) {
+            return checked[index].value || "";
+        }
+        const all = controls(`input[name='${name}']`);
+        if (all[index]) {
+            return all[index].value || "";
+        }
+        return "";
+    }
+
+    function readPrevious(scriptId, categoryNormalizer) {
+        const script = document.getElementById(scriptId);
+        if (!script) {
+            return [];
+        }
+        try {
+            const parsed = JSON.parse(script.textContent || "[]");
+            return parsed
+                .map((item, index) => ({
+                    index,
+                    source: "previous_appointment",
+                    date: normalizeDate(item.date || item.investigation_date || ""),
+                    category: categoryNormalizer(item.category || item.gfr_category || item.albuminuria_category || "")
+                }))
+                .filter((item) => item.date && item.category)
+                .sort((a, b) => a.date.localeCompare(b.date));
+        } catch (error) {
+            return [];
+        }
+    }
+
+    function readCurrentGfrSources() {
+        const sources = [];
+        const seenCards = new Set();
+
+        const cardCandidates = readableNodes(".lab-analysis-card").filter((card) => (
+            card.querySelector("[name='creatinine'], [name='serum_creatinine'], .biochemistry-stage, .biochemistry-egfr")
+        ));
+
+        cardCandidates.forEach((card, index) => {
+            seenCards.add(card);
+            const date = normalizeDate(firstValueIn(card, [
+                "[name='biochemistry_investigation_date']",
+                "[name='gfr_investigation_date']",
+                "[name='creatinine_investigation_date']"
+            ])) || fallbackInvestigationDate();
+            let category = normalizeGfrCategory(firstValueIn(card, [
+                "[name='gfr_category']",
+                "[name='egfr_category']",
+                ".biochemistry-stage",
+                "[data-gfr-category]"
+            ]));
+            if (!category) {
+                category = gfrCategoryFromEgfr(firstValueIn(card, [
+                    "[name='egfr_ckd_epi']",
+                    "[name='calculated_egfr']",
+                    "[name='egfr']",
+                    ".biochemistry-egfr"
+                ]));
+            }
+            if (!category) {
+                const creatinine = firstValueIn(card, ["[name='creatinine']", "[name='serum_creatinine']"]);
+                if (creatinine) {
+                    category = gfrCategoryFromEgfr(calculateEgfrCkdEpiCreatinine(creatinine, date));
+                }
+            }
+            if (category) {
+                sources.push({
+                    index,
+                    source: "current_appointment",
+                    date,
+                    category,
+                    uid: `gfr-card-${index}`
+                });
+            }
+        });
+
+        if (sources.length) {
+            return sources;
+        }
+
+        const dateValues = firstNonEmptyValues([
+            "[name='biochemistry_investigation_date']",
+            "[name='gfr_investigation_date']",
+            "[name='creatinine_investigation_date']"
+        ]);
+        const categoryValues = firstNonEmptyValues([
+            "[name='gfr_category']",
+            "[name='egfr_category']",
+            ".biochemistry-stage",
+            "#ckdStageRow .new-metrics-column",
+            "[data-gfr-category]"
+        ]);
+        const egfrValues = firstNonEmptyValues([
+            "[name='egfr_ckd_epi']",
+            "[name='calculated_egfr']",
+            "[name='egfr']",
+            ".biochemistry-egfr",
+            "#egfrRow .new-metrics-column"
+        ]);
+        const creatinineNodes = controls("[name='creatinine'], [name='serum_creatinine']");
+        const creatinineValues = creatinineNodes.map((node) => nodeValue(node));
+
+        const count = Math.max(dateValues.length, categoryValues.length, egfrValues.length, creatinineValues.length);
+        for (let index = 0; index < count; index += 1) {
+            const date = normalizeDate(dateValues[index] || "") || fallbackInvestigationDate();
+            let category = normalizeGfrCategory(categoryValues[index] || "");
+            if (!category) {
+                category = gfrCategoryFromEgfr(egfrValues[index] || "");
+            }
+            if (!category && creatinineValues[index]) {
+                const egfr = calculateEgfrCkdEpiCreatinine(creatinineValues[index], date);
+                category = gfrCategoryFromEgfr(egfr);
+            }
+            if (category) {
+                sources.push({
+                    index,
+                    source: "current_appointment",
+                    date,
+                    category,
+                    uid: `gfr-row-${index}`
+                });
+            }
+        }
+        return sources;
+    }
+
+    function readCurrentAlbuminuriaSources() {
+        const sources = [];
+
+        const cardCandidates = readableNodes(".lab-analysis-card").filter((card) => (
+            card.querySelector("[name='urine_albumin'], [name='urine_creatinine'], .albuminuria-category, [name='albuminuria_category']")
+        ));
+
+        cardCandidates.forEach((card, index) => {
+            const date = normalizeDate(firstValueIn(card, [
+                "[name='albuminuria_investigation_date']",
+                "[name='urine_investigation_date']"
+            ])) || fallbackInvestigationDate();
+            let category = normalizeAlbuminuriaCategory(firstValueIn(card, [
+                "[name='albuminuria_category']",
+                ".albuminuria-category",
+                "[data-albuminuria-category]"
+            ]));
+            if (!category) {
+                category = albuminuriaCategoryFromAcr(firstValueIn(card, [
+                    "[name='albumin_creatinine_ratio']",
+                    "[name='acr']",
+                    ".albuminuria-acr"
+                ]));
+            }
+            if (!category) {
+                const albumin = firstValueIn(card, ["[name='urine_albumin']", "[name='albumin']"]);
+                const creatinine = firstValueIn(card, ["[name='urine_creatinine']"]);
+                if (albumin && creatinine) {
+                    const acr = calculateAcr(
+                        albumin,
+                        creatinine,
+                        firstValueIn(card, ["[name='urine_creatinine_unit']", "[name='albuminuria_creatinine_unit']"])
+                    );
+                    category = albuminuriaCategoryFromAcr(acr);
+                }
+            }
+            if (category) {
+                sources.push({
+                    index,
+                    source: "current_appointment",
+                    date,
+                    category,
+                    uid: `albuminuria-card-${index}`
+                });
+            }
+        });
+
+        if (sources.length) {
+            return sources;
+        }
+
+        const dateValues = firstNonEmptyValues([
+            "[name='albuminuria_investigation_date']",
+            "[name='urine_investigation_date']"
+        ]);
+        const categoryValues = firstNonEmptyValues([
+            "[name='albuminuria_category']",
+            ".albuminuria-category",
+            "#albuminuria_category_row .table-success input",
+            "#albuminuria_category_row td:not(:first-child) input",
+            "[data-albuminuria-column][data-field='category']",
+            "[data-albuminuria-category]"
+        ]);
+        const acrValues = firstNonEmptyValues([
+            "[name='albumin_creatinine_ratio']",
+            "[name='acr']",
+            ".albuminuria-acr",
+            "#albuminuria_acr_row .table-success input",
+            "[data-albuminuria-column][data-field='acr']"
+        ]);
+        const albuminValues = firstNonEmptyValues([
+            "[name='urine_albumin']",
+            "[name='albumin']"
+        ]);
+        const creatinineValues = firstNonEmptyValues([
+            "[name='urine_creatinine']"
+        ]);
+        const unitValues = firstNonEmptyValues([
+            "[name='urine_creatinine_unit']",
+            "[name='albuminuria_creatinine_unit']"
+        ]);
+
+        const count = Math.max(dateValues.length, categoryValues.length, acrValues.length, albuminValues.length, creatinineValues.length);
+        for (let index = 0; index < count; index += 1) {
+            const date = normalizeDate(dateValues[index] || "") || fallbackInvestigationDate();
+            let category = normalizeAlbuminuriaCategory(categoryValues[index] || "");
+            if (!category) {
+                category = albuminuriaCategoryFromAcr(acrValues[index] || "");
+            }
+            if (!category && albuminValues[index] && creatinineValues[index]) {
+                const acr = calculateAcr(albuminValues[index], creatinineValues[index], unitValues[index] || radioGroupValueByIndex("urine_creatinine_unit", index));
+                category = albuminuriaCategoryFromAcr(acr);
+            }
+            if (category) {
+                sources.push({
+                    index,
+                    source: "current_appointment",
+                    date,
+                    category,
+                    uid: `albuminuria-row-${index}`
+                });
+            }
+        }
+        return sources;
+    }
+
+    function latestBeforeOrOn(sources, date) {
+        const normalizedDate = normalizeDate(date);
+        const suitable = sources
+            .filter((source) => source.date && (!normalizedDate || source.date <= normalizedDate))
+            .sort((a, b) => b.date.localeCompare(a.date));
+        return suitable[0] || null;
+    }
+
+    function pairKey(gfrSource, albuminuriaSource) {
+        return [
+            normalizeDate(gfrSource.date),
+            normalizeGfrCategory(gfrSource.category),
+            normalizeDate(albuminuriaSource.date),
+            normalizeAlbuminuriaCategory(albuminuriaSource.category)
+        ].join("|");
+    }
+
+    function rowKey(rowIndex, gfrSource, albuminuriaSource) {
+        return [
+            "row",
+            String(rowIndex),
+            pairKey(gfrSource, albuminuriaSource)
+        ].join("|");
+    }
+
+    function calculateRisk(gfrCategory, albuminuriaCategory) {
+        const normalizedGfr = normalizeGfrCategory(gfrCategory);
+        const normalizedAlbuminuria = normalizeAlbuminuriaCategory(albuminuriaCategory);
+        if (!RISK_MATRIX[normalizedGfr]) {
+            return "";
+        }
+        return RISK_MATRIX[normalizedGfr][normalizedAlbuminuria] || "";
+    }
+
+    function riskPhrase(gfrCategory, albuminuriaCategory, riskLevel) {
+        const normalizedGfr = normalizeGfrCategory(gfrCategory);
+        const normalizedAlbuminuria = normalizeAlbuminuriaCategory(albuminuriaCategory);
+        const combined = `${normalizedGfr}${normalizedAlbuminuria}`;
+        const text = RISK_TEXT[riskLevel] || UNKNOWN_RISK_TEXT;
+        return `По KDIGO: ${combined} — ${text}.`;
+    }
+
+    function sourceMeta(gfrSource, albuminuriaSource) {
+        return `СКФ: ${gfrSource.category} от ${formatRuDate(gfrSource.date)}; альбуминурия: ${albuminuriaSource.category} от ${formatRuDate(albuminuriaSource.date)}`;
+    }
+
+    function buildCalculatedAssessment(gfrSource, albuminuriaSource, rowIndex) {
+        const interval = daysBetween(gfrSource.date, albuminuriaSource.date);
+        const key = pairKey(gfrSource, albuminuriaSource);
+        const uniqueRowKey = rowKey(rowIndex, gfrSource, albuminuriaSource);
+        if (interval !== null && interval > MAX_INTERVAL_DAYS) {
+            return {
+                key: `stale|${uniqueRowKey}`,
+                status: "stale",
+                rowIndex,
+                text: STALE_TEXT,
+                meta: sourceMeta(gfrSource, albuminuriaSource),
+                riskLevel: ""
+            };
+        }
+        const riskLevel = calculateRisk(gfrSource.category, albuminuriaSource.category);
+        if (!riskLevel) {
+            return {
+                key: `unknown|${uniqueRowKey}`,
+                status: "unknown",
+                rowIndex,
+                text: UNKNOWN_RISK_TEXT,
+                meta: sourceMeta(gfrSource, albuminuriaSource),
+                riskLevel: ""
+            };
+        }
+        return {
+            key: uniqueRowKey,
+            pairKey: key,
+            rowKey: uniqueRowKey,
+            status: "calculated",
+            rowIndex,
+            text: riskPhrase(gfrSource.category, albuminuriaSource.category, riskLevel),
+            meta: sourceMeta(gfrSource, albuminuriaSource),
+            riskLevel
+        };
+    }
+
+    function missingAssessment(kind, rowIndex, source) {
+        const sourceSuffix = source ? `|${source.date}|${source.category}` : "";
+        if (kind === "albuminuria") {
+            return {
+                key: `missing-albuminuria|${rowIndex}${sourceSuffix}`,
+                status: "missing",
+                rowIndex,
+                text: MISSING_ALBUMINURIA_TEXT,
+                meta: source ? `СКФ: ${source.category} от ${formatRuDate(source.date)}` : "",
+                riskLevel: ""
+            };
+        }
+        if (kind === "gfr") {
+            return {
+                key: `missing-gfr|${rowIndex}${sourceSuffix}`,
+                status: "missing",
+                rowIndex,
+                text: MISSING_GFR_TEXT,
+                meta: source ? `Альбуминурия: ${source.category} от ${formatRuDate(source.date)}` : "",
+                riskLevel: ""
+            };
+        }
+        return {
+            key: "missing-both",
+            status: "missing",
+            rowIndex: 0,
+            text: EMPTY_BOTH_TEXT,
+            meta: "",
+            riskLevel: ""
+        };
+    }
+
+    function compactMissingAssessments(assessments) {
+        const calculatedLike = assessments.filter((item) => item.status === "calculated" || item.status === "stale" || item.status === "unknown");
+        if (calculatedLike.length) {
+            return assessments;
+        }
+        return assessments.length ? [assessments[0]] : [missingAssessment("both", 0, null)];
+    }
+
+    function buildCurrentVisitAssessments() {
+        const currentGfr = readCurrentGfrSources();
+        const currentAlbuminuria = readCurrentAlbuminuriaSources();
+        const previousGfr = readPrevious("kdigoPreviousGfrData", normalizeGfrCategory);
+        const previousAlbuminuria = readPrevious("kdigoPreviousAlbuminuriaData", normalizeAlbuminuriaCategory);
+        const assessments = [];
+
+        if (!currentGfr.length && !currentAlbuminuria.length) {
+            return [missingAssessment("both", 0, null)];
+        }
+
+        if (currentGfr.length && currentAlbuminuria.length) {
+            const rowsCount = Math.max(currentGfr.length, currentAlbuminuria.length);
+            for (let index = 0; index < rowsCount; index += 1) {
+                const gfrSource = currentGfr[index] || currentGfr[0];
+                const albuminuriaSource = currentAlbuminuria[index] || currentAlbuminuria[0];
+                assessments.push(buildCalculatedAssessment(gfrSource, albuminuriaSource, index));
+            }
+            return assessments;
+        }
+
+        if (currentGfr.length) {
+            currentGfr.forEach((gfrSource, index) => {
+                const albuminuriaSource = latestBeforeOrOn(previousAlbuminuria, gfrSource.date);
+                if (!albuminuriaSource) {
+                    assessments.push(missingAssessment("albuminuria", index, gfrSource));
+                    return;
+                }
+                assessments.push(buildCalculatedAssessment(gfrSource, albuminuriaSource, index));
+            });
+            return compactMissingAssessments(assessments);
+        }
+
+        currentAlbuminuria.forEach((albuminuriaSource, index) => {
+            const gfrSource = latestBeforeOrOn(previousGfr, albuminuriaSource.date);
+            if (!gfrSource) {
+                assessments.push(missingAssessment("gfr", index, albuminuriaSource));
+                return;
+            }
+            assessments.push(buildCalculatedAssessment(gfrSource, albuminuriaSource, index));
+        });
+        return compactMissingAssessments(assessments);
+    }
+
+    function selectedAssessment(assessments, preferredKey) {
+        const calculated = assessments.filter((item) => item.status === "calculated");
+        if (preferredKey) {
+            const preferred = assessments.find((item) => item.key === preferredKey);
+            if (preferred) {
+                return preferred;
+            }
+        }
+        if (lastSelectedKey) {
+            const previous = assessments.find((item) => item.key === lastSelectedKey);
+            if (previous) {
+                return previous;
+            }
+        }
+        if (calculated.length) {
+            return calculated[0];
+        }
+        return assessments[0];
+    }
+
+    function writeSelectedText(assessment) {
+        const field = document.getElementById("kdigoSelectedConclusionText");
+        if (!field) {
+            return;
+        }
+        field.value = assessment ? assessment.text : EMPTY_BOTH_TEXT;
+    }
+
+    function writeExcludedPairs(assessments, selected) {
+        const container = document.getElementById("kdigoExcludedPairsContainer");
+        if (!container) {
+            return;
+        }
+        container.innerHTML = "";
+        const selectedKey = selected ? selected.key : "";
+        assessments
+            .filter((item) => item.status === "calculated" && item.key !== selectedKey)
+            .forEach((item) => {
+                const input = document.createElement("input");
+                input.type = "hidden";
+                input.name = "kdigo_excluded_pair";
+                input.value = item.rowKey || item.key || item.pairKey;
+                container.appendChild(input);
+            });
+    }
+
+    function renderAssessments(preferredKey) {
+        const container = document.getElementById("kdigoCurrentVisitOptions");
+        if (!container) {
+            return;
+        }
+        const assessments = buildCurrentVisitAssessments();
+        const selected = selectedAssessment(assessments, preferredKey);
+        lastSelectedKey = selected ? selected.key : "";
+
+        container.innerHTML = "";
+        assessments.forEach((assessment) => {
+            const label = document.createElement("label");
+            label.className = "kdigo-current-option";
+            if (assessment.status === "calculated" && assessment.riskLevel) {
+                label.classList.add(`kdigo-risk-${assessment.riskLevel}`);
+            } else {
+                label.classList.add("kdigo-current-option-neutral");
+            }
+
+            const radio = document.createElement("input");
+            radio.type = "radio";
+            radio.name = "kdigo_selected_current_option";
+            radio.value = assessment.key;
+            radio.checked = Boolean(selected && selected.key === assessment.key);
+            radio.disabled = assessment.status !== "calculated";
+            radio.addEventListener("change", () => {
+                if (radio.checked) {
+                    renderAssessments(assessment.key);
+                }
+            });
+
+            const text = document.createElement("span");
+            text.className = "kdigo-current-option-text";
+            text.textContent = assessment.text;
+            if (assessment.meta) {
+                const meta = document.createElement("span");
+                meta.className = "kdigo-current-option-meta";
+                meta.textContent = assessment.meta;
+                text.appendChild(meta);
+            }
+
+            label.appendChild(radio);
+            label.appendChild(text);
+            container.appendChild(label);
+        });
+
+        writeSelectedText(selected);
+        writeExcludedPairs(assessments, selected);
+    }
+
+    function scheduleRender() {
+        window.clearTimeout(renderTimer);
+        renderTimer = window.setTimeout(() => renderAssessments(""), 80);
+    }
+
+    function initHistoryToggle() {
+        const button = document.getElementById("kdigoToggleHistoryButton");
+        const panel = document.getElementById("kdigoHistoryPanel");
+        if (!button || !panel) {
+            return;
+        }
+        button.addEventListener("click", () => {
+            panel.hidden = !panel.hidden;
+            button.textContent = panel.hidden
+                ? "Посмотреть историю прогнозов по KDIGO"
+                : "Скрыть историю прогнозов по KDIGO";
+        });
+    }
+
+    function initObservers() {
+        document.addEventListener("input", (event) => {
+            const kdigoRoot = root();
+            if (kdigoRoot && kdigoRoot.contains(event.target)) {
+                return;
+            }
+            scheduleRender();
+        }, true);
+
+        document.addEventListener("change", (event) => {
+            const kdigoRoot = root();
+            if (kdigoRoot && kdigoRoot.contains(event.target)) {
+                return;
+            }
+            scheduleRender();
+        }, true);
+
+        const observer = new MutationObserver((mutations) => {
+            const kdigoRoot = root();
+            if (kdigoRoot && mutations.every((mutation) => kdigoRoot.contains(mutation.target))) {
+                return;
+            }
+            scheduleRender();
+        });
+        observer.observe(document.body, {
+            childList: true,
+            subtree: true,
+            characterData: true,
+            attributes: true
+        });
+    }
+
+    function init() {
+        if (!root()) {
+            return;
+        }
+        initHistoryToggle();
+        initObservers();
+        renderAssessments("");
+    }
+
+    if (document.readyState === "loading") {
+        document.addEventListener("DOMContentLoaded", init);
+    } else {
+        init();
+    }
 })();

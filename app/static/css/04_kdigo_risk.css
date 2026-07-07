@@ -1,110 +1,142 @@
 /*
-Назначение файла: оформление live-блока KDIGO в формах приёма и матрицы истории.
+Назначение файла: оформление live-блока KDIGO в формах первого и повторного приёма.
 
-Что делает этот файл:
+Что делает файл:
 - оставляет общий блок KDIGO нейтральным, без цветовой заливки всего контейнера;
-- подсвечивает только отдельные строки вариантов прогноза;
-- подсвечивает ячейки исторической матрицы теми же цветами риска;
-- оставляет невозможные и устаревшие оценки нейтральными;
-- оформляет radio-кружочки и readonly-поле заключения без изменения общего дизайна проекта.
+- подсвечивает только отдельные строки прогнозов по категориям KDIGO;
+- оформляет radio-кружочки и встроенную историю прошлых прогнозов;
+- использует те же смысловые цвета для истории, что и для текущих прогнозов.
 
 Как это работает:
 - JavaScript добавляет строкам классы kdigo-risk-low / kdigo-risk-moderate / kdigo-risk-high / kdigo-risk-very_high;
-- этот CSS задаёт для этих классов мягкую KDIGO-подсветку;
-- общий .kdigo-risk-preview не получает цветовую категорию риска.
+- CSS задаёт этим классам мягкую цветовую подсветку;
+- невозможные и устаревшие оценки остаются нейтральными.
 
-Что можно редактировать:
+Что редактировать:
 - оттенки цветов;
-- отступы блока;
-- внешний вид строк вариантов и матрицы.
+- отступы;
+- внешний вид строки прогноза и таблицы истории.
 
-Что не редактировать здесь:
-- медицинскую логику расчёта;
-- тексты заключения;
-- имена id/name, которые использует JavaScript.
+Что не редактировать без синхронной правки JS:
+- названия классов kdigo-risk-*;
+- класс kdigo-current-option;
+- id и name полей формы.
 */
 
-.kdigo-risk-preview {
-  border: 1px solid #dee2e6;
-  border-radius: 0.5rem;
-  padding: 0.75rem 1rem;
-  background: #f8f9fa;
+.kdigo-live-block {
+    border: 1px solid #dee2e6;
+    border-radius: 0.5rem;
+    padding: 0.75rem 1rem;
+    background: #f8f9fa;
+}
+
+.kdigo-live-title {
+    font-weight: 600;
+    margin-bottom: 0.15rem;
+}
+
+.kdigo-live-subtitle {
+    font-size: 0.9rem;
+    color: #6c757d;
 }
 
 .kdigo-current-options {
-  margin-top: 0.5rem;
+    margin-top: 0.6rem;
 }
 
 .kdigo-current-option {
-  display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
-  border: 1px solid #dee2e6;
-  border-radius: 0.4rem;
-  padding: 0.55rem 0.65rem;
-  margin-bottom: 0.5rem;
-  background: #ffffff;
+    display: flex;
+    align-items: flex-start;
+    gap: 0.5rem;
+    border: 1px solid #dee2e6;
+    border-radius: 0.4rem;
+    padding: 0.55rem 0.65rem;
+    margin-bottom: 0.5rem;
+    background: #ffffff;
+}
+
+.kdigo-current-option:last-child {
+    margin-bottom: 0;
 }
 
 .kdigo-current-option input[type="radio"] {
-  margin-top: 0.25rem;
-  flex-shrink: 0;
+    margin-top: 0.25rem;
+    flex-shrink: 0;
+}
+
+.kdigo-current-option input[type="radio"]:disabled {
+    opacity: 0.55;
+    cursor: not-allowed;
 }
 
 .kdigo-current-option-text {
-  flex: 1;
+    flex: 1;
+    white-space: normal;
+}
+
+.kdigo-current-option-meta {
+    display: block;
+    margin-top: 0.15rem;
+    font-size: 0.82rem;
+    color: #6c757d;
 }
 
 .kdigo-current-option-neutral {
-  background: #ffffff;
-  color: #6c757d;
+    background: #ffffff;
+    color: #6c757d;
 }
 
 .kdigo-current-option.kdigo-risk-low,
-.kdigo-matrix-risk.kdigo-risk-low {
-  background: #d1e7dd;
-  border-color: #badbcc;
+.kdigo-history-risk.kdigo-risk-low {
+    background: #d1e7dd;
+    border-color: #badbcc;
 }
 
 .kdigo-current-option.kdigo-risk-moderate,
-.kdigo-matrix-risk.kdigo-risk-moderate {
-  background: #fff3cd;
-  border-color: #ffecb5;
+.kdigo-history-risk.kdigo-risk-moderate {
+    background: #fff3cd;
+    border-color: #ffecb5;
 }
 
 .kdigo-current-option.kdigo-risk-high,
-.kdigo-matrix-risk.kdigo-risk-high {
-  background: #ffe5b4;
-  border-color: #ffcc80;
+.kdigo-history-risk.kdigo-risk-high {
+    background: #ffe5b4;
+    border-color: #ffcc80;
 }
 
 .kdigo-current-option.kdigo-risk-very_high,
-.kdigo-matrix-risk.kdigo-risk-very_high {
-  background: #f8d7da;
-  border-color: #f5c2c7;
-}
-
-.kdigo-conclusion-text {
-  background: #ffffff;
+.kdigo-history-risk.kdigo-risk-very_high {
+    background: #f8d7da;
+    border-color: #f5c2c7;
 }
 
 .kdigo-history-panel {
-  border-top: 1px solid #dee2e6;
-  padding-top: 0.75rem;
+    border-top: 1px solid #dee2e6;
+    padding-top: 0.75rem;
 }
 
-.kdigo-risk-matrix .kdigo-matrix-cell {
-  min-width: 160px;
-  vertical-align: middle;
+.kdigo-history-title {
+    font-weight: 600;
+    margin-bottom: 0.5rem;
 }
 
-.kdigo-matrix-risk {
-  border: 1px solid #dee2e6;
-  border-radius: 0.35rem;
-  padding: 0.35rem 0.5rem;
-  margin-bottom: 0.25rem;
+.kdigo-history-table th,
+.kdigo-history-table td {
+    vertical-align: middle;
 }
 
-.kdigo-matrix-risk:last-child {
-  margin-bottom: 0;
+.kdigo-history-cell {
+    min-width: 160px;
+}
+
+.kdigo-history-risk {
+    border: 1px solid #dee2e6;
+    border-radius: 0.35rem;
+    padding: 0.35rem 0.5rem;
+    margin-bottom: 0.25rem;
+    font-size: 0.9rem;
+}
+
+.kdigo-history-risk:last-child {
+    margin-bottom: 0;
 }
