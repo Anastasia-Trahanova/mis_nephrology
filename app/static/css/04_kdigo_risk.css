@@ -1,21 +1,27 @@
 /*
-Назначение файла: оформление блока KDIGO в форме приёма и матрицы истории.
+Назначение файла: оформление live-блока KDIGO в формах приёма и матрицы истории.
 
-Что выполняет файл:
-- подсвечивает весь блок оценки риска выбранным цветом;
-- подсвечивает варианты текущего приёма и ячейки исторической матрицы;
-- оставляет невозможные/устаревшие оценки нейтральными;
-- оформляет radio-выбор и кнопки без изменения общей верстки проекта.
+Что делает этот файл:
+- оставляет общий блок KDIGO нейтральным, без цветовой заливки всего контейнера;
+- подсвечивает только отдельные строки вариантов прогноза;
+- подсвечивает ячейки исторической матрицы теми же цветами риска;
+- оставляет невозможные и устаревшие оценки нейтральными;
+- оформляет radio-кружочки и readonly-поле заключения без изменения общего дизайна проекта.
 
-Что редактировать здесь:
-- цвета категорий риска;
-- отступы блока KDIGO;
-- внешний вид вариантов прогноза.
+Как это работает:
+- JavaScript добавляет строкам классы kdigo-risk-low / kdigo-risk-moderate / kdigo-risk-high / kdigo-risk-very_high;
+- этот CSS задаёт для этих классов мягкую KDIGO-подсветку;
+- общий .kdigo-risk-preview не получает цветовую категорию риска.
+
+Что можно редактировать:
+- оттенки цветов;
+- отступы блока;
+- внешний вид строк вариантов и матрицы.
 
 Что не редактировать здесь:
-- медицинскую логику KDIGO;
-- тексты сообщений;
-- SQL и сохранение в БД.
+- медицинскую логику расчёта;
+- тексты заключения;
+- имена id/name, которые использует JavaScript.
 */
 
 .kdigo-risk-preview {
@@ -25,29 +31,8 @@
   background: #f8f9fa;
 }
 
-.kdigo-risk-empty {
-  background: #f8f9fa;
-  border-color: #dee2e6;
-}
-
-.kdigo-risk-low {
-  background: #d1e7dd;
-  border-color: #badbcc;
-}
-
-.kdigo-risk-moderate {
-  background: #fff3cd;
-  border-color: #ffecb5;
-}
-
-.kdigo-risk-high {
-  background: #ffe5b4;
-  border-color: #ffcc80;
-}
-
-.kdigo-risk-very_high {
-  background: #f8d7da;
-  border-color: #f5c2c7;
+.kdigo-current-options {
+  margin-top: 0.5rem;
 }
 
 .kdigo-current-option {
@@ -56,13 +41,14 @@
   gap: 0.5rem;
   border: 1px solid #dee2e6;
   border-radius: 0.4rem;
-  padding: 0.5rem 0.6rem;
+  padding: 0.55rem 0.65rem;
   margin-bottom: 0.5rem;
-  background: #fff;
+  background: #ffffff;
 }
 
 .kdigo-current-option input[type="radio"] {
   margin-top: 0.25rem;
+  flex-shrink: 0;
 }
 
 .kdigo-current-option-text {
@@ -70,11 +56,36 @@
 }
 
 .kdigo-current-option-neutral {
+  background: #ffffff;
   color: #6c757d;
 }
 
+.kdigo-current-option.kdigo-risk-low,
+.kdigo-matrix-risk.kdigo-risk-low {
+  background: #d1e7dd;
+  border-color: #badbcc;
+}
+
+.kdigo-current-option.kdigo-risk-moderate,
+.kdigo-matrix-risk.kdigo-risk-moderate {
+  background: #fff3cd;
+  border-color: #ffecb5;
+}
+
+.kdigo-current-option.kdigo-risk-high,
+.kdigo-matrix-risk.kdigo-risk-high {
+  background: #ffe5b4;
+  border-color: #ffcc80;
+}
+
+.kdigo-current-option.kdigo-risk-very_high,
+.kdigo-matrix-risk.kdigo-risk-very_high {
+  background: #f8d7da;
+  border-color: #f5c2c7;
+}
+
 .kdigo-conclusion-text {
-  background: #fff;
+  background: #ffffff;
 }
 
 .kdigo-history-panel {
@@ -88,6 +99,7 @@
 }
 
 .kdigo-matrix-risk {
+  border: 1px solid #dee2e6;
   border-radius: 0.35rem;
   padding: 0.35rem 0.5rem;
   margin-bottom: 0.25rem;

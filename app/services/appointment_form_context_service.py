@@ -1,24 +1,28 @@
 """
 Назначение файла: сборка context для форм нового пациента и повторного приёма.
 
-Этот сервис не содержит SQL напрямую. Он собирает справочники, пациента,
-последний приём, истории анализов и словари, которые нужны HTML-формам.
+Что делает этот файл:
+- get_new_patient_context() собирает справочники для страницы добавления нового пациента;
+- get_new_appointment_context(patient_id) собирает пациента, последний приём, истории анализов и справочники для повторного приёма;
+- подготавливает данные прошлой СКФ и прошлой альбуминурии для live-блока KDIGO;
+- подготавливает матрицу истории прогнозов KDIGO для раскрывающегося блока в форме повторного приёма;
+- не содержит SQL напрямую: все чтения идут через функции из app.repositories.
 
-Что выполняет файл:
-- get_new_patient_context() — context для страницы добавления нового пациента;
-- get_new_appointment_context(patient_id) — context для нового приёма существующего пациента;
-- _group_icd10_diagnoses_for_form() — группировка МКБ-10 диагнозов для формы;
-- готовит данные истории СКФ/альбуминурии для live-блока KDIGO.
+Как это работает:
+- repository-функции получают данные из PostgreSQL;
+- этот service собирает их в один словарь context для Jinja-шаблона;
+- JavaScript в app/static/js/kdigo_risk_preview.js читает kdigo_previous_gfr_data и kdigo_previous_albuminuria_data из JSON в шаблоне.
 
-Что редактировать здесь:
-- какие справочники передаются в формы;
-- какие данные прошлого приёма подставляются в повторный приём;
-- какие истории анализов доступны врачу при заполнении формы.
+Что можно редактировать:
+- какие справочники и истории передаются в форму;
+- какие прошлые данные доступны для fallback-расчёта KDIGO;
+- состав context для Jinja.
 
 Что не редактировать здесь:
-- SQL — он в app/repositories;
-- внешний вид формы — он в app/templates/appointment_form;
-- сохранение формы — оно в appointment_save_service.py и patient_appointment_service.py.
+- SQL-запросы;
+- внешний вид формы;
+- сохранение приёма;
+- медицинскую матрицу риска KDIGO.
 """
 
 from __future__ import annotations
@@ -96,7 +100,7 @@ def _date_to_iso(value: Any) -> str | None:
 
 
 def _prepare_kdigo_previous_gfr_data(metrics_history) -> list[dict[str, str]]:
-    """Готовит историю СКФ для fallback-расчёта KDIGO в форме."""
+    """Готовит историю СКФ для fallback-расчёта KDIGO в форме повторного приёма."""
     result: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
 
@@ -105,6 +109,7 @@ def _prepare_kdigo_previous_gfr_data(metrics_history) -> list[dict[str, str]]:
         category = _row_get(item, "ckd_stage")
         if not current_date or not category:
             continue
+
         key = (current_date, str(category))
         if key in seen:
             continue
@@ -115,7 +120,7 @@ def _prepare_kdigo_previous_gfr_data(metrics_history) -> list[dict[str, str]]:
 
 
 def _prepare_kdigo_previous_albuminuria_data(albuminuria_history) -> list[dict[str, str]]:
-    """Готовит историю альбуминурии для fallback-расчёта KDIGO в форме."""
+    """Готовит историю альбуминурии для fallback-расчёта KDIGO в форме повторного приёма."""
     result: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
 
@@ -124,6 +129,7 @@ def _prepare_kdigo_previous_albuminuria_data(albuminuria_history) -> list[dict[s
         category = _row_get(item, "albuminuria_category")
         if not current_date or not category:
             continue
+
         key = (current_date, str(category))
         if key in seen:
             continue
@@ -134,7 +140,7 @@ def _prepare_kdigo_previous_albuminuria_data(albuminuria_history) -> list[dict[s
 
 
 def get_new_appointment_context(patient_id: int):
-    """Собирает данные для формы нового приёма одним соединением к БД."""
+    """Собирает данные для формы нового приёма существующего пациента одним соединением к БД."""
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             patient = _fetch_patient_by_id(cur, patient_id)

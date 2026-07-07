@@ -1,32 +1,40 @@
 /*
-Назначение файла: live-расчёт KDIGO внутри формы приёма.
+Назначение файла: live-расчёт прогноза KDIGO в формах нового пациента и повторного приёма.
 
-Что выполняет файл:
-- читает текущие СКФ из блока биохимии и текущие категории альбуминурии;
-- если одного показателя нет, использует последний подходящий показатель из прошлых приёмов;
-- показывает варианты прогноза именно для текущего приёма;
-- даёт врачу выбрать один вариант radio-кнопкой;
-- записывает выбранную фразу в поле заключения;
-- для невыбранных рассчитанных вариантов создаёт hidden kdigo_excluded_pair,
-  чтобы backend сохранил только выбранный вариант;
+Что делает этот файл:
+- читает текущие значения СКФ/категории СКФ прямо из заполняемой формы до сохранения в БД;
+- читает текущие значения альбуминурии/категории A1-A3 прямо из формы до сохранения в БД;
+- если в текущем приёме есть только СКФ, берёт последнюю подходящую альбуминурию из прошлых данных пациента;
+- если в текущем приёме есть только альбуминурия, берёт последнюю подходящую СКФ из прошлых данных пациента;
+- если в текущем приёме нет ни СКФ, ни альбуминурии, показывает одну нейтральную фразу о невозможности оценки;
+- при изменении полей формы автоматически пересчитывает прогноз без кнопки «Обновить»;
+- если вариантов несколько, даёт врачу выбрать один radio-кружочком;
+- выбранную фразу записывает в textarea «Формулировка для заключения»;
+- для невыбранных рассчитанных вариантов создаёт hidden-поля kdigo_excluded_pair, чтобы backend не сохранял шум;
 - раскрывает/скрывает историю прошлых прогнозов по кнопке.
 
-Что редактировать здесь:
-- правила чтения полей формы;
+Как это работает:
+- текущий приём никогда не строится как полная матрица СКФ × альбуминурия;
+- один текущий показатель СКФ даёт один вариант прогноза;
+- две текущие СКФ дают два варианта прогноза;
+- если текущих альбуминурий несколько, они сопоставляются с СКФ по порядку строк, а не создают все пересечения;
+- старые данные используются только как fallback для отсутствующего показателя, но не создают прогнозы сами по себе при открытии формы.
+
+Что можно редактировать:
 - точные короткие фразы для врача;
-- поведение выбора варианта.
+- правила выбора текущей альбуминурии для текущей СКФ;
+- CSS-классы вариантов.
 
 Что не редактировать здесь:
 - серверное сохранение ckd_prognosis_results;
-- медицинскую матрицу KDIGO на backend;
-- расчёт ACR/eGFR, который уже делает существующий код формы.
+- SQL-запросы;
+- расчёт eGFR и ACR, который выполняется существующими скриптами формы.
 */
-
 (function () {
   "use strict";
 
-  if (window.__kdigoCurrentVisitSelectionInitialized) return;
-  window.__kdigoCurrentVisitSelectionInitialized = true;
+  if (window.__kdigoLiveCurrentVisitV2Initialized) return;
+  window.__kdigoLiveCurrentVisitV2Initialized = true;
 
   const RISK_MATRIX = {
     "С1": { A1: ["low", "низкий риск"], A2: ["moderate", "умеренно повышенный риск"], A3: ["high", "высокий риск"] },
@@ -44,12 +52,8 @@
     very_high: 90
   };
 
-  const RISK_ORDER = {
-    low: 1,
-    moderate: 2,
-    high: 3,
-    very_high: 4
-  };
+  const RISK_ORDER = { low: 1, moderate: 2, high: 3, very_high: 4 };
+  const EMPTY_TEXT = "Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены.";
 
   function readJsonScript(id) {
     const node = document.getElementById(id);
@@ -74,6 +78,8 @@
     if (!value) return "";
     const text = String(value).trim();
     if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text;
+    const ru = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+    if (ru) return `${ru[3]}-${ru[2]}-${ru[1]}`;
     return "";
   }
 
@@ -104,8 +110,7 @@
     text = text.replace(/^G/i, "С").replace(/^C/, "С");
     text = text.replace("3A", "3а").replace("3a", "3а");
     text = text.replace("3B", "3б").replace("3b", "3б");
-    if (["С1", "С2", "С3а", "С3б", "С4", "С5"].includes(text)) return text;
-    return "";
+    return ["С1", "С2", "С3а", "С3б", "С4", "С5"].includes(text) ? text : "";
   }
 
   function gfrCategoryFromEgfr(value) {
@@ -163,26 +168,9 @@
     return `${months} ${monthWord(months)} назад`;
   }
 
-  function pairKey(gfrDate, gfrCategory, albuminuriaDate, albuminuriaCategory) {
-    return [
-      normalizeDate(gfrDate),
-      normalizeGfrCategory(gfrCategory),
-      normalizeDate(albuminuriaDate),
-      normalizeAlbuminuriaCategory(albuminuriaCategory)
-    ].join("|");
-  }
-
-  function riskPhrase(risk, gfrDate, albuminuriaDate) {
-    return `По KDIGO: ${risk.combinedCategory} — ${risk.text} прогрессирования ХБП и развития ХПН (рассчитано по СКФ от ${formatRuDate(gfrDate)}, альбуминурия от ${formatRuDate(albuminuriaDate)})`;
-  }
-
   function missingPhrase(missing) {
-    if (missing === "both") {
-      return "Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены.";
-    }
-    if (missing === "gfr") {
-      return "Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по СКФ не предоставлены.";
-    }
+    if (missing === "both") return EMPTY_TEXT;
+    if (missing === "gfr") return "Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по СКФ не предоставлены.";
     return "Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии не предоставлены.";
   }
 
@@ -193,34 +181,25 @@
     return `Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии были получены ${elapsedMonthsText(intervalDays)}, рекомендовано повторить исследование.`;
   }
 
-  function readCurrentGfrSources() {
-    const result = [];
-    const cards = Array.from(document.querySelectorAll("#biochemistryContainer .lab-analysis-card, #biochemistryContainer .biochemistry-block"));
-    cards.forEach((card) => {
-      const date = normalizeDate(card.querySelector('[name="biochemistry_investigation_date"]')?.value);
-      const stageInput = card.querySelector(".biochemistry-stage");
-      const egfrInput = card.querySelector(".biochemistry-egfr");
-      const category = normalizeGfrCategory(stageInput?.value) || gfrCategoryFromEgfr(egfrInput?.value);
-      if (date && category) {
-        result.push({ date, category, source: "current_appointment" });
-      }
-    });
-    return dedupeSources(result);
+  function riskPhrase(risk, gfrDate, albuminuriaDate) {
+    return `По KDIGO: ${risk.combinedCategory} — ${risk.text} прогрессирования ХБП и развития ХПН (рассчитано по СКФ от ${formatRuDate(gfrDate)}, альбуминурия от ${formatRuDate(albuminuriaDate)})`;
   }
 
-  function readCurrentAlbuminuriaSources() {
-    const result = [];
-    const cards = Array.from(document.querySelectorAll("#albuminuriaContainer .albuminuria-block, #albuminuriaContainer .lab-analysis-card"));
-    cards.forEach((card) => {
-      const date = normalizeDate(card.querySelector('[name="albuminuria_investigation_date"]')?.value);
-      const categoryInput = card.querySelector(".albuminuria-category");
-      const acrInput = card.querySelector(".albuminuria-acr");
-      const category = normalizeAlbuminuriaCategory(categoryInput?.value) || albuminuriaCategoryFromAcr(acrInput?.value);
-      if (date && category) {
-        result.push({ date, category, source: "current_appointment" });
-      }
-    });
-    return dedupeSources(result);
+  function pairKey(gfrDate, gfrCategory, albuminuriaDate, albuminuriaCategory) {
+    return [normalizeDate(gfrDate), normalizeGfrCategory(gfrCategory), normalizeDate(albuminuriaDate), normalizeAlbuminuriaCategory(albuminuriaCategory)].join("|");
+  }
+
+  function getEditableCards(containerSelector, dateName, valueSelectors) {
+    const container = document.querySelector(containerSelector);
+    if (!container) return [];
+
+    const dateInputs = Array.from(container.querySelectorAll(`input[name="${dateName}"]`));
+    return dateInputs
+      .map((dateInput) => {
+        const card = dateInput.closest(".lab-analysis-card, .biochemistry-block, .albuminuria-block, .card, .border, div") || dateInput.parentElement;
+        return { card, dateInput };
+      })
+      .filter(({ card }) => card && valueSelectors.some((selector) => card.querySelector(selector)));
   }
 
   function dedupeSources(sources) {
@@ -235,23 +214,51 @@
     return result;
   }
 
+  function readCurrentGfrSources() {
+    const cards = getEditableCards(
+      "#biochemistryContainer",
+      "biochemistry_investigation_date",
+      [".biochemistry-egfr", ".biochemistry-stage"]
+    );
+
+    const result = cards.map(({ card, dateInput }, index) => {
+      const date = normalizeDate(dateInput.value);
+      const stageInput = card.querySelector(".biochemistry-stage");
+      const egfrInput = card.querySelector(".biochemistry-egfr");
+      const category = normalizeGfrCategory(stageInput && stageInput.value) || gfrCategoryFromEgfr(egfrInput && egfrInput.value);
+      return date && category ? { date, category, index, source: "current_appointment" } : null;
+    }).filter(Boolean);
+
+    return dedupeSources(result);
+  }
+
+  function readCurrentAlbuminuriaSources() {
+    const cards = getEditableCards(
+      "#albuminuriaContainer",
+      "albuminuria_investigation_date",
+      [".albuminuria-category", ".albuminuria-acr"]
+    );
+
+    const result = cards.map(({ card, dateInput }, index) => {
+      const date = normalizeDate(dateInput.value);
+      const categoryInput = card.querySelector(".albuminuria-category");
+      const acrInput = card.querySelector(".albuminuria-acr");
+      const category = normalizeAlbuminuriaCategory(categoryInput && categoryInput.value) || albuminuriaCategoryFromAcr(acrInput && acrInput.value);
+      return date && category ? { date, category, index, source: "current_appointment" } : null;
+    }).filter(Boolean);
+
+    return dedupeSources(result);
+  }
+
   function loadPreviousGfrSources() {
     return readJsonScript("kdigoPreviousGfrData")
-      .map((item) => ({
-        date: normalizeDate(item.date),
-        category: normalizeGfrCategory(item.category),
-        source: "previous_appointment"
-      }))
+      .map((item) => ({ date: normalizeDate(item.date), category: normalizeGfrCategory(item.category), source: "previous_appointment" }))
       .filter((item) => item.date && item.category);
   }
 
   function loadPreviousAlbuminuriaSources() {
     return readJsonScript("kdigoPreviousAlbuminuriaData")
-      .map((item) => ({
-        date: normalizeDate(item.date),
-        category: normalizeAlbuminuriaCategory(item.category),
-        source: "previous_appointment"
-      }))
+      .map((item) => ({ date: normalizeDate(item.date), category: normalizeAlbuminuriaCategory(item.category), source: "previous_appointment" }))
       .filter((item) => item.date && item.category);
   }
 
@@ -266,18 +273,21 @@
       .sort((a, b) => parseIsoDate(b.date) - parseIsoDate(a.date))[0] || null;
   }
 
-  function closestSourceByDate(sources, targetDate) {
-    const target = parseIsoDate(targetDate);
-    if (!target || !sources.length) return null;
-    return sources
-      .map((item) => ({ item, diff: Math.abs(parseIsoDate(item.date) - target) }))
-      .filter((entry) => Number.isFinite(entry.diff))
-      .sort((a, b) => a.diff - b.diff)[0]?.item || null;
+  function albuminuriaForGfr(gfrSource, currentAlbuminuria, previousAlbuminuria) {
+    if (currentAlbuminuria.length) {
+      return currentAlbuminuria[gfrSource.index] || currentAlbuminuria[0] || null;
+    }
+    return latestPreviousBeforeOrOn(previousAlbuminuria, gfrSource.date);
+  }
+
+  function gfrForAlbuminuria(albuminuriaSource, previousGfr) {
+    return latestPreviousBeforeOrOn(previousGfr, albuminuriaSource.date);
   }
 
   function assessmentFromPair(gfrSource, albuminuriaSource, staleSourceWhenOld) {
     const risk = calculateRisk(gfrSource.category, albuminuriaSource.category);
     if (!risk) return null;
+
     const intervalDays = daysBetween(gfrSource.date, albuminuriaSource.date);
     const maxDays = MAX_INTERVAL_BY_RISK[risk.level] || 90;
     const key = pairKey(gfrSource.date, risk.gfrCategory, albuminuriaSource.date, risk.albuminuriaCategory);
@@ -306,35 +316,32 @@
     const previousAlbuminuria = loadPreviousAlbuminuriaSources();
     const assessments = [];
 
-    if (currentGfr.length && currentAlbuminuria.length) {
+    if (!currentGfr.length && !currentAlbuminuria.length) {
+      return [{ status: "missing", key: "missing-both", level: null, text: missingPhrase("both") }];
+    }
+
+    if (currentGfr.length) {
       currentGfr.forEach((gfr) => {
-        const albuminuria = closestSourceByDate(currentAlbuminuria, gfr.date);
-        const assessment = albuminuria ? assessmentFromPair(gfr, albuminuria, "albuminuria") : null;
-        if (assessment) assessments.push(assessment);
-      });
-    } else if (currentGfr.length && !currentAlbuminuria.length) {
-      currentGfr.forEach((gfr) => {
-        const previous = latestPreviousBeforeOrOn(previousAlbuminuria, gfr.date);
-        if (!previous) {
+        const albuminuria = albuminuriaForGfr(gfr, currentAlbuminuria, previousAlbuminuria);
+        if (!albuminuria) {
           assessments.push({ status: "missing", key: `missing-albuminuria-${gfr.date}-${gfr.category}`, level: null, text: missingPhrase("albuminuria") });
           return;
         }
-        const assessment = assessmentFromPair(gfr, previous, "albuminuria");
+        const assessment = assessmentFromPair(gfr, albuminuria, "albuminuria");
         if (assessment) assessments.push(assessment);
       });
-    } else if (!currentGfr.length && currentAlbuminuria.length) {
-      currentAlbuminuria.forEach((albuminuria) => {
-        const previous = latestPreviousBeforeOrOn(previousGfr, albuminuria.date);
-        if (!previous) {
-          assessments.push({ status: "missing", key: `missing-gfr-${albuminuria.date}-${albuminuria.category}`, level: null, text: missingPhrase("gfr") });
-          return;
-        }
-        const assessment = assessmentFromPair(previous, albuminuria, "gfr");
-        if (assessment) assessments.push(assessment);
-      });
-    } else {
-      assessments.push({ status: "missing", key: "missing-both", level: null, text: missingPhrase("both") });
+      return dedupeAssessments(assessments);
     }
+
+    currentAlbuminuria.forEach((albuminuria) => {
+      const previous = gfrForAlbuminuria(albuminuria, previousGfr);
+      if (!previous) {
+        assessments.push({ status: "missing", key: `missing-gfr-${albuminuria.date}-${albuminuria.category}`, level: null, text: missingPhrase("gfr") });
+        return;
+      }
+      const assessment = assessmentFromPair(previous, albuminuria, "gfr");
+      if (assessment) assessments.push(assessment);
+    });
 
     return dedupeAssessments(assessments);
   }
@@ -351,32 +358,29 @@
     return result;
   }
 
-  function bestCalculatedIndex(assessments) {
-    let bestIndex = -1;
-    let bestLevel = 0;
-    assessments.forEach((assessment, index) => {
+  function bestCalculatedKey(assessments) {
+    let best = null;
+    assessments.forEach((assessment) => {
       if (assessment.status !== "calculated") return;
-      const level = RISK_ORDER[assessment.level] || 0;
-      if (bestIndex === -1 || level > bestLevel) {
-        bestIndex = index;
-        bestLevel = level;
+      if (!best || (RISK_ORDER[assessment.level] || 0) > (RISK_ORDER[best.level] || 0)) {
+        best = assessment;
       }
     });
-    return bestIndex;
+    return best ? best.key : "";
   }
 
-  function setBlockRiskClass(block, level) {
-    block.classList.remove("kdigo-risk-empty", "kdigo-risk-low", "kdigo-risk-moderate", "kdigo-risk-high", "kdigo-risk-very_high");
-    block.classList.add(level ? `kdigo-risk-${level}` : "kdigo-risk-empty");
+  function selectedRadioValue() {
+    const selected = document.querySelector('input[name="kdigo_selected_current_option"]:checked');
+    return selected ? selected.value : "";
   }
 
   function writeExcludedPairs(assessments, selectedKey) {
-    const container = document.getElementById("kdigoExcludedPairs");
+    const container = document.getElementById("kdigoHiddenFields");
     if (!container) return;
     container.innerHTML = "";
+
     assessments.forEach((assessment) => {
-      if (assessment.status !== "calculated" || !assessment.key) return;
-      if (assessment.key === selectedKey) return;
+      if (assessment.status !== "calculated" || !assessment.key || assessment.key === selectedKey) return;
       const input = document.createElement("input");
       input.type = "hidden";
       input.name = "kdigo_excluded_pair";
@@ -385,32 +389,27 @@
     });
   }
 
-  function selectedRadioValue() {
-    const selected = document.querySelector('input[name="kdigo_selected_current_option"]:checked');
-    return selected ? selected.value : "";
-  }
-
   function renderAssessments(preferredSelectedKey) {
-    const block = document.getElementById("kdigoRiskPreview");
     const optionsContainer = document.getElementById("kdigoCurrentVisitOptions");
     const conclusionText = document.getElementById("kdigoSelectedConclusionText");
-    if (!block || !optionsContainer || !conclusionText) return;
+    if (!optionsContainer || !conclusionText) return;
 
     const previousSelectedKey = preferredSelectedKey || selectedRadioValue();
     const assessments = buildCurrentVisitAssessments();
-    const calculatedAssessments = assessments.filter((item) => item.status === "calculated");
-    const bestIndex = bestCalculatedIndex(assessments);
-    let selectedKey = "";
+    const hasCalculated = assessments.some((item) => item.status === "calculated");
 
-    if (calculatedAssessments.some((item) => item.key === previousSelectedKey)) {
+    let selectedKey = "";
+    if (hasCalculated && assessments.some((item) => item.status === "calculated" && item.key === previousSelectedKey)) {
       selectedKey = previousSelectedKey;
-    } else if (bestIndex >= 0) {
-      selectedKey = assessments[bestIndex].key;
+    } else if (hasCalculated) {
+      selectedKey = bestCalculatedKey(assessments);
+    } else {
+      selectedKey = assessments[0] ? assessments[0].key : "missing-both";
     }
 
     optionsContainer.innerHTML = "";
 
-    assessments.forEach((assessment, index) => {
+    assessments.forEach((assessment) => {
       const row = document.createElement("label");
       row.className = "kdigo-current-option";
       if (assessment.status === "calculated" && assessment.level) {
@@ -419,26 +418,24 @@
         row.classList.add("kdigo-current-option-neutral");
       }
 
-      if (assessment.status === "calculated") {
-        const radio = document.createElement("input");
-        radio.type = "radio";
-        radio.name = "kdigo_selected_current_option";
-        radio.value = assessment.key;
-        radio.checked = assessment.key === selectedKey;
-        radio.addEventListener("change", () => renderAssessments(assessment.key));
-        row.appendChild(radio);
-      }
+      const radio = document.createElement("input");
+      radio.type = "radio";
+      radio.name = "kdigo_selected_current_option";
+      radio.value = assessment.key;
+      radio.checked = assessment.key === selectedKey;
+      radio.addEventListener("change", () => renderAssessments(assessment.key));
+      row.appendChild(radio);
 
       const text = document.createElement("div");
       text.className = "kdigo-current-option-text";
       text.textContent = assessment.text;
       row.appendChild(text);
+
       optionsContainer.appendChild(row);
     });
 
     const selectedAssessment = assessments.find((item) => item.key === selectedKey) || assessments[0];
-    conclusionText.value = selectedAssessment ? selectedAssessment.text : missingPhrase("both");
-    setBlockRiskClass(block, selectedAssessment && selectedAssessment.status === "calculated" ? selectedAssessment.level : null);
+    conclusionText.value = selectedAssessment ? selectedAssessment.text : EMPTY_TEXT;
     writeExcludedPairs(assessments, selectedKey);
   }
 
@@ -451,39 +448,21 @@
     button.textContent = shouldShow ? "Скрыть историю прогнозов по KDIGO" : "Посмотреть историю прогнозов по KDIGO";
   }
 
+  let renderTimer = null;
   function scheduleRender() {
-    window.setTimeout(() => renderAssessments(), 0);
+    if (renderTimer) window.clearTimeout(renderTimer);
+    renderTimer = window.setTimeout(() => renderAssessments(), 80);
   }
 
   function init() {
     if (!document.getElementById("kdigoRiskPreview")) return;
 
-    const refreshButton = document.getElementById("kdigoRefreshButton");
-    if (refreshButton) {
-      refreshButton.addEventListener("click", () => renderAssessments());
-    }
-
     const historyButton = document.getElementById("kdigoToggleHistoryButton");
-    if (historyButton) {
-      historyButton.addEventListener("click", toggleHistory);
-    }
+    if (historyButton) historyButton.addEventListener("click", toggleHistory);
 
     document.addEventListener("input", scheduleRender, true);
     document.addEventListener("change", scheduleRender, true);
-    document.addEventListener("click", function (event) {
-      const target = event.target;
-      if (!(target instanceof Element)) return;
-      if (
-        target.matches('[data-add-lab="biochemistryContainer"]') ||
-        target.matches('[data-add-lab="albuminuriaContainer"]') ||
-        target.closest('[data-add-lab="biochemistryContainer"]') ||
-        target.closest('[data-add-lab="albuminuriaContainer"]') ||
-        target.matches(".remove-lab-card") ||
-        target.closest(".remove-lab-card")
-      ) {
-        scheduleRender();
-      }
-    }, true);
+    document.addEventListener("click", scheduleRender, true);
 
     renderAssessments();
   }
