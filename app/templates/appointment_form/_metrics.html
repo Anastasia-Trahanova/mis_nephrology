@@ -1,57 +1,315 @@
 {#
 Назначение файла: блок «Расчётные показатели». Сейчас выводится только в форме нового приёма существующего пациента, где есть история расчётов.
+
 Файл выделен при разделении большой формы приёма на структурные части.
+
 Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
 #}
 
 {% if appointment_form_mode == 'new_appointment' %}
+
 {% from "appointment_form/_calculation_hints.html" import egfr_hint %}
+
 <hr>
 
-            <!-- ===================================================== -->
-            <!-- РАСЧЁТНЫЕ ПОКАЗАТЕЛИ -->
-            <!-- ===================================================== -->
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="mb-0">Расчётные показатели</h5>
-                {{ egfr_hint() }}
-                <button type="button" class="btn btn-outline-primary btn-sm" id="updateMetricsTableBtn">
-                    🔄 Обновить
-                </button>
-            </div>
+<!-- ===================================================== -->
+<!-- РАСЧЁТНЫЕ ПОКАЗАТЕЛИ -->
+<!-- ===================================================== -->
 
-            <div class="table-responsive">
-                <table class="table table-bordered table-sm table-hover align-middle" id="metricsTable">
-                    <thead class="table-light">
-                        <tr id="metricsHeaderRow">
-                            <th style="min-width: 190px;">Показатель / Дата</th>
-                            {% for item in metrics_history %}
-                            <th class="text-center" style="min-width: 120px;"
-                                data-date="{{ item.investigation_date.isoformat() if item.investigation_date else '' }}">
-                                {{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}
-                            </th>
-                            {% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr id="egfrRow">
-                            <td><strong>СКФ CKD-EPI, мл/мин/1,73 м²</strong></td>
-                            {% for item in metrics_history %}
-                            <td class="text-center">{{ item.egfr_ckdepi or '—' }}</td>
-                            {% endfor %}
-                        </tr>
-                        <tr id="cockcroftRow">
-                            <td><strong>СКФ Кокрофт–Голт, мл/мин</strong></td>
-                            {% for item in metrics_history %}
-                            <td class="text-center">{{ item.crcl_cockcroft_gault or '—' }}</td>
-                            {% endfor %}
-                        </tr>
-                        <tr id="ckdStageRow">
-                            <td><strong>Категория СКФ</strong></td>
-                            {% for item in metrics_history %}
-                            <td class="text-center">{{ item.ckd_stage or '—' }}</td>
-                            {% endfor %}
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+<div class="d-flex justify-content-between align-items-center mb-2">
+    <div class="d-flex align-items-center gap-2">
+        <h5 class="mb-0">Расчётные показатели</h5>
+        {{ egfr_hint() }}
+    </div>
+    <div class="text-muted small">Обновляется автоматически при вводе креатинина</div>
+</div>
+
+<div class="table-responsive">
+    <table class="table table-bordered table-sm table-hover align-middle" id="metricsTable">
+        <thead class="table-light">
+            <tr id="metricsHeaderRow">
+                <th style="min-width: 190px;">Показатель / Дата</th>
+                {% for item in metrics_history %}
+                <th class="text-center" style="min-width: 120px;"
+                    data-date="{{ item.investigation_date.isoformat() if item.investigation_date else '' }}">
+                    {{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}
+                </th>
+                {% endfor %}
+            </tr>
+        </thead>
+        <tbody>
+            <tr id="egfrRow">
+                <td><strong>СКФ CKD-EPI, мл/мин/1,73 м²</strong></td>
+                {% for item in metrics_history %}
+                <td class="text-center">{{ item.egfr_ckdepi or '—' }}</td>
+                {% endfor %}
+            </tr>
+            <tr id="cockcroftRow">
+                <td><strong>СКФ Кокрофт–Голт, мл/мин</strong></td>
+                {% for item in metrics_history %}
+                <td class="text-center">{{ item.crcl_cockcroft_gault or '—' }}</td>
+                {% endfor %}
+            </tr>
+            <tr id="ckdStageRow">
+                <td><strong>Категория СКФ</strong></td>
+                {% for item in metrics_history %}
+                <td class="text-center">{{ item.ckd_stage or '—' }}</td>
+                {% endfor %}
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+(function () {
+    "use strict";
+
+    let updateFrame = null;
+
+    function parseMetricNumber(value) {
+        if (!value) return null;
+        const number = parseFloat(String(value).replace(',', '.').replace(/\s/g, ''));
+        return Number.isFinite(number) ? number : null;
+    }
+
+    function calculateMetricAge(birthDateValue, calculationDateValue) {
+        if (!birthDateValue || !calculationDateValue) return null;
+
+        const birthDate = new Date(birthDateValue);
+        const calculationDate = new Date(calculationDateValue);
+
+        if (Number.isNaN(birthDate.getTime()) || Number.isNaN(calculationDate.getTime())) {
+            return null;
+        }
+
+        let age = calculationDate.getFullYear() - birthDate.getFullYear();
+        const monthDiff = calculationDate.getMonth() - birthDate.getMonth();
+        const dayDiff = calculationDate.getDate() - birthDate.getDate();
+
+        if (monthDiff < 0 || (monthDiff === 0 && dayDiff < 0)) {
+            age -= 1;
+        }
+
+        return age > 0 ? age : null;
+    }
+
+    function isFemaleGender(genderValue) {
+        return ["false", "False", "female", "Female", "Женский", "женский", "ж", "Ж"].includes(String(genderValue || '').trim());
+    }
+
+    function calculateCkdEpi2021(creatinineUmol, age, genderValue) {
+        if (!creatinineUmol || !age || !genderValue) return null;
+
+        const scr = creatinineUmol / 88.4;
+        const isFemale = isFemaleGender(genderValue);
+        const kappa = isFemale ? 0.7 : 0.9;
+        const alpha = isFemale ? -0.241 : -0.302;
+        const sexFactor = isFemale ? 1.012 : 1.0;
+
+        const egfr =
+            142 *
+            Math.pow(Math.min(scr / kappa, 1), alpha) *
+            Math.pow(Math.max(scr / kappa, 1), -1.200) *
+            Math.pow(0.9938, age) *
+            sexFactor;
+
+        return Math.round(egfr * 100) / 100;
+    }
+
+    function calculateCockcroftGault(creatinineUmol, age, weightKg, genderValue) {
+        if (!creatinineUmol || !age || !weightKg || !genderValue) return null;
+
+        const scr = creatinineUmol / 88.4;
+        const isFemale = isFemaleGender(genderValue);
+        let crcl = ((140 - age) * weightKg) / (72 * scr);
+
+        if (isFemale) {
+            crcl *= 0.85;
+        }
+
+        return Math.round(crcl * 100) / 100;
+    }
+
+    function getCkdStage(egfr) {
+        if (egfr === null || egfr === undefined) return '—';
+        if (egfr >= 90) return 'С1';
+        if (egfr >= 60) return 'С2';
+        if (egfr >= 45) return 'С3a';
+        if (egfr >= 30) return 'С3b';
+        if (egfr >= 15) return 'С4';
+        return 'С5';
+    }
+
+    function formatDateForMetricsTable(dateValue) {
+        if (!dateValue) return 'Новый расчёт';
+        const parts = String(dateValue).split('-');
+        if (parts.length !== 3) return dateValue;
+        return `${parts[2]}.${parts[1]}.${parts[0]}`;
+    }
+
+    function clearLiveMetricsColumns() {
+        document.querySelectorAll('.new-metrics-column').forEach(function (cell) {
+            cell.remove();
+        });
+    }
+
+    function getSortableMetricsDate(cell) {
+        if (!cell) return '9999-12-31';
+
+        const dataDate = cell.getAttribute('data-date');
+        if (dataDate) return dataDate;
+
+        const text = cell.textContent.trim();
+        const match = text.match(/^(\d{2})\.(\d{2})\.(\d{4})$/);
+        if (match) return `${match[3]}-${match[2]}-${match[1]}`;
+
+        return '9999-12-31';
+    }
+
+    function sortMetricsTableChronologically() {
+        const headerRow = document.getElementById('metricsHeaderRow');
+        const egfrRow = document.getElementById('egfrRow');
+        const cockcroftRow = document.getElementById('cockcroftRow');
+        const ckdStageRow = document.getElementById('ckdStageRow');
+
+        if (!headerRow || !egfrRow || !cockcroftRow || !ckdStageRow) return;
+
+        const headerCells = Array.from(headerRow.children).slice(1);
+        const egfrCells = Array.from(egfrRow.children).slice(1);
+        const cockcroftCells = Array.from(cockcroftRow.children).slice(1);
+        const stageCells = Array.from(ckdStageRow.children).slice(1);
+
+        const columns = headerCells.map(function (headerCell, index) {
+            return {
+                date: getSortableMetricsDate(headerCell),
+                originalIndex: index,
+                headerCell: headerCell,
+                egfrCell: egfrCells[index],
+                cockcroftCell: cockcroftCells[index],
+                stageCell: stageCells[index]
+            };
+        });
+
+        columns.sort(function (a, b) {
+            if (a.date === b.date) return a.originalIndex - b.originalIndex;
+            return a.date.localeCompare(b.date);
+        });
+
+        columns.forEach(function (column) {
+            headerRow.appendChild(column.headerCell);
+            egfrRow.appendChild(column.egfrCell);
+            cockcroftRow.appendChild(column.cockcroftCell);
+            ckdStageRow.appendChild(column.stageCell);
+        });
+    }
+
+    function appendMetricColumn(dateValue, egfr, cockcroft, stage) {
+        const headerRow = document.getElementById('metricsHeaderRow');
+        const egfrRow = document.getElementById('egfrRow');
+        const cockcroftRow = document.getElementById('cockcroftRow');
+        const ckdStageRow = document.getElementById('ckdStageRow');
+
+        if (!headerRow || !egfrRow || !cockcroftRow || !ckdStageRow) return;
+
+        const headerCell = document.createElement('th');
+        headerCell.className = 'text-center table-success new-metrics-column';
+        headerCell.setAttribute('data-date', dateValue || '');
+        headerCell.textContent = formatDateForMetricsTable(dateValue);
+        headerRow.appendChild(headerCell);
+
+        const egfrCell = document.createElement('td');
+        egfrCell.className = 'text-center table-success new-metrics-column';
+        egfrCell.textContent = egfr !== null ? egfr : '—';
+        egfrRow.appendChild(egfrCell);
+
+        const cockcroftCell = document.createElement('td');
+        cockcroftCell.className = 'text-center table-success new-metrics-column';
+        cockcroftCell.textContent = cockcroft !== null ? cockcroft : '—';
+        cockcroftRow.appendChild(cockcroftCell);
+
+        const stageCell = document.createElement('td');
+        stageCell.className = 'text-center table-success new-metrics-column';
+        stageCell.textContent = stage || '—';
+        ckdStageRow.appendChild(stageCell);
+    }
+
+    function updateLiveMetricsTable() {
+        clearLiveMetricsColumns();
+
+        const birthDate = document.querySelector('[name="birth_date"]')?.value;
+        const gender = document.querySelector('[name="gender"]')?.value;
+        const weight = parseMetricNumber(document.querySelector('[name="weight"]')?.value);
+        const appointmentDate = document.querySelector('[name="appointment_date"]')?.value;
+        const creatinineInputs = Array.from(document.querySelectorAll('[name="creatinine"]'));
+        const biochemistryDateInputs = Array.from(document.querySelectorAll('[name="biochemistry_investigation_date"]'));
+
+        creatinineInputs.forEach(function (input, index) {
+            const creatinine = parseMetricNumber(input.value);
+            if (creatinine === null || creatinine <= 0) return;
+
+            const dateValue = biochemistryDateInputs[index]?.value || appointmentDate;
+            const age = calculateMetricAge(birthDate, dateValue);
+            const egfr = calculateCkdEpi2021(creatinine, age, gender);
+            const cockcroft = calculateCockcroftGault(creatinine, age, weight, gender);
+            const stage = getCkdStage(egfr);
+
+            appendMetricColumn(dateValue, egfr, cockcroft, stage);
+        });
+
+        sortMetricsTableChronologically();
+    }
+
+    function scheduleLiveMetricsTableUpdate() {
+        if (updateFrame !== null) {
+            window.cancelAnimationFrame(updateFrame);
+        }
+
+        updateFrame = window.requestAnimationFrame(function () {
+            updateFrame = null;
+            updateLiveMetricsTable();
+        });
+    }
+
+    function initLiveMetricsTable() {
+        const metricsTable = document.getElementById('metricsTable');
+        if (!metricsTable) return;
+
+        const liveSelector = [
+            '[name="creatinine"]',
+            '[name="biochemistry_investigation_date"]',
+            '[name="weight"]',
+            '[name="birth_date"]',
+            '[name="gender"]',
+            '[name="appointment_date"]'
+        ].join(', ');
+
+        document.addEventListener('input', function (event) {
+            if (event.target.matches(liveSelector)) {
+                scheduleLiveMetricsTableUpdate();
+            }
+        });
+
+        document.addEventListener('change', function (event) {
+            if (event.target.matches(liveSelector)) {
+                scheduleLiveMetricsTableUpdate();
+            }
+        });
+
+        document.addEventListener('click', function (event) {
+            if (event.target.closest('#addBiochemistryColumnBtn')) {
+                scheduleLiveMetricsTableUpdate();
+            }
+        });
+
+        updateLiveMetricsTable();
+    }
+
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', initLiveMetricsTable);
+    } else {
+        initLiveMetricsTable();
+    }
+})();
+</script>
+
 {% endif %}
