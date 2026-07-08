@@ -17,8 +17,12 @@ from .formatting import (
     add_field_inline,
     add_history_table,
     add_small_table,
+    add_table_title,
     clean_value,
     fmt_date,
+    clean_word_recommendations,
+    icd10_diagnoses_conclusion_text,
+    kdigo_conclusion_text,
     prognosis_display,
     set_run_font,
 )
@@ -71,38 +75,73 @@ def add_patient_section(doc, appointment):
         add_field_inline(doc, "Возраст на момент приёма", age_text)
 
 
+def _sentence(value: str) -> str:
+    """Нормализует фрагмент текста до одной фразы с точкой в конце."""
+    value = (value or "").strip()
+    if not value:
+        return ""
+    value = value.rstrip(" ;")
+    if value[-1] not in ".!?":
+        value += "."
+    return value
+
+
+def _join_sentences(parts) -> str:
+    return " ".join(part for part in parts if part).strip()
+
+
 def add_survey_section(doc, appointment):
     add_field_inline(doc, "Жалобы", appointment.get("complaints"), space_before=5)
-    add_field_inline(doc, "Анамнез жизни", appointment.get("life_anamnesis"))
-    add_field_inline(doc, "Анамнез заболевания", appointment.get("disease_anamnesis"))
-
-    heredity = "Да" if appointment.get("heredity") else "Нет"
-    add_field_inline(doc, "Отягощённая наследственность", heredity)
-    add_field_inline(doc, "Описание наследственности", appointment.get("heredity_description"))
-    add_field_inline(doc, "Сопутствующие заболевания", appointment.get("comorbidities"))
 
 
 def add_examination_section(doc, appointment):
-    add_field_inline(doc, "Кожные покровы", appointment.get("skin_condition"), space_before=5)
-    add_field_inline(doc, "Отёки", appointment.get("edema_location"))
-
+    """Компактный абзац анамнеза и объективных данных без лишних подзаголовков."""
     pressure = "—"
     if appointment.get("systolic_pressure") or appointment.get("diastolic_pressure"):
         pressure = (
             f"{clean_value(appointment.get('systolic_pressure'))}/"
             f"{clean_value(appointment.get('diastolic_pressure'))} мм рт. ст."
         )
-    add_field_inline(doc, "Артериальное давление", pressure)
-    add_field_inline(doc, "Примечание к АД", appointment.get("bp_note"))
-    add_field_inline(doc, "ЧСС", appointment.get("heart_rate"))
-    add_field_inline(doc, "Рост", appointment.get("height"))
-    add_field_inline(doc, "Вес", appointment.get("weight"))
-    add_field_inline(doc, "ИМТ", appointment.get("bmi"))
+
+    bp_note = (appointment.get("bp_note") or "").strip()
+    if bp_note and pressure != "—":
+        pressure = f"{pressure} ({bp_note})"
+
+    anamnesis_parts = [
+        _sentence(appointment.get("life_anamnesis")),
+        _sentence(appointment.get("disease_anamnesis")),
+    ]
+
+    heredity_description = (appointment.get("heredity_description") or "").strip()
+    if heredity_description:
+        anamnesis_parts.append(_sentence(heredity_description))
+    elif appointment.get("heredity"):
+        anamnesis_parts.append("Отягощённая наследственность.")
+
+    comorbidities = (appointment.get("comorbidities") or "").strip()
+    if comorbidities:
+        anamnesis_parts.append(_sentence(f"Сопутствующие заболевания: {comorbidities}"))
+
+    skin_condition = (appointment.get("skin_condition") or "").strip()
+    if skin_condition:
+        anamnesis_parts.append(_sentence(f"Кожные покровы: {skin_condition}"))
+
+    anamnesis_parts.extend(
+        [
+            _sentence(f"Отёки: {clean_value(appointment.get('edema_location'))}"),
+            _sentence(f"Артериальное давление: {pressure}"),
+            _sentence(f"ЧСС: {clean_value(appointment.get('heart_rate'))}"),
+            _sentence(f"Рост: {clean_value(appointment.get('height'))}"),
+            _sentence(f"Вес: {clean_value(appointment.get('weight'))}"),
+            _sentence(f"ИМТ: {clean_value(appointment.get('bmi'))}"),
+        ]
+    )
+
+    add_field_inline(doc, "Анамнез", _join_sentences(anamnesis_parts))
 
 
 def add_lab_sections(doc, context):
     labs = context["labs"]
-    kdigo = context["kdigo"]
 
     add_history_table(
         doc,
@@ -172,27 +211,6 @@ def add_lab_sections(doc, context):
     )
     add_history_table(
         doc,
-        "Прогноз ХБП по KDIGO",
-        kdigo["history"],
-        [
-            ("Категория СКФ", "gfr_category"),
-            ("Категория альбуминурии", "albuminuria_category"),
-            ("Итоговая категория", "combined_category"),
-            ("Прогноз", "prognosis_text"),
-        ],
-        date_key="assessment_date",
-    )
-
-    if kdigo["current"]:
-        add_field_inline(
-            doc,
-            "Актуальный прогноз ХБП",
-            prognosis_display(kdigo["current"]),
-            space_before=2,
-        )
-
-    add_history_table(
-        doc,
         "УЗИ почек",
         labs["ultrasound_history"],
         [
@@ -205,11 +223,21 @@ def add_lab_sections(doc, context):
     )
 
 
-def add_diagnoses_section(doc, appointment):
-    # Структуру диагнозов пока намеренно не меняем: это отдельный следующий этап.
-    add_field_inline(doc, "Основной диагноз", appointment.get("main_diagnosis"), space_before=5)
-    add_field_inline(doc, "Осложнения", appointment.get("complications"))
-    add_field_inline(doc, "Сопутствующие диагнозы", appointment.get("diag_comorbidities"))
+def add_conclusion_section(doc, context):
+    """Блок заключения: диагнозы МКБ-10 одной строкой и сохранённый прогноз KDIGO."""
+    diagnosis_text = icd10_diagnoses_conclusion_text(context.get("diagnoses") or [])
+    prognosis_text = kdigo_conclusion_text((context.get("kdigo") or {}).get("current"))
+
+    if not diagnosis_text and not prognosis_text:
+        return
+
+    add_table_title(doc, "Заключение")
+
+    if diagnosis_text:
+        add_field_inline(doc, "Диагноз", diagnosis_text, space_before=0)
+
+    if prognosis_text:
+        add_field_inline(doc, "Прогноз по KDIGO", prognosis_text)
 
 
 def add_treatment_section(doc, context):
@@ -253,8 +281,11 @@ def add_treatment_section(doc, context):
     if not recommendations:
         recommendations = appointment.get("recommendations")
 
+    recommendations = clean_word_recommendations(recommendations)
+
     add_field_inline(doc, "Диета", diet, space_before=3)
-    add_field_inline(doc, "Рекомендации", recommendations)
+    if recommendations:
+        add_field_inline(doc, "Рекомендации", recommendations)
     add_field_inline(doc, "Дата следующего контроля", fmt_date(next_control_date))
 
 

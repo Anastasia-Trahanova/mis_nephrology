@@ -18,6 +18,7 @@ from app.repositories.ckd_prognosis import (
     get_appointment_ckd_prognosis,
     get_patient_ckd_prognosis_history,
 )
+from app.repositories.diagnoses import get_appointment_icd10_diagnoses
 from app.repositories.lab_history import (
     get_patient_albuminuria_history,
     get_patient_biochemistry_history,
@@ -77,6 +78,7 @@ def get_word_export_context(appointment_id: int) -> dict | None:
         "appointment": appointment,
         "medications": get_appointment_medications(appointment_id),
         "diet_info": get_appointment_diet(appointment_id),
+        "diagnoses": get_appointment_icd10_diagnoses(appointment_id),
         "location_info": location_info,
         "labs": {
             "cbc_history": get_patient_cbc_history(patient_id, until_date),

@@ -21,7 +21,7 @@ from .data import get_word_export_context
 from .formatting import fmt_date, safe_filename
 from .sections import (
     add_clinic_header,
-    add_diagnoses_section,
+    add_conclusion_section,
     add_document_title,
     add_examination_section,
     add_lab_sections,
@@ -57,7 +57,7 @@ def build_appointment_docx(appointment_id: int):
     add_survey_section(doc, appointment)
     add_examination_section(doc, appointment)
     add_lab_sections(doc, context)
-    add_diagnoses_section(doc, appointment)
+    add_conclusion_section(doc, context)
     add_treatment_section(doc, context)
     add_signature_section(doc, appointment)
 

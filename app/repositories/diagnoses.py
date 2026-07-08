@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from app.db.connection import get_db_connection
+
 
 def find_active_icd10_diagnosis_id(cur: Any, diagnosis_text: str) -> int | None:
     """Ищет активный диагноз МКБ-10 по тексту из формы и возвращает его id."""
@@ -60,3 +62,41 @@ def insert_appointment_icd10_diagnosis_row(
             sort_order,
         ),
     )
+
+
+def _fetch_appointment_icd10_diagnoses(cur: Any, appointment_id: int):
+    """Возвращает МКБ-10 диагнозы приёма в клиническом порядке для карточки/Word."""
+    cur.execute(
+        """
+        SELECT
+            id,
+            appointment_id,
+            diagnosis_type,
+            icd10_diagnosis_id,
+            icd10_diagnosis,
+            doctor_note,
+            sort_order,
+            created_at,
+            updated_at
+        FROM appointment_icd10_diagnoses_view
+        WHERE appointment_id = %s
+        ORDER BY
+            CASE diagnosis_type
+                WHEN 'main' THEN 1
+                WHEN 'complication' THEN 2
+                WHEN 'comorbidity' THEN 3
+                ELSE 9
+            END,
+            sort_order ASC,
+            id ASC
+        """,
+        (appointment_id,),
+    )
+    return cur.fetchall()
+
+
+def get_appointment_icd10_diagnoses(appointment_id: int):
+    """Возвращает МКБ-10 диагнозы конкретного приёма."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            return _fetch_appointment_icd10_diagnoses(cur, appointment_id)
