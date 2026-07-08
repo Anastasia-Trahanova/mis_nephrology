@@ -1,53 +1,79 @@
 {#
-Назначение файла:
-Блок диагнозов и МКБ-10 в заключении.
+Назначение файла: структурированный блок диагнозов МКБ-10 в карточке пациента.
 
-Что делает:
-- выводит структурированные МКБ-10 диагнозы по типам;
-- выводит текстовые диагнозы из старой таблицы diagnoses;
-- сохраняет исходное расположение: после прогноза ХБП и перед назначениями.
+Что выполняет файл:
+- показывает врачу диагнозы по группам: основной, осложнения, сопутствующие;
+- использует только новую МКБ-10 модель appointment_icd10_diagnoses;
+- не выводит старые свободные текстовые диагнозы из удалённой таблицы diagnoses;
+- не выводит markdown-разметку и не показывает пустые группы.
 #}
-<!-- Диагнозы -->
+
 {% if icd10_diagnoses %}
-  <div class="mb-3">
-    <h6>Основной диагноз</h6>
-    <ul>
-      {% set has_main = namespace(value=false) %}
-      {% for item in icd10_diagnoses %}
-        {% if item.diagnosis_type == 'main' %}
-          {% set has_main.value = true %}
-          <li>{{ item.icd10_diagnosis }}{% if item.doctor_note %}<br><small class="text-muted">Уточнение: {{ item.doctor_note }}</small>{% endif %}</li>
-        {% endif %}
-      {% endfor %}
-      {% if not has_main.value %}<li>—</li>{% endif %}
-    </ul>
+    {% set has_main = namespace(value=false) %}
+    {% set has_complications = namespace(value=false) %}
+    {% set has_comorbidities = namespace(value=false) %}
 
-    <h6>Осложнения основного диагноза</h6>
-    <ul>
-      {% set has_complications = namespace(value=false) %}
-      {% for item in icd10_diagnoses %}
-        {% if item.diagnosis_type == 'complication' %}
-          {% set has_complications.value = true %}
-          <li>{{ item.icd10_diagnosis }}{% if item.doctor_note %}<br><small class="text-muted">Уточнение: {{ item.doctor_note }}</small>{% endif %}</li>
+    {% for item in icd10_diagnoses %}
+        {% if item.diagnosis_type == "main" %}
+            {% set has_main.value = true %}
+        {% elif item.diagnosis_type == "complication" %}
+            {% set has_complications.value = true %}
+        {% elif item.diagnosis_type == "comorbidity" %}
+            {% set has_comorbidities.value = true %}
         {% endif %}
-      {% endfor %}
-      {% if not has_complications.value %}<li>—</li>{% endif %}
-    </ul>
+    {% endfor %}
 
-    <h6>Сопутствующие заболевания</h6>
-    <ul>
-      {% set has_comorbidities = namespace(value=false) %}
-      {% for item in icd10_diagnoses %}
-        {% if item.diagnosis_type == 'comorbidity' %}
-          {% set has_comorbidities.value = true %}
-          <li>{{ item.icd10_diagnosis }}{% if item.doctor_note %}<br><small class="text-muted">Уточнение: {{ item.doctor_note }}</small>{% endif %}</li>
-        {% endif %}
-      {% endfor %}
-      {% if not has_comorbidities.value %}<li>—</li>{% endif %}
-    </ul>
-  </div>
+    {% if has_main.value %}
+        <div class="mb-3">
+            <h6 class="mb-2">Основной диагноз</h6>
+            <ul class="mb-0">
+                {% for item in icd10_diagnoses %}
+                    {% if item.diagnosis_type == "main" %}
+                        <li>
+                            {{ item.icd10_diagnosis }}
+                            {% if item.doctor_note %}
+                                <div class="text-muted small">Комментарий: {{ item.doctor_note }}</div>
+                            {% endif %}
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    {% if has_complications.value %}
+        <div class="mb-3">
+            <h6 class="mb-2">Осложнения основного диагноза</h6>
+            <ul class="mb-0">
+                {% for item in icd10_diagnoses %}
+                    {% if item.diagnosis_type == "complication" %}
+                        <li>
+                            {{ item.icd10_diagnosis }}
+                            {% if item.doctor_note %}
+                                <div class="text-muted small">Комментарий: {{ item.doctor_note }}</div>
+                            {% endif %}
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
+
+    {% if has_comorbidities.value %}
+        <div class="mb-3">
+            <h6 class="mb-2">Сопутствующие заболевания</h6>
+            <ul class="mb-0">
+                {% for item in icd10_diagnoses %}
+                    {% if item.diagnosis_type == "comorbidity" %}
+                        <li>
+                            {{ item.icd10_diagnosis }}
+                            {% if item.doctor_note %}
+                                <div class="text-muted small">Комментарий: {{ item.doctor_note }}</div>
+                            {% endif %}
+                        </li>
+                    {% endif %}
+                {% endfor %}
+            </ul>
+        </div>
+    {% endif %}
 {% endif %}
-
-<p><strong>Основной диагноз:</strong> {{ selected_appointment.main_diagnosis or '—' }}</p>
-<p><strong>Осложнения:</strong> {{ selected_appointment.complications or '—' }}</p>
-<p><strong>Сопутствующие диагнозы:</strong> {{ selected_appointment.diag_comorbidities or '—' }}</p>

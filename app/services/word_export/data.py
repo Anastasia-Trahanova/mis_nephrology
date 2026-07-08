@@ -29,7 +29,8 @@ from app.repositories.lab_history import (
 )
 from app.repositories.reference_data import get_location_info
 
-from .formatting import prognosis_display, value_with_unit
+from .formatting import value_with_unit
+from .text import prognosis_display
 
 
 def prepare_albuminuria_records(records):

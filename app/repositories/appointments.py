@@ -9,7 +9,8 @@
 Что не редактировать здесь:
 - сохранение ОАК/биохимии/ОАМ/альбуминурии;
 - расчёт прогноза ХБП;
-- сборку context для шаблонов.
+- сборку context для шаблонов;
+- вывод диагнозов МКБ-10.
 """
 
 from __future__ import annotations
@@ -98,13 +99,11 @@ def get_all_appointments(filters: dict | None = None):
 
     sort_order = str(filters.get("sort_order", "desc")).lower()
     sort_order = "ASC" if sort_order == "asc" else "DESC"
-
     try:
         limit = int(filters.get("limit") or 200)
     except (TypeError, ValueError):
         limit = 200
     limit = max(1, min(limit, 500))
-
     try:
         offset = int(filters.get("offset") or 0)
     except (TypeError, ValueError):
@@ -150,13 +149,7 @@ def get_patient_appointments(patient_id: int):
 
 
 def _fetch_appointment_full_data(cur: Any, appointment_id: int):
-    """
-    Возвращает основные данные одного приёма через уже открытый cursor.
-
-    Поля main_diagnosis/complications/diag_comorbidities оставлены как NULL-алиасы
-    на переходный период, чтобы старые шаблоны/экспорт не падали после удаления
-    таблицы diagnoses. Источник истины по диагнозам — appointment_icd10_diagnoses_view.
-    """
+    """Возвращает основные данные одного приёма через уже открытый cursor."""
     cur.execute(
         """
         SELECT
@@ -185,9 +178,6 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
             e.height,
             e.weight,
             e.bmi,
-            NULL::text AS main_diagnosis,
-            NULL::text AS complications,
-            NULL::text AS diag_comorbidities,
             ad.diet,
             ad.next_control_date,
             ad.recommendations
@@ -214,12 +204,7 @@ def get_appointment_full_data(appointment_id: int):
 
 
 def _fetch_last_appointment_data(cur: Any, patient_id: int):
-    """
-    Возвращает данные последнего приёма пациента для автоподстановки.
-
-    Старые свободные текстовые диагнозы больше не читаются из diagnoses. Для формы
-    повторного приёма используется МКБ-10 история из appointment_icd10_diagnoses_view.
-    """
+    """Возвращает данные последнего приёма пациента для автоподстановки."""
     cur.execute(
         """
         SELECT
@@ -242,9 +227,6 @@ def _fetch_last_appointment_data(cur: Any, patient_id: int):
             e.height,
             e.weight,
             e.bmi,
-            NULL::text AS main_diagnosis,
-            NULL::text AS complications,
-            NULL::text AS diag_comorbidities,
             ad.diet,
             ad.next_control_date,
             ad.recommendations
@@ -272,7 +254,11 @@ def _fetch_appointment_medications(cur: Any, appointment_id: int):
     """Возвращает лекарства приёма через уже открытый cursor."""
     cur.execute(
         """
-        SELECT id, medication, dosage, schedule
+        SELECT
+            id,
+            medication,
+            dosage,
+            schedule
         FROM prescriptions
         WHERE appointment_id = %s
         ORDER BY id
@@ -293,7 +279,10 @@ def _fetch_appointment_diet(cur: Any, appointment_id: int):
     """Возвращает диету, дату контроля и рекомендации приёма."""
     cur.execute(
         """
-        SELECT diet, next_control_date, recommendations
+        SELECT
+            diet,
+            next_control_date,
+            recommendations
         FROM appointment_diets
         WHERE appointment_id = %s
         LIMIT 1
