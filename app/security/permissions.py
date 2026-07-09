@@ -4,18 +4,8 @@
 Как работает:
 - читает текущего пользователя из request.session;
 - отличает администратора от врача;
-- даёт единое место для проверки admin-only страниц;
+- даёт единое место для проверки admin-only и doctor-only страниц;
 - возвращает 403, если пользователь вошёл, но его роль не подходит.
-
-Что редактировать здесь:
-- список допустимых ролей;
-- helper-функции require_admin / require_roles;
-- будущую роль заведующего или главного врача, когда она появится.
-
-Что не редактировать здесь:
-- idle-timeout и login/logout — они в app/routers/auth.py;
-- таблицу аудита — она в app/repositories/audit_log.py;
-- медицинские SQL-запросы и шаблоны карточки пациента.
 """
 
 from __future__ import annotations
@@ -66,3 +56,30 @@ def require_roles(request: Request, *allowed_roles: str) -> None:
 def require_admin(request: Request) -> None:
     """Пускает только администратора."""
     require_roles(request, ROLE_ADMIN)
+
+
+def require_doctor_with_id(request: Request) -> int:
+    """
+    Пускает только врача, привязанного к записи doctors.
+
+    Это используется при создании пациента/приёма: администратор не может создавать
+    медицинские приёмы, а doctor_id берётся только из сессии, не из HTML-формы.
+    """
+    require_roles(request, ROLE_DOCTOR)
+
+    doctor_id = request.session.get("doctor_id")
+    try:
+        doctor_id_int = int(doctor_id)
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=403,
+            detail="Пользователь-врач не привязан к записи врача",
+        )
+
+    if doctor_id_int <= 0:
+        raise HTTPException(
+            status_code=403,
+            detail="Пользователь-врач не привязан к записи врача",
+        )
+
+    return doctor_id_int

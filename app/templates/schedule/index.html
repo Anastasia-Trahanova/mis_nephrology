@@ -1,0 +1,308 @@
+{% extends "base.html" %}
+
+{% block content %}
+<link rel="stylesheet" href="/static/css/06_schedule.css">
+
+<div class="schedule-page">
+  <div class="schedule-topbar">
+    <div>
+      <h1>Расписание</h1>
+      <p class="schedule-muted">Минимальный модуль записи пациента к конкретному врачу.</p>
+    </div>
+
+    <div class="schedule-period-nav">
+      <a class="schedule-nav-btn" href="{{ prev_url }}">←</a>
+      <div class="schedule-period-title">{{ period_label }}</div>
+      <a class="schedule-nav-btn" href="{{ next_url }}">→</a>
+    </div>
+  </div>
+
+  <form class="schedule-filters" method="get" action="/schedule">
+    <label>
+      Режим
+      <select name="view">
+        <option value="day" {% if view_mode == 'day' %}selected{% endif %}>День</option>
+        <option value="week" {% if view_mode == 'week' %}selected{% endif %}>Неделя</option>
+        <option value="month" {% if view_mode == 'month' %}selected{% endif %}>Месяц</option>
+        <option value="custom" {% if view_mode == 'custom' %}selected{% endif %}>Период</option>
+      </select>
+    </label>
+
+    <label>
+      Дата
+      <input type="date" name="date" value="{{ anchor_date.isoformat() }}">
+    </label>
+
+    <label>
+      С даты
+      <input type="date" name="date_from" value="{{ date_from.isoformat() }}">
+    </label>
+
+    <label>
+      По дату
+      <input type="date" name="date_to" value="{{ date_to.isoformat() }}">
+    </label>
+
+    <label>
+      Врач
+      <select name="doctor_id" required>
+        {% for doctor in doctors %}
+          <option value="{{ doctor.id }}" {% if doctor.id == selected_doctor_id %}selected{% endif %}>
+            {{ doctor.fio }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <label>
+      Отделение
+      <select name="location_id">
+        <option value="">Все отделения врача</option>
+        {% for location in locations %}
+          <option value="{{ location.id }}" {% if location.id == selected_location_id %}selected{% endif %}>
+            {{ location.full_name }}
+          </option>
+        {% endfor %}
+      </select>
+    </label>
+
+    <button type="submit" class="schedule-primary-btn">Показать</button>
+  </form>
+
+  {% if message %}
+    <div class="schedule-empty">{{ message }}</div>
+  {% endif %}
+
+  <details class="schedule-create-panel">
+    <summary>Создать свободные слоты расписания</summary>
+
+    <form method="post" action="/schedule/slots/generate" class="schedule-create-form">
+      <label>
+        Врач
+        <select name="doctor_id" required>
+          {% for doctor in doctors %}
+            <option value="{{ doctor.id }}" {% if doctor.id == selected_doctor_id %}selected{% endif %}>
+              {{ doctor.fio }}
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>
+        Отделение
+        <select name="location_id" required>
+          {% for location in locations %}
+            <option value="{{ location.id }}" {% if location.id == selected_location_id %}selected{% endif %}>
+              {{ location.full_name }}
+            </option>
+          {% endfor %}
+        </select>
+      </label>
+
+      <label>
+        Дата с
+        <input type="date" name="date_from" value="{{ date_from.isoformat() }}" required>
+      </label>
+
+      <label>
+        Дата по
+        <input type="date" name="date_to" value="{{ date_to.isoformat() }}" required>
+      </label>
+
+      <label>
+        Время с
+        <input type="time" name="time_from" value="07:00" required>
+      </label>
+
+      <label>
+        Время по
+        <input type="time" name="time_to" value="15:00" required>
+      </label>
+
+      <label>
+        Длительность, минут
+        <input type="number" name="slot_minutes" value="30" min="5" max="240" required>
+      </label>
+
+      <label>
+        Тип приёма
+        <select name="slot_kind" required>
+          <option value="primary">Первичный</option>
+          <option value="repeat">Повторный</option>
+        </select>
+      </label>
+
+      <div class="schedule-weekdays">
+        <span>Дни недели</span>
+        <label><input type="checkbox" name="weekdays" value="0" checked> Пн</label>
+        <label><input type="checkbox" name="weekdays" value="1" checked> Вт</label>
+        <label><input type="checkbox" name="weekdays" value="2" checked> Ср</label>
+        <label><input type="checkbox" name="weekdays" value="3" checked> Чт</label>
+        <label><input type="checkbox" name="weekdays" value="4" checked> Пт</label>
+        <label><input type="checkbox" name="weekdays" value="5"> Сб</label>
+        <label><input type="checkbox" name="weekdays" value="6"> Вс</label>
+      </div>
+
+      <label class="schedule-wide-field">
+        Примечание
+        <input type="text" name="note" placeholder="Например: кабинет 12, приём по записи">
+      </label>
+
+      <button type="submit" class="schedule-primary-btn">Создать слоты</button>
+    </form>
+  </details>
+
+  <div class="schedule-calendar-wrap">
+    {% if dates and time_rows %}
+      <table class="schedule-calendar">
+        <thead>
+          <tr>
+            <th class="schedule-time-col">Время</th>
+            {% for day in dates %}
+              <th class="{% if day.is_today %}schedule-today{% endif %}">
+                <div>{{ day.weekday }}</div>
+                <div>{{ day.label }}</div>
+              </th>
+            {% endfor %}
+          </tr>
+        </thead>
+        <tbody>
+          {% for row in time_rows %}
+            <tr>
+              <th class="schedule-time-col">{{ row.time_label }}</th>
+              {% for slot in row.cells %}
+                {% if slot %}
+                  <td class="schedule-slot-cell schedule-status-{{ slot.status }}">
+                    {% if slot.status == 'free' %}
+                      <button
+                        type="button"
+                        class="schedule-slot-free"
+                        onclick="openBookingPanel('{{ slot.id }}', '{{ slot.starts_at.strftime('%d.%m.%Y') }}', '{{ slot.time_label }}', '{{ slot.slot_kind_label }}')"
+                      >
+                        <span>Свободно</span>
+                        <strong>{{ slot.slot_kind_label }}</strong>
+                      </button>
+                    {% else %}
+                      <div class="schedule-booked-card">
+                        <div class="schedule-booked-kind">{{ slot.slot_kind_label }}</div>
+                        <a href="/patient/{{ slot.patient_id }}" class="schedule-patient-link">
+                          {{ slot.patient_fio }}
+                        </a>
+                        {% if slot.booking_reason %}
+                          <div class="schedule-muted-small">{{ slot.booking_reason }}</div>
+                        {% endif %}
+
+                        <div class="schedule-status-label">{{ slot.status_label }}</div>
+
+                        {% if slot.booking_id %}
+                          <div class="schedule-actions-row">
+                            <form method="post" action="/schedule/bookings/{{ slot.booking_id }}/status">
+                              <input type="hidden" name="status" value="completed">
+                              <button type="submit" class="schedule-mini-btn">Пришёл</button>
+                            </form>
+                            <form method="post" action="/schedule/bookings/{{ slot.booking_id }}/status">
+                              <input type="hidden" name="status" value="no_show">
+                              <button type="submit" class="schedule-mini-btn">Не пришёл</button>
+                            </form>
+                            <form method="post" action="/schedule/bookings/{{ slot.booking_id }}/cancel">
+                              <button type="submit" class="schedule-mini-btn schedule-danger-btn">Удалить запись</button>
+                            </form>
+                          </div>
+                        {% endif %}
+                      </div>
+                    {% endif %}
+                  </td>
+                {% else %}
+                  <td class="schedule-slot-empty">—</td>
+                {% endif %}
+              {% endfor %}
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    {% else %}
+      <div class="schedule-empty">
+        На выбранный период пока нет слотов. Создай свободные слоты выше, затем записывай пациентов.
+      </div>
+    {% endif %}
+  </div>
+</div>
+
+<div id="schedule-booking-drawer" class="schedule-drawer" aria-hidden="true">
+  <div class="schedule-drawer-head">
+    <div>
+      <h2>Записать пациента</h2>
+      <p id="drawer-slot-title" class="schedule-muted"></p>
+    </div>
+    <button type="button" class="schedule-close-btn" onclick="closeBookingPanel()">×</button>
+  </div>
+
+  <form id="schedule-booking-form" method="post" action="">
+    <label>
+      Фамилия *
+      <input type="text" name="last_name" required autocomplete="off">
+    </label>
+
+    <label>
+      Имя *
+      <input type="text" name="first_name" required autocomplete="off">
+    </label>
+
+    <label>
+      Отчество
+      <input type="text" name="patronymic" autocomplete="off">
+    </label>
+
+    <label>
+      Дата рождения *
+      <input type="date" name="birth_date" required>
+    </label>
+
+    <label>
+      Пол *
+      <select name="gender" required>
+        <option value="true">Мужской</option>
+        <option value="false">Женский</option>
+      </select>
+    </label>
+
+    <label>
+      Причина обращения
+      <input type="text" name="reason" placeholder="Например: первичный осмотр, контроль анализов">
+    </label>
+
+    <label>
+      Комментарий
+      <textarea name="comment" rows="3"></textarea>
+    </label>
+
+    <button type="submit" class="schedule-primary-btn">Записать</button>
+  </form>
+</div>
+
+<div id="schedule-drawer-backdrop" class="schedule-drawer-backdrop" onclick="closeBookingPanel()"></div>
+
+<script>
+  function openBookingPanel(slotId, dateText, timeText, kindText) {
+    const drawer = document.getElementById('schedule-booking-drawer');
+    const backdrop = document.getElementById('schedule-drawer-backdrop');
+    const form = document.getElementById('schedule-booking-form');
+    const title = document.getElementById('drawer-slot-title');
+
+    form.action = `/schedule/slots/${slotId}/book`;
+    form.reset();
+    title.textContent = `${dateText}, ${timeText}, ${kindText}`;
+    drawer.classList.add('is-open');
+    backdrop.classList.add('is-open');
+    drawer.setAttribute('aria-hidden', 'false');
+  }
+
+  function closeBookingPanel() {
+    const drawer = document.getElementById('schedule-booking-drawer');
+    const backdrop = document.getElementById('schedule-drawer-backdrop');
+    drawer.classList.remove('is-open');
+    backdrop.classList.remove('is-open');
+    drawer.setAttribute('aria-hidden', 'true');
+  }
+</script>
+{% endblock %}

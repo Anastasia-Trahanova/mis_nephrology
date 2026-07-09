@@ -5,11 +5,6 @@
 - имена полей формы, если меняется HTML-шаблон;
 - состав структурированных секций, которые потом сохраняются в БД;
 - правила нормализации значений перед сохранением.
-
-Что не редактировать здесь:
-- SQL-запросы;
-- медицинские алгоритмы расчёта СКФ, ACR и KDIGO;
-- внешний вид формы.
 """
 
 from __future__ import annotations
@@ -36,13 +31,17 @@ except ImportError:  # fallback на случай, если calculate_bmi ещё
 
 
 def parse_required_appointment_fields(form: Any) -> dict[str, Any]:
-    """Забирает обязательные поля приёма и формирует appointment_datetime."""
-    doctor_id = empty_to_none(form.get("doctor_id"))
+    """
+    Забирает обязательные поля приёма и формирует appointment_datetime.
+
+    doctor_id здесь больше не читается как источник истины: врач определяется
+    сервером по request.session["doctor_id"] в роутере/сервисе сохранения.
+    """
     location_id = empty_to_none(form.get("location_id"))
     appointment_date = empty_to_none(form.get("appointment_date"))
     appointment_time = empty_to_none(form.get("appointment_time"))
 
-    if not doctor_id or not location_id or not appointment_date or not appointment_time:
+    if not location_id or not appointment_date or not appointment_time:
         raise HTTPException(
             status_code=400,
             detail="Не заполнены обязательные данные приёма",
@@ -57,7 +56,6 @@ def parse_required_appointment_fields(form: Any) -> dict[str, Any]:
         raise HTTPException(status_code=400, detail="Некорректная дата или время приёма")
 
     return {
-        "doctor_id": int(doctor_id),
         "location_id": int(location_id),
         "appointment_date": appointment_date,
         "appointment_time": appointment_time,
@@ -97,11 +95,10 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
     """
     Разбирает все поля формы приёма в структурированный словарь.
 
-    Свободные текстовые диагнозы больше не разбираются: источник истины по диагнозам —
-    МКБ-10 блок appointment_icd10_diagnoses.
+    Свободные текстовые диагнозы больше не разбираются: источник истины по
+    диагнозам — МКБ-10 блок appointment_icd10_diagnoses.
     """
     form = normalize_appointment_form_values(form)
-
     height = empty_to_none(form.get("height"))
     weight = empty_to_none(form.get("weight"))
 

@@ -10,17 +10,6 @@
 - справочник диагнозов МКБ-10;
 - справочник лекарств;
 - структурированные МКБ-10 диагнозы конкретного приёма.
-
-Что редактировать здесь:
-- SQL для выпадающих списков;
-- сортировку врачей, отделений, диагнозов и лекарств;
-- набор полей, который нужен формам и фильтрам.
-
-Что не редактировать здесь:
-- создание пациента или приёма;
-- сохранение анализов;
-- расчёты ХБП/СКФ/ACR;
-- сборку полного context для HTML-страницы.
 """
 
 from __future__ import annotations
@@ -52,7 +41,6 @@ def _fetch_locations_by_branch(cur: Any, branch_id: int | None = None):
         )
     else:
         cur.execute("SELECT id, name, branch_id FROM locations ORDER BY name")
-
     return cur.fetchall()
 
 
@@ -76,14 +64,31 @@ def get_doctors():
             return _fetch_doctors(cur)
 
 
+def _fetch_doctor_by_id(cur: Any, doctor_id: int):
+    """Возвращает одного врача по id через уже открытый cursor."""
+    cur.execute(
+        """
+        SELECT id, last_name, first_name, patronymic
+        FROM doctors
+        WHERE id = %s
+        LIMIT 1
+        """,
+        (doctor_id,),
+    )
+    return cur.fetchone()
+
+
+def get_doctor_by_id(doctor_id: int):
+    """Возвращает одного врача по id."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            return _fetch_doctor_by_id(cur, doctor_id)
+
+
 def get_doctors_for_filter(branch_id: int | None = None, location_id: int | None = None):
     """Возвращает врачей для фильтра главной страницы."""
     query = """
-        SELECT DISTINCT
-            d.id,
-            d.last_name,
-            d.first_name,
-            d.patronymic
+        SELECT DISTINCT d.id, d.last_name, d.first_name, d.patronymic
         FROM doctors d
         LEFT JOIN doctor_locations dl ON dl.doctor_id = d.id
         LEFT JOIN locations l ON l.id = dl.location_id
@@ -110,10 +115,7 @@ def get_doctors_for_filter(branch_id: int | None = None, location_id: int | None
 def get_locations_for_filter(branch_id: int | None = None, doctor_id: int | None = None):
     """Возвращает отделения для фильтра главной страницы."""
     query = """
-        SELECT DISTINCT
-            l.id,
-            l.name,
-            l.branch_id
+        SELECT DISTINCT l.id, l.name, l.branch_id
         FROM locations l
         LEFT JOIN doctor_locations dl ON dl.location_id = l.id
         WHERE 1=1
@@ -136,25 +138,42 @@ def get_locations_for_filter(branch_id: int | None = None, doctor_id: int | None
             return cur.fetchall()
 
 
+def _fetch_doctor_locations(cur: Any, doctor_id: int):
+    """Возвращает отделения текущего врача через уже открытый cursor."""
+    cur.execute(
+        """
+        SELECT l.id, l.name, l.branch_id, b.name AS branch_name
+        FROM doctor_locations dl
+        JOIN locations l ON dl.location_id = l.id
+        JOIN branches b ON l.branch_id = b.id
+        WHERE dl.doctor_id = %s
+        ORDER BY b.name, l.name
+        """,
+        (doctor_id,),
+    )
+    return cur.fetchall()
+
+
 def get_doctor_locations(doctor_id: int):
     """Возвращает отделения, где работает выбранный врач."""
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT
-                    l.id,
-                    l.name,
-                    b.name AS branch_name
-                FROM doctor_locations dl
-                JOIN locations l ON dl.location_id = l.id
-                JOIN branches b ON l.branch_id = b.id
-                WHERE dl.doctor_id = %s
-                ORDER BY b.name, l.name
-                """,
-                (doctor_id,),
-            )
-            return cur.fetchall()
+            return _fetch_doctor_locations(cur, doctor_id)
+
+
+def doctor_can_work_in_location(cur: Any, doctor_id: int, location_id: int) -> bool:
+    """Проверяет, что отделение действительно привязано к врачу."""
+    cur.execute(
+        """
+        SELECT 1
+        FROM doctor_locations
+        WHERE doctor_id = %s
+          AND location_id = %s
+        LIMIT 1
+        """,
+        (doctor_id, location_id),
+    )
+    return cur.fetchone() is not None
 
 
 def get_location_info(location_id: int):
@@ -247,12 +266,7 @@ def _fetch_medications_dictionary(cur: Any):
     """Возвращает активный справочник лекарств для формы назначений."""
     cur.execute(
         """
-        SELECT
-            id,
-            display_name,
-            trade_name,
-            active_substance,
-            drug_group
+        SELECT id, display_name, trade_name, active_substance, drug_group
         FROM medications
         WHERE is_active = TRUE
         ORDER BY sort_order, display_name

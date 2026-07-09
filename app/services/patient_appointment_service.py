@@ -11,15 +11,6 @@
 - создать новый приём существующему пациенту;
 - вызвать сохранение всех разделов приёма;
 - commit / rollback.
-
-Перед медицинской валидацией и сохранением форма проходит нормализацию
-клинических числовых значений:
-- десятичная запятая -> точка;
-- удельный вес мочи 1015 -> 1.015;
-- гематокрит 0.39 -> 39.
-
-Нормализация выполняет только однозначные преобразования. Сомнительно высокие
-значения остаются как есть и проверяются validate_appointment_form.
 """
 
 from __future__ import annotations
@@ -32,6 +23,7 @@ from fastapi import HTTPException
 from app.db.connection import get_db_connection
 from ..repositories.appointments import create_appointment
 from ..repositories.patients import create_patient, get_patient_for_appointment
+from ..repositories.reference_data import doctor_can_work_in_location
 from ..validation import validate_appointment_form
 from .appointment_form_parser import (
     parse_appointment_form,
@@ -62,14 +54,47 @@ def _raise_validation_errors(validation_errors: list[dict[str, Any]] | dict[str,
         )
 
 
-def create_patient_with_first_appointment(form: Any) -> AppointmentSaveResult:
+def _require_valid_current_doctor_id(current_doctor_id: int | None) -> int:
+    """Проверяет, что сервис получил врача из сессии."""
+    try:
+        doctor_id = int(current_doctor_id)  # type: ignore[arg-type]
+    except (TypeError, ValueError):
+        raise HTTPException(
+            status_code=403,
+            detail="Создавать приём может только пользователь, привязанный к врачу",
+        )
+
+    if doctor_id <= 0:
+        raise HTTPException(
+            status_code=403,
+            detail="Создавать приём может только пользователь, привязанный к врачу",
+        )
+
+    return doctor_id
+
+
+def _ensure_doctor_location_allowed(cur: Any, doctor_id: int, location_id: int) -> None:
+    """Не даёт врачу сохранить приём в отделение, к которому он не привязан."""
+    if not doctor_can_work_in_location(cur, doctor_id, location_id):
+        raise HTTPException(
+            status_code=403,
+            detail="Выбранное отделение не привязано к текущему врачу",
+        )
+
+
+def create_patient_with_first_appointment(
+    form: Any,
+    *,
+    current_doctor_id: int | None,
+) -> AppointmentSaveResult:
     """
     Создаёт нового пациента и его первый приём.
 
     Используется POST /api/patients/new.
+    doctor_id берётся только из текущей сессии, а не из HTML-формы.
     """
+    doctor_id = _require_valid_current_doctor_id(current_doctor_id)
     normalized_form = normalize_appointment_form_values(form)
-
     patient_data = parse_new_patient_form(normalized_form)
     appointment_required = parse_required_appointment_fields(normalized_form)
     appointment_datetime = appointment_required["appointment_datetime"]
@@ -82,11 +107,17 @@ def create_patient_with_first_appointment(form: Any) -> AppointmentSaveResult:
     with get_db_connection() as conn:
         try:
             with conn.cursor() as cur:
+                _ensure_doctor_location_allowed(
+                    cur,
+                    doctor_id,
+                    appointment_required["location_id"],
+                )
+
                 patient_id = create_patient(cur, patient_data)
                 appointment_id = create_appointment(
                     cur=cur,
                     patient_id=patient_id,
-                    doctor_id=appointment_required["doctor_id"],
+                    doctor_id=doctor_id,
                     location_id=appointment_required["location_id"],
                     appointment_datetime=appointment_datetime,
                 )
@@ -98,9 +129,7 @@ def create_patient_with_first_appointment(form: Any) -> AppointmentSaveResult:
                     patient_birth_date=patient_data["birth_date"],
                     patient_gender=patient_data["gender"],
                 )
-
                 conn.commit()
-
         except HTTPException:
             conn.rollback()
             raise
@@ -114,15 +143,21 @@ def create_patient_with_first_appointment(form: Any) -> AppointmentSaveResult:
     return AppointmentSaveResult(patient_id=patient_id, appointment_id=appointment_id)
 
 
-def create_appointment_for_existing_patient(patient_id: int, form: Any) -> AppointmentSaveResult:
+def create_appointment_for_existing_patient(
+    patient_id: int,
+    form: Any,
+    *,
+    current_doctor_id: int | None,
+) -> AppointmentSaveResult:
     """
     Создаёт новый приём для уже существующего пациента.
 
     Пациент заново не создаётся: используется patient_id из URL.
     Используется POST /api/patients/{patient_id}/appointments/new.
+    doctor_id берётся только из текущей сессии, а не из прошлого приёма и не из формы.
     """
+    doctor_id = _require_valid_current_doctor_id(current_doctor_id)
     normalized_form = normalize_appointment_form_values(form)
-
     appointment_required = parse_required_appointment_fields(normalized_form)
     appointment_datetime = appointment_required["appointment_datetime"]
 
@@ -135,14 +170,19 @@ def create_appointment_for_existing_patient(patient_id: int, form: Any) -> Appoi
         try:
             with conn.cursor() as cur:
                 patient = get_patient_for_appointment(cur, patient_id)
-
                 if not patient:
                     raise HTTPException(status_code=404, detail="Пациент не найден")
+
+                _ensure_doctor_location_allowed(
+                    cur,
+                    doctor_id,
+                    appointment_required["location_id"],
+                )
 
                 appointment_id = create_appointment(
                     cur=cur,
                     patient_id=patient_id,
-                    doctor_id=appointment_required["doctor_id"],
+                    doctor_id=doctor_id,
                     location_id=appointment_required["location_id"],
                     appointment_datetime=appointment_datetime,
                 )
@@ -154,9 +194,7 @@ def create_appointment_for_existing_patient(patient_id: int, form: Any) -> Appoi
                     patient_birth_date=patient["birth_date"],
                     patient_gender=patient["gender"],
                 )
-
                 conn.commit()
-
         except HTTPException:
             conn.rollback()
             raise

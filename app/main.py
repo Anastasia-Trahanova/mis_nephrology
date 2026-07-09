@@ -20,9 +20,9 @@ from .routers import (
     lab_api,
     patient_pages,
     patients,
+    schedule,
 )
 from .settings import settings
-
 
 logging.basicConfig(
     filename="app.log",
@@ -84,3 +84,4 @@ app.include_router(patients.router)
 app.include_router(appointments.router)
 app.include_router(ckd_registry.router)
 app.include_router(admin.router)
+app.include_router(schedule.router)

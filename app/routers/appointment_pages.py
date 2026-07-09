@@ -16,10 +16,12 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from app.security.permissions import require_doctor_with_id
 from app.services.appointment_form_context_service import (
     get_new_appointment_context,
     get_new_patient_context,
 )
+
 
 router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="app/templates")
@@ -28,7 +30,9 @@ templates = Jinja2Templates(directory="app/templates")
 @router.get("/new-patient", response_class=HTMLResponse)
 def new_patient_form(request: Request):
     """Форма создания нового пациента и первого приёма."""
-    context = get_new_patient_context()
+    current_doctor_id = require_doctor_with_id(request)
+    context = get_new_patient_context(current_doctor_id)
+
     now = datetime.now()
     context.update(
         {
@@ -37,13 +41,15 @@ def new_patient_form(request: Request):
             "now_time": now.strftime("%H:%M"),
         }
     )
+
     return templates.TemplateResponse("new_patient.html", context)
 
 
 @router.get("/new-appointment/{patient_id}", response_class=HTMLResponse)
 def new_appointment_form(request: Request, patient_id: int):
     """Форма повторного приёма."""
-    context = get_new_appointment_context(patient_id)
+    current_doctor_id = require_doctor_with_id(request)
+    context = get_new_appointment_context(patient_id, current_doctor_id)
     if not context:
         raise HTTPException(status_code=404, detail="Пациент не найден")
 
@@ -55,4 +61,5 @@ def new_appointment_form(request: Request, patient_id: int):
             "now_time": now.strftime("%H:%M"),
         }
     )
+
     return templates.TemplateResponse("new_appointment.html", context)

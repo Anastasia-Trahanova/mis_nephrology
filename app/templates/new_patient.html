@@ -1,95 +1,109 @@
 {#
-Назначение файла: страница создания нового пациента и первого приёма. Каркас страницы оставлен здесь, а общие блоки приёма вынесены в app/templates/appointment_form/.
+Назначение файла: страница создания нового пациента и первого приёма.
+Каркас страницы оставлен здесь, а общие блоки приёма вынесены в app/templates/appointment_form/.
 Файл выделен при разделении большой формы приёма на структурные части.
 Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
 #}
 {% extends "base.html" %}
 
 {% block content %}
+
 {% set appointment_form_mode = 'new_patient' %}
+
 <style>
-    .text-danger { color: #dc3545; }
+ .text-danger { color: #dc3545; }
 </style>
 
 <h2>➕ Добавление нового пациента</h2>
 <p class="text-muted">Заполните информацию о пациенте и данные первого приёма</p>
 
 <form method="post" action="/api/patients/new">
-    <!-- ===================================================== -->
-    <!-- БЛОК 1: ИНФОРМАЦИЯ О ПАЦИЕНТЕ -->
-    <!-- ===================================================== -->
-    <div class="card mb-4">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0">👤 Информация о пациенте</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <label class="form-label">Фамилия <span class="text-danger">*</span></label>
-                    <input type="text" name="last_name" class="form-control" required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Имя <span class="text-danger">*</span></label>
-                    <input type="text" name="first_name" class="form-control" required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Отчество</label>
-                    <input type="text" name="patronymic" class="form-control">
-                </div>
-            </div>
-            <div class="row mt-3">
-                <div class="col-md-4">
-                    <label class="form-label">Дата рождения <span class="text-danger">*</span></label>
-                    <input type="date" name="birth_date" class="form-control" required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Пол</label>
-                    <select name="gender" class="form-select">
-                        <option value="true">Мужской</option>
-                        <option value="false">Женский</option>
-                    </select>
-                </div>
-                
-            </div>
-        </div>
+
+ <!-- ===================================================== -->
+ <!-- БЛОК 1: ИНФОРМАЦИЯ О ПАЦИЕНТЕ -->
+ <!-- ===================================================== -->
+ <div class="card mb-4">
+  <div class="card-header bg-primary text-white">
+   <h5 class="mb-0"> Информация о пациенте</h5>
+  </div>
+
+  <div class="card-body">
+   <div class="row">
+    <div class="col-md-4">
+     <label class="form-label">Фамилия <span class="text-danger">*</span></label>
+     <input type="text" name="last_name" class="form-control" required>
     </div>
 
-    <!-- ===================================================== -->
-    <!-- БЛОК 2: ДАННЫЕ ПРИЁМА (как в new_appointment.html) -->
-    <!-- ===================================================== -->
-    <div class="card mb-4">
-        <div class="card-header bg-success text-white">
-            <h5 class="mb-0"> Данные первого приёма</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-6">
-                    <label class="form-label">Врач <span class="text-danger">*</span></label>
-                    <select name="doctor_id" class="form-select" required>
-                        <option value="" selected disabled>-- Выберите врача --</option>
-                        {% for doctor in doctors %}
-                        <option value="{{ doctor.id }}">{{ doctor.last_name }} {{ doctor.first_name }} {{ doctor.patronymic or '' }}</option>
-                        {% endfor %}
-                    </select>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Отделение <span class="text-danger">*</span></label>
-                    <select name="location_id" id="locationSelect" class="form-select" required>
-                        <option value="">Сначала выберите врача</option>
-                    </select>
-                </div>
-            </div>
-            
-            <div class="row mt-3">
-                <div class="col-md-4">
-                    <label class="form-label">Дата приёма</label>
-                    <input type="date" name="appointment_date" class="form-control" value="{{ now_date }}" required>
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Время приёма</label>
-                    <input type="time" name="appointment_time" class="form-control" value="{{ now_time }}" required>
-                </div>
-            </div>
+    <div class="col-md-4">
+     <label class="form-label">Имя <span class="text-danger">*</span></label>
+     <input type="text" name="first_name" class="form-control" required>
+    </div>
+
+    <div class="col-md-4">
+     <label class="form-label">Отчество</label>
+     <input type="text" name="patronymic" class="form-control">
+    </div>
+   </div>
+
+   <div class="row mt-3">
+    <div class="col-md-4">
+     <label class="form-label">Дата рождения <span class="text-danger">*</span></label>
+     <input type="date" name="birth_date" class="form-control" required>
+    </div>
+
+    <div class="col-md-4">
+     <label class="form-label">Пол</label>
+     <select name="gender" class="form-select">
+      <option value="true">Мужской</option>
+      <option value="false">Женский</option>
+     </select>
+    </div>
+   </div>
+  </div>
+ </div>
+
+ <!-- ===================================================== -->
+ <!-- БЛОК 2: ДАННЫЕ ПРИЁМА -->
+ <!-- ===================================================== -->
+ <div class="card mb-4">
+  <div class="card-header bg-success text-white">
+   <h5 class="mb-0"> Данные первого приёма</h5>
+  </div>
+
+  <div class="card-body">
+   <div class="row">
+    <div class="col-md-6">
+     <label class="form-label">Врач <span class="text-danger">*</span></label>
+     <input type="text"
+            class="form-control"
+            value="{{ current_doctor.last_name }} {{ current_doctor.first_name }} {{ current_doctor.patronymic or '' }}"
+            readonly>
+     <input type="hidden" name="doctor_id" value="{{ current_doctor.id }}">
+    </div>
+
+    <div class="col-md-6">
+     <label class="form-label">Отделение <span class="text-danger">*</span></label>
+     <select name="location_id" id="locationSelect" class="form-select" required>
+      <option value="">Выберите отделение</option>
+      {% for location in doctor_locations %}
+       <option value="{{ location.id }}">{{ location.name }} ({{ location.branch_name }})</option>
+      {% endfor %}
+     </select>
+    </div>
+   </div>
+
+   <div class="row mt-3">
+    <div class="col-md-4">
+     <label class="form-label">Дата приёма</label>
+     <input type="date" name="appointment_date" class="form-control" value="{{ now_date }}" required>
+    </div>
+
+    <div class="col-md-4">
+     <label class="form-label">Время приёма</label>
+     <input type="time" name="appointment_time" class="form-control" value="{{ now_time }}" required>
+    </div>
+   </div>
+
 {% include "appointment_form/_survey.html" %}
 {% include "appointment_form/_examination.html" %}
 {% include "appointment_form/_cbc.html" %}
@@ -99,6 +113,7 @@
 {% include "appointment_form/_albuminuria.html" %}
 {% include "appointment_form/_ultrasound.html" %}
 {% include "appointment_form/_conclusion.html" %}
+
 </form>
 
 {% include "appointment_form/_scripts.html" %}
