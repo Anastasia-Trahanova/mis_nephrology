@@ -1,0 +1,149 @@
+{# Протокол аудита всего приёма: все события appointment_id одной временной шкалой. #}
+{% extends "base.html" %}
+
+{% macro result_badge(result) -%}
+  {% if result == 'success' %}<span class="badge text-bg-success">успешно</span>
+  {% elif result == 'error' %}<span class="badge text-bg-danger">ошибка</span>
+  {% elif result == 'denied' %}<span class="badge text-bg-warning">отказано</span>
+  {% else %}<span class="badge text-bg-secondary">{{ result }}</span>{% endif %}
+{%- endmacro %}
+
+{% block content %}
+<div class="admin-audit-page admin-audit-appointment-page">
+  <div class="mb-3 d-flex gap-2 flex-wrap">
+    <a href="/admin/audit" class="btn btn-outline-secondary btn-sm">← Вернуться к журналу</a>
+    {% if protocol.patient_id %}<a href="/patient/{{ protocol.patient_id }}" class="btn btn-outline-primary btn-sm">Открыть карточку пациента</a>{% endif %}
+  </div>
+
+  <section class="audit-event-card">
+    <div class="audit-event-card-header">
+      <div>
+        <div class="audit-page-kicker">Протокол аудита приёма</div>
+        <h1 class="audit-page-title">Приём №{{ protocol.appointment_id }}</h1>
+        <p class="audit-event-sentence">
+          {% if protocol.patient_name %}Пациент: {{ protocol.patient_name }}. {% endif %}
+          Событий в цепочке: {{ protocol.event_count }}. Подробных строк изменений: {{ protocol.all_changes|length }}.
+          {% if protocol.has_errors %}В цепочке есть ошибки или отказы доступа.{% else %}Ошибок и отказов доступа в найденной цепочке нет.{% endif %}
+        </p>
+      </div>
+      <div class="audit-event-result">
+        {% if protocol.has_errors %}<span class="badge text-bg-warning">требует внимания</span>{% else %}<span class="badge text-bg-success">цепочка без ошибок</span>{% endif %}
+      </div>
+    </div>
+
+    <div class="audit-passport-grid">
+      <div class="audit-meta-item"><div class="audit-meta-label">ID приёма</div><div class="audit-meta-value">{{ protocol.appointment_id }}</div></div>
+      <div class="audit-meta-item"><div class="audit-meta-label">Пациент</div><div class="audit-meta-value">{% if protocol.patient_id and protocol.patient_name %}<a href="/patient/{{ protocol.patient_id }}">{{ protocol.patient_name }}</a>{% else %}{{ protocol.patient_name or '—' }}{% endif %}</div></div>
+      <div class="audit-meta-item"><div class="audit-meta-label">Дата приёма</div><div class="audit-meta-value">{% if protocol.appointment_date and protocol.appointment_date.strftime is defined %}{{ protocol.appointment_date.strftime('%d.%m.%Y %H:%M') }}{% else %}{{ protocol.appointment_date or '—' }}{% endif %}</div></div>
+      <div class="audit-meta-item"><div class="audit-meta-label">Событий</div><div class="audit-meta-value">{{ protocol.event_count }}</div></div>
+    </div>
+  </section>
+
+  <section class="audit-counters-grid mb-4">
+    {% for card in protocol.stats_cards %}
+      <div class="audit-counter-card audit-counter-{{ card.key }}">
+        <div class="audit-counter-label">{{ card.label }}</div>
+        <div class="audit-counter-value">{{ card.count }}</div>
+        <div class="audit-counter-description">{{ card.description }}</div>
+      </div>
+    {% endfor %}
+  </section>
+
+  {% if protocol.protocol_summary %}
+  <section class="audit-changes-card audit-summary-card">
+    <div class="audit-section-heading">
+      <h2>Сводка по всем событиям приёма</h2>
+      <p>Агрегированный вид нужен для проверки: что врач ввёл сам, что перенесено, что система рассчитала, что удалено.</p>
+    </div>
+    <div class="audit-summary-list">
+      {% for group in protocol.protocol_summary %}
+        <div class="audit-summary-row audit-summary-{{ group.key }}">
+          <div class="audit-summary-label">{{ group.label }} <span class="text-muted">({{ group.count }})</span></div>
+          <div class="audit-summary-items">
+            {% for item in group['items'][:10] %}<div>{{ item }}</div>{% endfor %}
+            {% if group['items']|length > 10 %}<div class="text-muted">и ещё {{ group['items']|length - 10 }}</div>{% endif %}
+          </div>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="audit-changes-card">
+    <div class="audit-section-heading">
+      <h2>Временная шкала приёма</h2>
+      <p>Все найденные события по appointment_id: сохранения, открытия протоколов, выгрузки, ошибки и отказы.</p>
+    </div>
+
+    <div class="audit-timeline">
+      {% for event in protocol.events %}
+        <article class="audit-timeline-item {% if event.result == 'error' %}audit-timeline-error{% elif event.result == 'denied' %}audit-timeline-warning{% endif %}">
+          <div class="audit-timeline-point"></div>
+          <div class="audit-timeline-card">
+            <div class="d-flex justify-content-between gap-3 flex-wrap">
+              <div>
+                <h3>{{ event.action_label or event.action }}</h3>
+                <div class="text-muted small">
+                  {% if event.created_at and event.created_at.strftime is defined %}{{ event.created_at.strftime('%d.%m.%Y %H:%M:%S') }}{% else %}{{ event.created_at or '—' }}{% endif %}
+                  · {{ event.user_login or '—' }} · {{ event.user_role or 'роль не указана' }}
+                </div>
+              </div>
+              <div>{{ result_badge(event.result) }}</div>
+            </div>
+
+            <p class="mt-2 mb-2">{{ event.narrative }}</p>
+
+            {% if event.details or event.error_message %}
+              <div class="audit-event-note compact">
+                {% if event.details %}<div>{{ event.details }}</div>{% endif %}
+                {% if event.error_message %}<div class="text-danger">{{ event.error_message }}</div>{% endif %}
+              </div>
+            {% endif %}
+
+            {% if event.summary %}
+              <div class="audit-mini-summary">
+                {% for group in event.summary %}
+                  <span class="badge text-bg-light border">{{ group.short_label }}: {{ group.count }}</span>
+                {% endfor %}
+              </div>
+            {% endif %}
+
+            <div class="mt-3 d-flex gap-2 flex-wrap">
+              <a class="btn btn-outline-secondary btn-sm" href="/admin/audit/{{ event.id }}">Открыть событие №{{ event.id }}</a>
+              {% if event.path %}<span class="text-muted small align-self-center">{{ event.method or '' }} {{ event.path }}</span>{% endif %}
+            </div>
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+  </section>
+
+  {% if protocol.grouped_changes %}
+  <section class="audit-changes-card">
+    <div class="audit-section-heading">
+      <h2>Агрегированный разбор по разделам</h2>
+      <p>Сводит изменения из разных событий приёма в один клинический разрез.</p>
+    </div>
+    <div class="row g-3">
+      {% for section in protocol.grouped_changes %}
+        <div class="col-lg-6">
+          <article class="audit-section-compact">
+            <h3>{{ section.section_label }} <span class="badge text-bg-light border">{{ section.count }}</span></h3>
+            <p class="text-muted small">{{ section.purpose }}</p>
+            <ul>
+              {% for change in section.changes[:6] %}
+                <li>
+                  <strong>{{ change.field_label or change.field_name or 'Изменение' }}</strong> — {{ change.change_type_label }}
+                  {% if change.value_preview %}<div class="text-muted small">{{ change.value_preview }}</div>{% endif %}
+                </li>
+              {% endfor %}
+            </ul>
+            {% if section.changes|length > 6 %}<div class="text-muted small">и ещё {{ section.changes|length - 6 }}</div>{% endif %}
+          </article>
+        </div>
+      {% endfor %}
+    </div>
+  </section>
+  {% endif %}
+</div>
+{% endblock %}

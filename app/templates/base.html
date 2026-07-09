@@ -1,77 +1,49 @@
-{#
-Назначение файла: общий HTML-каркас внутренних страниц МИС.
-
-Как работает:
-- сохраняет исходный дизайн проекта: синяя верхняя панель, container mt-4,
-  прежние CSS-файлы и прежние версии Bootstrap-подключений;
-- показывает основную навигацию и кнопку выхода только авторизованному пользователю;
-- подключает simple_form_guard.js и kdigo_risk_preview.js, как было в проекте;
-- подключает 05_admin_audit.css для единообразного оформления административного журнала;
-- дополнительно подключает session_keepalive.js только после входа пользователя,
-  чтобы активная работа врача в форме продлевала idle-сессию.
-
-Что редактировать здесь:
-- общую навигацию, включая ссылку администратора на журнал работы;
-- подключение общих CSS/JS;
-- общий контейнер внутренних страниц.
-
-Что не редактировать здесь:
-- правила авторизации и timeout — они находятся в app/routers/auth.py;
-- страницу входа — она находится в app/templates/login.html;
-- медицинские partial-шаблоны карточки пациента и формы приёма.
-#}
-
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>МИС Нефролога</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/01_layout_controls.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/02_clinical_messages.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/03_select_popups.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/04_kdigo_risk.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/05_admin_audit.css') }}">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>МИС Нефролога</title>
+
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/css/bootstrap.min.css" rel="stylesheet">
+
+  <link rel="stylesheet" href="{{ url_for('static', path='css/01_layout_controls.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/02_clinical_messages.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/03_select_popups.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/04_kdigo_risk.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', path='css/05_admin_audit.css') }}">
 </head>
 <body>
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="/"> МИС Нефролога</a>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container">
+      <a class="navbar-brand" href="/">МИС Нефролога</a>
 
-            <div class="navbar-nav me-auto">
-                <a class="nav-link" href="/patients">Пациенты</a>
-                {% if request.session.get('role') == 'admin' %}
-                    <a class="nav-link" href="/ckd-registry">Регистр ХБП</a>
-                    <a class="nav-link" href="/admin/audit">Журнал работы</a>
-                {% endif %}
-            </div>
+      <div class="navbar-nav me-auto">
+        <a class="nav-link" href="/patients">Пациенты</a>
+        {% if request.session.get('role') == 'admin' %}
+          <a class="nav-link" href="/ckd-registry">Регистр ХБП</a>
+          <a class="nav-link" href="/admin/audit">Журнал аудита</a>
+        {% endif %}
+      </div>
 
-            {% if request.session.get('user_id') %}
-                <div class="navbar-nav ms-auto align-items-center">
-                    <span class="navbar-text text-white me-3">
-                        {{ request.session.get('display_name') or request.session.get('login') }}
-                        <small class="text-white-50">({{ request.session.get('role') }})</small>
-                    </span>
-                    <a class="nav-link" href="/logout">Выйти</a>
-                </div>
-            {% endif %}
-        </div>
-    </nav>
-
-    <div class="container mt-4">
-        {% block content %}{% endblock %}
+      {% if request.session.get('user_id') %}
+      <div class="navbar-nav ms-auto align-items-center">
+        <span class="navbar-text text-white me-3">
+          {{ request.session.get('display_name') or request.session.get('login') }}
+          <small class="text-white-50">({{ request.session.get('role') }})</small>
+        </span>
+        <a class="nav-link" href="/logout">Выйти</a>
+      </div>
+      {% endif %}
     </div>
+  </nav>
 
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="{{ url_for('static', path='js/simple_form_guard.js') }}"></script>
-    <script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}" defer></script>
+  <div class="container mt-4">
+    {% block content %}{% endblock %}
+  </div>
 
-    {% if request.session.get('user_id') %}
-        <script>
-            window.MIS_SESSION_KEEPALIVE_INTERVAL_SECONDS = {{ settings.session_keepalive_interval_seconds if settings is defined else 180 }};
-        </script>
-        <script src="{{ url_for('static', path='js/session_keepalive.js') }}" defer></script>
-    {% endif %}
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="{{ url_for('static', path='js/simple_form_guard.js') }}"></script>
+  <script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}" defer></script>
 </body>
 </html>

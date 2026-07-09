@@ -1,190 +1,246 @@
 {#
-Назначение файла: административная страница журнала действий МИС.
-
-Как работает:
-- доступна только пользователю с ролью admin через /admin/audit;
-- показывает краткую статистику за последние 24 часа;
-- выводит последние события audit_events таблицей;
-- даёт фильтры по действию, результату и пользователю;
-- для каждой строки даёт ссылку «Подробнее», где видны сохранённые изменения;
-- не показывает пароли и не хранит полные медицинские тексты в общей таблице.
-
-Что редактировать здесь:
-- внешний вид таблицы аудита;
-- набор фильтров;
-- подписи колонок и карточек статистики.
-
-Что не редактировать здесь:
-- SQL выборки аудита — он в app/repositories/audit_log.py;
-- правила доступа admin — они в app/security/permissions.py;
-- подробности одного события — они в app/templates/admin/audit_event_detail.html.
+Административная страница журнала действий МИС.
+Показывает события audit_events как рабочий контрольный журнал: фильтры, категории,
+ссылки на протокол события и протокол всего приёма, CSV-выгрузка.
 #}
-
 {% extends "base.html" %}
+
+{% macro result_badge(event) -%}
+  {% if event.result == 'success' %}<span class="badge text-bg-success">{{ event.result_label }}</span>
+  {% elif event.result == 'error' %}<span class="badge text-bg-danger">{{ event.result_label }}</span>
+  {% elif event.result == 'denied' %}<span class="badge text-bg-warning">{{ event.result_label }}</span>
+  {% else %}<span class="badge text-bg-secondary">{{ event.result_label or event.result }}</span>{% endif %}
+{%- endmacro %}
 
 {% block content %}
 <div class="admin-audit-page">
-<div class="d-flex justify-content-between align-items-start mb-4">
+  <div class="d-flex justify-content-between align-items-start mb-4 gap-3 flex-wrap">
     <div>
-        <h1 class="h3 mb-1">Журнал работы МИС</h1>
-        <p class="text-muted mb-0">
-            Здесь администратор видит, кто входил в систему, какие страницы открывал,
-            какие пациенты и приёмы создавались, а также ошибки и отказы доступа.
-            По ссылке «Подробнее» открываются сохранённые медицинские изменения события.
-        </p>
+      <h1 class="h3 mb-1">Журнал работы МИС</h1>
+      <p class="text-muted mb-0">
+        Общая лента событий: входы, просмотры, действия с пациентами и приёмами,
+        выгрузки, ошибки, отказы доступа и действия администратора.
+      </p>
     </div>
-</div>
+  </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="card shadow-sm h-100">
-            <div class="card-body">
-                <div class="text-muted small">Событий за 24 часа</div>
-                <div class="fs-4 fw-semibold">{{ summary.total_events or 0 }}</div>
-            </div>
-        </div>
+  <div class="row g-3 mb-4">
+    <div class="col-md-2 col-sm-6">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <div class="text-muted small">Событий</div>
+        <div class="fs-4 fw-semibold">{{ summary.total_events or 0 }}</div>
+      </div></div>
     </div>
-    <div class="col-md-3">
-        <div class="card shadow-sm h-100">
-            <div class="card-body">
-                <div class="text-muted small">Пользователей</div>
-                <div class="fs-4 fw-semibold">{{ summary.active_users or 0 }}</div>
-            </div>
-        </div>
+    <div class="col-md-2 col-sm-6">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <div class="text-muted small">Пользователей</div>
+        <div class="fs-4 fw-semibold">{{ summary.active_users or 0 }}</div>
+      </div></div>
     </div>
-    <div class="col-md-3">
-        <div class="card shadow-sm h-100">
-            <div class="card-body">
-                <div class="text-muted small">Ошибок</div>
-                <div class="fs-4 fw-semibold text-danger">{{ summary.error_events or 0 }}</div>
-            </div>
-        </div>
+    <div class="col-md-2 col-sm-6">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <div class="text-muted small">Успешных</div>
+        <div class="fs-4 fw-semibold text-success">{{ summary.success_events or 0 }}</div>
+      </div></div>
     </div>
-    <div class="col-md-3">
-        <div class="card shadow-sm h-100">
-            <div class="card-body">
-                <div class="text-muted small">Отказов доступа</div>
-                <div class="fs-4 fw-semibold text-warning">{{ summary.denied_events or 0 }}</div>
-            </div>
-        </div>
+    <div class="col-md-2 col-sm-6">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <div class="text-muted small">Ошибок</div>
+        <div class="fs-4 fw-semibold text-danger">{{ summary.error_events or 0 }}</div>
+      </div></div>
     </div>
-</div>
+    <div class="col-md-2 col-sm-6">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <div class="text-muted small">Отказов</div>
+        <div class="fs-4 fw-semibold text-warning">{{ summary.denied_events or 0 }}</div>
+      </div></div>
+    </div>
+    <div class="col-md-2 col-sm-6">
+      <div class="card shadow-sm h-100"><div class="card-body">
+        <div class="text-muted small">Выгрузок</div>
+        <div class="fs-4 fw-semibold text-info">{{ summary.export_events or 0 }}</div>
+      </div></div>
+    </div>
+  </div>
 
-<form class="card shadow-sm mb-4" method="get" action="/admin/audit">
+  <form class="card shadow-sm mb-4" method="get" action="/admin/audit">
     <div class="card-body">
-        <div class="row g-3 align-items-end">
-            <div class="col-md-4">
-                <label class="form-label" for="action">Действие</label>
-                <select class="form-select" id="action" name="action">
-                    <option value="">Все действия</option>
-                    {% for value, label in action_choices %}
-                        <option value="{{ value }}" {% if selected_action == value %}selected{% endif %}>{{ label }}</option>
-                    {% endfor %}
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label" for="result">Результат</label>
-                <select class="form-select" id="result" name="result">
-                    <option value="">Любой</option>
-                    <option value="success" {% if selected_result == 'success' %}selected{% endif %}>Успешно</option>
-                    <option value="error" {% if selected_result == 'error' %}selected{% endif %}>Ошибка</option>
-                    <option value="denied" {% if selected_result == 'denied' %}selected{% endif %}>Отказано</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label" for="user_login">Пользователь</label>
-                <input class="form-control" id="user_login" name="user_login" value="{{ user_login }}" placeholder="ФИО или логин">
-            </div>
-            <div class="col-md-2 d-grid">
-                <button class="btn btn-primary" type="submit">Показать</button>
-            </div>
+      <div class="row g-3 align-items-end">
+        <div class="col-lg-3 col-md-4">
+          <label class="form-label" for="action_category">Категория</label>
+          <select class="form-select" id="action_category" name="action_category">
+            <option value="">Все категории</option>
+            {% for value, label in action_category_choices %}
+              <option value="{{ value }}" {% if selected_action_category == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
         </div>
+
+        <div class="col-lg-3 col-md-4">
+          <label class="form-label" for="action">Действие</label>
+          <select class="form-select" id="action" name="action">
+            <option value="">Все действия</option>
+            {% for value, label in action_choices %}
+              <option value="{{ value }}" {% if selected_action == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label" for="result">Результат</label>
+          <select class="form-select" id="result" name="result">
+            <option value="">Любой</option>
+            <option value="success" {% if selected_result == 'success' %}selected{% endif %}>Успешно</option>
+            <option value="error" {% if selected_result == 'error' %}selected{% endif %}>Ошибка</option>
+            <option value="denied" {% if selected_result == 'denied' %}selected{% endif %}>Отказано</option>
+          </select>
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label" for="user_role">Роль</label>
+          <select class="form-select" id="user_role" name="user_role">
+            <option value="">Любая</option>
+            {% for value, label in role_choices %}
+              <option value="{{ value }}" {% if selected_user_role == value %}selected{% endif %}>{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label" for="user_login">Пользователь</label>
+          <input class="form-control" id="user_login" name="user_login" value="{{ user_login }}" placeholder="ФИО/логин">
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label" for="patient_id">ID пациента</label>
+          <input class="form-control" id="patient_id" name="patient_id" value="{{ patient_id }}" inputmode="numeric">
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label" for="appointment_id">ID приёма</label>
+          <input class="form-control" id="appointment_id" name="appointment_id" value="{{ appointment_id }}" inputmode="numeric">
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label" for="date_from">С даты</label>
+          <input class="form-control" id="date_from" name="date_from" value="{{ date_from }}" type="date">
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label" for="date_to">По дату</label>
+          <input class="form-control" id="date_to" name="date_to" value="{{ date_to }}" type="date">
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <label class="form-label" for="limit">Лимит</label>
+          <input class="form-control" id="limit" name="limit" value="{{ limit }}" inputmode="numeric">
+        </div>
+
+        <div class="col-lg-2 col-md-4">
+          <div class="form-check mb-2">
+            <input class="form-check-input" id="only_errors" name="only_errors" type="checkbox" value="1" {% if only_errors %}checked{% endif %}>
+            <label class="form-check-label" for="only_errors">только ошибки/отказы</label>
+          </div>
+        </div>
+
+        <div class="col-lg-3 col-md-8 d-flex gap-2">
+          <button class="btn btn-primary flex-fill" type="submit">Показать</button>
+          <button class="btn btn-outline-secondary flex-fill" type="submit" formaction="/admin/audit/export.csv" formmethod="get">
+            CSV
+          </button>
+        </div>
+      </div>
     </div>
-</form>
+  </form>
 
-<div class="card shadow-sm">
+  <div class="card shadow-sm">
     <div class="card-body">
-        <h2 class="h5 mb-3">Последние события</h2>
-
-        {% if events %}
-            <div class="table-responsive">
-                <table class="table table-sm align-middle">
-                    <thead>
-                        <tr>
-                            <th style="min-width: 155px;">Дата и время</th>
-                            <th>Пользователь</th>
-                            <th>Роль</th>
-                            <th>Действие</th>
-                            <th>Пациент</th>
-                            <th>Результат</th>
-                            <th>Детали</th>
-                            <th></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for event in events %}
-                            <tr class="{% if event.result == 'error' %}table-danger{% elif event.result == 'denied' %}table-warning{% endif %}">
-                                <td>
-                                    {% if event.created_at %}
-                                        {{ event.created_at.strftime('%d.%m.%Y %H:%M:%S') if event.created_at.strftime is defined else event.created_at }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </td>
-                                <td>{{ event.user_login or '—' }}</td>
-                                <td>{{ event.user_role or '—' }}</td>
-                                <td>
-                                    <div>{{ event.action_label or event.action }}</div>
-                                    <div class="text-muted small">{{ event.method or '' }} {{ event.path or '' }}</div>
-                                </td>
-                                <td>
-                                    {% if event.patient_id and event.patient_name %}
-                                        <a href="/patient/{{ event.patient_id }}">{{ event.patient_name }}</a>
-                                    {% elif event.patient_name %}
-                                        {{ event.patient_name }}
-                                    {% else %}
-                                        —
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    {% if event.result == 'success' %}
-                                        <span class="badge text-bg-success">{{ event.result_label }}</span>
-                                    {% elif event.result == 'error' %}
-                                        <span class="badge text-bg-danger">{{ event.result_label }}</span>
-                                    {% elif event.result == 'denied' %}
-                                        <span class="badge text-bg-warning">{{ event.result_label }}</span>
-                                    {% else %}
-                                        {{ event.result_label or event.result }}
-                                    {% endif %}
-                                </td>
-                                <td>
-                                    <div>{{ event.details or event.event_sentence or '—' }}</div>
-                                    {% if event.error_message %}
-                                        <div class="text-danger small">{{ event.error_message }}</div>
-                                    {% endif %}
-                                    {% if event.appointment_id %}
-                                        <div class="text-muted small">appointment_id={{ event.appointment_id }}</div>
-                                    {% endif %}
-                                    {% if event.status_code %}
-                                        <div class="text-muted small">HTTP {{ event.status_code }}</div>
-                                    {% endif %}
-                                </td>
-                                <td class="text-end">
-                                    {% if event.has_details %}
-                                        <a class="btn btn-outline-primary btn-sm" href="/admin/audit/{{ event.id }}">Подробнее</a>
-                                    {% else %}
-                                        <span class="text-muted small">—</span>
-                                    {% endif %}
-                                </td>
-                            </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        {% else %}
-            <p class="text-muted mb-0">Событий пока нет или они не попали под выбранные фильтры.</p>
+      <div class="d-flex justify-content-between align-items-center mb-3 gap-3 flex-wrap">
+        <div>
+          <h2 class="h5 mb-1">Последние события</h2>
+          <p class="text-muted mb-0 small">Для приёма открывайте не только «Событие», но и общий «Протокол приёма».</p>
+        </div>
+        {% if offset > 0 %}
+          <a class="btn btn-outline-secondary btn-sm" href="/admin/audit">Сбросить смещение</a>
         {% endif %}
+      </div>
+
+      {% if events %}
+      <div class="table-responsive">
+        <table class="table table-sm align-middle audit-events-table">
+          <thead>
+            <tr>
+              <th style="min-width: 155px;">Дата и время</th>
+              <th>Пользователь</th>
+              <th>Категория</th>
+              <th>Действие</th>
+              <th>Пациент / приём</th>
+              <th>Результат</th>
+              <th>Детали</th>
+              <th class="text-end">Переходы</th>
+            </tr>
+          </thead>
+          <tbody>
+          {% for event in events %}
+            <tr class="{% if event.result == 'error' %}table-danger{% elif event.result == 'denied' %}table-warning{% endif %}">
+              <td>
+                {% if event.created_at %}
+                  {{ event.created_at.strftime('%d.%m.%Y %H:%M:%S') if event.created_at.strftime is defined else event.created_at }}
+                {% else %}—{% endif %}
+                <div class="text-muted small">ID {{ event.id }}</div>
+              </td>
+              <td>
+                <div class="fw-semibold">{{ event.user_login or '—' }}</div>
+                <div class="text-muted small">{{ event.user_role or 'роль не указана' }}</div>
+                {% if event.ip_address %}<div class="text-muted small">IP {{ event.ip_address }}</div>{% endif %}
+              </td>
+              <td>
+                <span class="badge text-bg-light border">{{ event.action_category_label }}</span>
+              </td>
+              <td>
+                <div>{{ event.action_label or event.action }}</div>
+                <div class="text-muted small">{{ event.method or '' }} {{ event.path or '' }}</div>
+              </td>
+              <td>
+                {% if event.patient_id and event.patient_name %}
+                  <a href="/patient/{{ event.patient_id }}">{{ event.patient_name }}</a>
+                {% elif event.patient_name %}
+                  {{ event.patient_name }}
+                {% else %}
+                  —
+                {% endif %}
+                {% if event.appointment_id %}
+                  <div class="small"><a href="/admin/audit/appointment/{{ event.appointment_id }}">приём №{{ event.appointment_id }}</a></div>
+                {% endif %}
+              </td>
+              <td>{{ result_badge(event) }}</td>
+              <td>
+                <div>{{ event.details or event.event_sentence or '—' }}</div>
+                {% if event.error_message %}<div class="text-danger small">{{ event.error_message }}</div>{% endif %}
+                {% if event.status_code %}<div class="text-muted small">HTTP {{ event.status_code }}</div>{% endif %}
+              </td>
+              <td class="text-end">
+                <div class="btn-group btn-group-sm" role="group">
+                  {% if event.has_details %}
+                    <a class="btn btn-outline-primary" href="/admin/audit/{{ event.id }}">Событие</a>
+                  {% endif %}
+                  {% if event.appointment_id %}
+                    <a class="btn btn-outline-secondary" href="/admin/audit/appointment/{{ event.appointment_id }}">Приём</a>
+                  {% endif %}
+                </div>
+              </td>
+            </tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+      {% else %}
+        <div class="audit-empty-state">
+          <h3>Событий нет</h3>
+          <p>По выбранным фильтрам журнал ничего не вернул. Попробуйте расширить период или убрать часть фильтров.</p>
+        </div>
+      {% endif %}
     </div>
-</div>
+  </div>
 </div>
 {% endblock %}
