@@ -1,0 +1,10 @@
+security_sessions_v1
+
+Назначение архива:
+- закрыть все внутренние страницы МИС active session;
+- убрать публичные /docs, /redoc, /openapi.json;
+- сделать idle-timeout 60 минут;
+- добавить JS keepalive, чтобы врач не терял введённые данные при реальной работе в форме;
+- добавить scripts/create_admin_user.py и scripts/reset_user_password.py для управления паролями без хранения открытых паролей.
+
+После распаковки проверьте .env по .env.example.

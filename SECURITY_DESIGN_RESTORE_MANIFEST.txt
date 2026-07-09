@@ -1,0 +1,14 @@
+security_design_restore_v2
+
+Файлы:
+- app/templates/base.html
+- app/templates/login.html
+
+Назначение:
+- вернуть исходный дизайн страниц после security_sessions_v1;
+- оставить подключение session_keepalive.js для авторизованных пользователей;
+- не откатывать серверную защиту сессий, middleware, admin scripts и настройки.
+
+Важно:
+- старый комментарий с демо-паролями в login.html намеренно не возвращён;
+- реальные пароли должны храниться только как password_hash в БД.

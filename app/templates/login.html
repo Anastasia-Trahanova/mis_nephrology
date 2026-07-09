@@ -1,3 +1,22 @@
+{#
+Назначение файла: единственная публичная страница входа в МИС.
+
+Как работает:
+- сохраняет исходный дизайн проекта: центрированная карточка входа на светлом фоне;
+- показывает логин, пароль и ошибку входа;
+- сохраняет hidden-поле next, чтобы после входа вернуть врача на нужную внутреннюю страницу;
+- не хранит и не показывает реальные пароли пользователей.
+
+Что редактировать здесь:
+- внешний вид страницы входа;
+- поясняющие тексты для пользователя.
+
+Что не редактировать здесь:
+- проверку password_hash;
+- создание сессии;
+- правила idle-timeout.
+#}
+
 <!DOCTYPE html>
 <html lang="ru">
 <head>
@@ -12,13 +31,13 @@
             <div class="col-md-5 col-lg-4">
                 <div class="card shadow-sm">
                     <div class="card-body p-4">
-                        <h1 class="h4 text-center mb-1">🏥 МИС Нефролога</h1>
+                        <h1 class="h4 text-center mb-1"> МИС Нефролога</h1>
                         <p class="text-muted text-center mb-4">Вход в систему</p>
 
                         {% if error %}
-                        <div class="alert alert-danger" role="alert">
-                            {{ error }}
-                        </div>
+                            <div class="alert alert-danger" role="alert">
+                                {{ error }}
+                            </div>
                         {% endif %}
 
                         <form method="post" action="/login">
@@ -50,10 +69,8 @@
                                 >
                             </div>
 
-                            <button class="btn btn-primary w-100" type="submit">Войти</button> 
+                            <button class="btn btn-primary w-100" type="submit">Войти</button>
                         </form>
-
-                       
                     </div>
                 </div>
             </div>
@@ -61,7 +78,3 @@
     </div>
 </body>
 </html>
-
-
-
-<!--admin / admin123, lobanova_n / doctor123
