@@ -6,11 +6,12 @@
   прежние CSS-файлы и прежние версии Bootstrap-подключений;
 - показывает основную навигацию и кнопку выхода только авторизованному пользователю;
 - подключает simple_form_guard.js и kdigo_risk_preview.js, как было в проекте;
+- подключает 05_admin_audit.css для единообразного оформления административного журнала;
 - дополнительно подключает session_keepalive.js только после входа пользователя,
   чтобы активная работа врача в форме продлевала idle-сессию.
 
 Что редактировать здесь:
-- общую навигацию;
+- общую навигацию, включая ссылку администратора на журнал работы;
 - подключение общих CSS/JS;
 - общий контейнер внутренних страниц.
 
@@ -31,6 +32,7 @@
     <link rel="stylesheet" href="{{ url_for('static', path='css/02_clinical_messages.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/03_select_popups.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/04_kdigo_risk.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/05_admin_audit.css') }}">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
@@ -41,6 +43,7 @@
                 <a class="nav-link" href="/patients">Пациенты</a>
                 {% if request.session.get('role') == 'admin' %}
                     <a class="nav-link" href="/ckd-registry">Регистр ХБП</a>
+                    <a class="nav-link" href="/admin/audit">Журнал работы</a>
                 {% endif %}
             </div>
 

@@ -1,0 +1,318 @@
+/*
+Назначение файла: оформление административного журнала МИС.
+
+Как работает:
+- задаёт единый внешний вид страниц /admin/audit и /admin/audit/{event_id};
+- все селекторы начинаются с .admin-audit-page, чтобы не менять карточку пациента,
+  формы приёма, KDIGO-матрицу и другие страницы проекта;
+- страница подробностей аудита оформлена как протокол: слева описание сохранённого
+  действия, справа отдельная колонка статуса.
+
+Что редактировать здесь:
+- размер шрифта административного журнала;
+- ширину правой колонки статусов;
+- плотность строк протокола;
+- цвета бейджей статусов.
+
+Что не редактировать здесь:
+- медицинские тексты и статусы изменений — они формируются в app/services/audit_details.py;
+- SQL аудита — он в app/repositories/audit_log.py;
+- HTML-разметку страницы — она в app/templates/admin/audit*.html.
+*/
+
+.admin-audit-page {
+    font-size: 1.03rem;
+    margin-left: auto;
+    margin-right: auto;
+    max-width: 1220px;
+}
+
+.admin-audit-page .table {
+    font-size: 0.98rem;
+}
+
+.admin-audit-page .table th,
+.admin-audit-page .table td {
+    vertical-align: top;
+}
+
+.audit-page-title {
+    font-size: 1.5rem;
+    font-weight: 600;
+    margin: 0 0 0.35rem;
+}
+
+.audit-event-card,
+.audit-changes-card {
+    background: #fff;
+    border: 1px solid #dee2e6;
+    border-radius: 0.45rem;
+    box-shadow: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    margin-bottom: 1rem;
+    padding: 1rem;
+}
+
+.audit-event-card-header {
+    align-items: flex-start;
+    display: flex;
+    gap: 1rem;
+    justify-content: space-between;
+    margin-bottom: 1rem;
+}
+
+.audit-event-sentence {
+    color: #6c757d;
+    margin: 0;
+}
+
+.audit-event-meta-grid {
+    border-top: 1px solid #e9ecef;
+    display: grid;
+    gap: 0.85rem 1rem;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    padding-top: 1rem;
+}
+
+.audit-event-meta-grid-protocol {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.audit-meta-label {
+    color: #6c757d;
+    font-size: 0.9rem;
+    margin-bottom: 0.15rem;
+}
+
+.audit-meta-value {
+    font-size: 1rem;
+    line-height: 1.35;
+}
+
+.audit-event-note {
+    background: #f8f9fa;
+    border-left: 3px solid #6c757d;
+    border-radius: 0.25rem;
+    margin-top: 1rem;
+    padding: 0.75rem;
+}
+
+.audit-section-heading {
+    border-bottom: 1px solid #e9ecef;
+    margin-bottom: 1rem;
+    padding-bottom: 0.75rem;
+}
+
+.audit-section-heading h2,
+.audit-summary-card h2 {
+    font-size: 1.25rem;
+    font-weight: 600;
+    margin: 0 0 0.25rem;
+}
+
+.audit-section-heading p {
+    color: #6c757d;
+    margin: 0;
+}
+
+.audit-summary-list {
+    display: flex;
+    flex-direction: column;
+    gap: 0.6rem;
+    margin-top: 0.75rem;
+}
+
+.audit-summary-row {
+    background: #f8f9fa;
+    border-left: 4px solid #dee2e6;
+    border-radius: 0.25rem;
+    display: grid;
+    gap: 0.75rem;
+    grid-template-columns: 230px 1fr;
+    padding: 0.7rem 0.8rem;
+}
+
+.audit-summary-added {
+    border-left-color: #198754;
+}
+
+.audit-summary-removed {
+    border-left-color: #dc3545;
+}
+
+.audit-summary-changed {
+    border-left-color: #ffc107;
+}
+
+.audit-summary-system {
+    border-left-color: #0dcaf0;
+}
+
+.audit-summary-unchanged {
+    border-left-color: #6c757d;
+}
+
+.audit-summary-label {
+    font-weight: 600;
+}
+
+.audit-summary-items {
+    line-height: 1.45;
+}
+
+.audit-change-section {
+    margin-bottom: 1.4rem;
+}
+
+.audit-change-section h3 {
+    border-bottom: 1px solid #e9ecef;
+    font-size: 1.16rem;
+    font-weight: 600;
+    margin: 0 0 0.3rem;
+    padding-bottom: 0.45rem;
+}
+
+.audit-protocol-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.audit-protocol-row {
+    display: grid;
+    gap: 1rem;
+    grid-template-columns: minmax(0, 1fr) 220px;
+    padding: 0.85rem 0;
+}
+
+.audit-protocol-row + .audit-protocol-row {
+    border-top: 1px solid #eef1f4;
+}
+
+.audit-protocol-main {
+    min-width: 0;
+}
+
+.audit-protocol-field {
+    font-weight: 600;
+    line-height: 1.35;
+    margin-bottom: 0.25rem;
+}
+
+.audit-protocol-value {
+    line-height: 1.45;
+    margin-top: 0.18rem;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+.audit-protocol-value-new {
+    font-weight: 500;
+}
+
+.audit-protocol-value-muted {
+    color: #6c757d;
+}
+
+.audit-protocol-details {
+    color: #495057;
+    line-height: 1.45;
+    margin-top: 0.35rem;
+    white-space: pre-wrap;
+}
+
+.audit-protocol-status {
+    align-items: flex-start;
+    display: flex;
+    justify-content: flex-end;
+    padding-top: 0.1rem;
+}
+
+.audit-change-badge {
+    border: 1px solid transparent;
+    border-radius: 999px;
+    display: inline-block;
+    font-size: 0.9rem;
+    font-weight: 600;
+    line-height: 1;
+    padding: 0.38rem 0.6rem;
+    text-align: center;
+    white-space: normal;
+}
+
+.audit-change-badge-added {
+    background: #d1e7dd;
+    border-color: #badbcc;
+    color: #0f5132;
+}
+
+.audit-change-badge-changed {
+    background: #fff3cd;
+    border-color: #ffecb5;
+    color: #664d03;
+}
+
+.audit-change-badge-removed {
+    background: #f8d7da;
+    border-color: #f5c2c7;
+    color: #842029;
+}
+
+.audit-change-badge-system {
+    background: #cff4fc;
+    border-color: #b6effb;
+    color: #055160;
+}
+
+.audit-change-badge-neutral {
+    background: #f8f9fa;
+    border-color: #dee2e6;
+    color: #495057;
+}
+
+.audit-empty-state {
+    background: #f8f9fa;
+    border: 1px dashed #ced4da;
+    border-radius: 0.45rem;
+    padding: 1rem;
+}
+
+.audit-empty-state h3 {
+    font-size: 1.05rem;
+    margin: 0 0 0.35rem;
+}
+
+.audit-empty-state p {
+    color: #6c757d;
+    margin: 0;
+}
+
+@media (max-width: 992px) {
+    .audit-event-meta-grid,
+    .audit-event-meta-grid-protocol {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .audit-summary-row,
+    .audit-protocol-row {
+        grid-template-columns: 1fr;
+    }
+
+    .audit-protocol-status {
+        justify-content: flex-start;
+    }
+}
+
+@media (max-width: 576px) {
+    .audit-event-card-header {
+        display: block;
+    }
+
+    .audit-event-result {
+        margin-top: 0.5rem;
+    }
+
+    .audit-event-meta-grid,
+    .audit-event-meta-grid-protocol {
+        grid-template-columns: 1fr;
+    }
+}

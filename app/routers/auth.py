@@ -18,7 +18,7 @@
 - формат хэша пароля.
 
 Что не редактировать здесь:
-- ролевые права doctor/admin — это следующий отдельный слой;
+- ролевые права doctor/admin — они вынесены в app/security/permissions.py;
 - медицинские маршруты;
 - шаблоны карточки пациента и формы приёма.
 """
@@ -39,6 +39,7 @@ from fastapi.templating import Jinja2Templates
 from starlette.middleware.base import BaseHTTPMiddleware
 
 from app.db.connection import get_db_connection
+from app.repositories.audit_log import log_audit_event
 from app.settings import settings
 
 
@@ -346,9 +347,19 @@ async def login_submit(
 ):
     """Проверяет логин/пароль и создаёт новую active session."""
     next_url = safe_next_url(next)
-    user = get_user_by_login(login.strip())
+    login_value = login.strip()
+    user = get_user_by_login(login_value)
 
     if not user or not verify_password(password, user["password_hash"]):
+        log_audit_event(
+            request,
+            "login_failed",
+            result="error",
+            user_login=login_value,
+            details="неуспешная попытка входа",
+            error_message="неверный логин или пароль",
+            status_code=401,
+        )
         return templates.TemplateResponse(
             "login.html",
             {
@@ -361,6 +372,12 @@ async def login_submit(
         )
 
     put_user_into_session(request, user)
+    log_audit_event(
+        request,
+        "login_success",
+        details="успешный вход в систему",
+        status_code=303,
+    )
     return RedirectResponse(url=next_url, status_code=303)
 
 
@@ -372,6 +389,12 @@ def logout(request: Request):
     /logout не показывает медицинские данные и не является публичной страницей.
     Если сессия активна — очищает её. Если нет — middleware уже отправит на /login.
     """
+    log_audit_event(
+        request,
+        "logout",
+        details="пользователь завершил работу",
+        status_code=303,
+    )
     request.session.clear()
     return RedirectResponse(url="/login", status_code=303)
 

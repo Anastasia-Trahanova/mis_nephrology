@@ -1,0 +1,204 @@
+{#
+Назначение файла: протокол одного события аудита.
+
+Как работает:
+- открывается по /admin/audit/{event_id}, но ссылка выдаётся только для событий с подробностями;
+- доступен только admin;
+- показывает протокол события: кто, когда, что сделал, с каким пациентом и что реально изменилось;
+- изменения сгруппированы по разделам формы;
+- внутри раздела слева показано сохранённое действие, справа — статус действия;
+- для простых событий просмотра страницы отдельная страница не создаётся.
+
+Что редактировать здесь:
+- порядок блоков протокола и русские подписи;
+- структуру левого описания строки изменения.
+
+Что не редактировать здесь:
+- размер шрифта, отступы, ширину правой колонки и цвета — они в app/static/css/05_admin_audit.css;
+- правила формирования изменений — они в app/services/audit_details.py.
+#}
+
+{% extends "base.html" %}
+
+{% macro result_badge(result, label) -%}
+    {% if result == 'success' %}<span class="badge text-bg-success">{{ label }}</span>
+    {% elif result == 'error' %}<span class="badge text-bg-danger">{{ label }}</span>
+    {% elif result == 'denied' %}<span class="badge text-bg-warning">{{ label }}</span>
+    {% else %}<span class="badge text-bg-secondary">{{ label or result }}</span>{% endif %}
+{%- endmacro %}
+
+{% macro change_badge(change) -%}
+    {% if change.change_type in ['changed_from_prefill','overridden_system_main','diagnosis_note_changed','date_changed','dosage_changed','schedule_changed','medication_row_changed'] %}
+        <span class="audit-change-badge audit-change-badge-changed">{{ change.change_type_label }}</span>
+    {% elif change.change_type in ['filled_new','lab_added','diagnosis_added','medication_added','patient_created','appointment_created','date_set'] %}
+        <span class="audit-change-badge audit-change-badge-added">{{ change.change_type_label }}</span>
+    {% elif change.change_type in ['cleared_from_prefill','diagnosis_removed','medication_removed','date_removed'] %}
+        <span class="audit-change-badge audit-change-badge-removed">{{ change.change_type_label }}</span>
+    {% elif change.change_type in ['autocalculated','accepted_system_main','accepted_system','selected_by_doctor'] %}
+        <span class="audit-change-badge audit-change-badge-system">{{ change.change_type_label }}</span>
+    {% elif change.change_type in ['field_not_filled'] %}
+        <span class="audit-change-badge audit-change-badge-neutral">{{ change.change_type_label }}</span>
+    {% else %}
+        <span class="audit-change-badge audit-change-badge-neutral">{{ change.change_type_label }}</span>
+    {% endif %}
+{%- endmacro %}
+
+{% macro render_change_line(change) -%}
+<li class="audit-protocol-row">
+    <div class="audit-protocol-main">
+        <div class="audit-protocol-field">{{ change.field_label or change.field_name or 'Изменение' }}</div>
+
+        {% if change.change_type in ['diagnosis_removed','medication_removed','cleared_from_prefill','date_removed'] %}
+            {% if change.old_value %}
+                <div class="audit-protocol-value">Удалено: {{ change.old_value }}</div>
+            {% else %}
+                <div class="audit-protocol-value">Удалено</div>
+            {% endif %}
+        {% elif change.change_type == 'field_not_filled' %}
+            <div class="audit-protocol-value audit-protocol-value-muted">Поле не заполнено</div>
+        {% elif change.old_value and change.new_value and change.old_value != change.new_value %}
+            <div class="audit-protocol-value">Было: {{ change.old_value }}</div>
+            <div class="audit-protocol-value audit-protocol-value-new">Стало: {{ change.new_value }}</div>
+        {% elif change.new_value %}
+            <div class="audit-protocol-value audit-protocol-value-new">{{ change.new_value }}</div>
+        {% elif change.old_value %}
+            <div class="audit-protocol-value">{{ change.old_value }}</div>
+        {% endif %}
+
+        {% if change.details %}
+            <div class="audit-protocol-details">{{ change.details }}</div>
+        {% endif %}
+    </div>
+    <div class="audit-protocol-status">
+        {{ change_badge(change) }}
+    </div>
+</li>
+{%- endmacro %}
+
+{% block content %}
+<div class="admin-audit-page admin-audit-protocol-page">
+    <div class="mb-3">
+        <a href="/admin/audit" class="btn btn-outline-secondary btn-sm">← Вернуться к журналу</a>
+    </div>
+
+    <section class="audit-event-card">
+        <div class="audit-event-card-header">
+            <div>
+                <h1 class="audit-page-title">
+                    {% if event.action == 'create_appointment' %}
+                        Протокол сохранения приёма №{{ event.appointment_id or event.entity_id or event.id }}
+                    {% elif event.action == 'create_patient' %}
+                        Протокол создания пациента
+                    {% else %}
+                        Протокол события №{{ event.id }}
+                    {% endif %}
+                </h1>
+                <p class="audit-event-sentence">{{ event.event_sentence }}</p>
+            </div>
+            <div class="audit-event-result">{{ result_badge(event.result, event.result_label) }}</div>
+        </div>
+
+        <div class="audit-event-meta-grid audit-event-meta-grid-protocol">
+            <div class="audit-meta-item">
+                <div class="audit-meta-label">Пациент</div>
+                <div class="audit-meta-value">
+                    {% if event.patient_id and event.patient_name %}
+                        <a href="/patient/{{ event.patient_id }}">{{ event.patient_name }}</a>
+                    {% elif event.patient_name %}
+                        {{ event.patient_name }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </div>
+            </div>
+            <div class="audit-meta-item">
+                <div class="audit-meta-label">Пользователь</div>
+                <div class="audit-meta-value">{{ event.user_login or '—' }}</div>
+            </div>
+            <div class="audit-meta-item">
+                <div class="audit-meta-label">Дата события</div>
+                <div class="audit-meta-value">
+                    {% if event.created_at %}
+                        {{ event.created_at.strftime('%d.%m.%Y %H:%M:%S') if event.created_at.strftime is defined else event.created_at }}
+                    {% else %}
+                        —
+                    {% endif %}
+                </div>
+            </div>
+            <div class="audit-meta-item">
+                <div class="audit-meta-label">Действие</div>
+                <div class="audit-meta-value">{{ event.action_label or event.action }}</div>
+            </div>
+            <div class="audit-meta-item">
+                <div class="audit-meta-label">Результат</div>
+                <div class="audit-meta-value">{{ event.result_label or event.result }}</div>
+            </div>
+            <div class="audit-meta-item">
+                <div class="audit-meta-label">Запрос</div>
+                <div class="audit-meta-value">
+                    {{ event.method or '—' }} {{ event.path or '' }}
+                    {% if event.status_code %}<span class="text-muted">HTTP {{ event.status_code }}</span>{% endif %}
+                </div>
+            </div>
+        </div>
+
+        {% if event.details or event.error_message %}
+            <div class="audit-event-note">
+                {% if event.details %}<div><strong>Детали:</strong> {{ event.details }}</div>{% endif %}
+                {% if event.error_message %}<div class="text-danger"><strong>Ошибка:</strong> {{ event.error_message }}</div>{% endif %}
+            </div>
+        {% endif %}
+    </section>
+
+    {% if protocol_summary %}
+        <section class="audit-changes-card audit-summary-card">
+            <h2>Краткая сводка</h2>
+            <div class="audit-summary-list">
+                {% for group in protocol_summary %}
+                    <div class="audit-summary-row audit-summary-{{ group.key }}">
+                        <div class="audit-summary-label">{{ group.label }}</div>
+                        <div class="audit-summary-items">
+                            {% for item in group.items[:6] %}
+                                <div>{{ item }}</div>
+                            {% endfor %}
+                            {% if group.items|length > 6 %}
+                                <div class="text-muted">и ещё {{ group.items|length - 6 }}</div>
+                            {% endif %}
+                        </div>
+                    </div>
+                {% endfor %}
+            </div>
+        </section>
+    {% endif %}
+
+    <section class="audit-changes-card">
+        <div class="audit-section-heading">
+            <h2>Разбор сохранения по разделам формы</h2>
+            <p>
+                Слева показано, что именно зафиксировано в форме. Справа — статус действия.
+                Черновые действия до нажатия «Сохранить» сюда не попадают.
+            </p>
+        </div>
+
+        {% if grouped_changes %}
+            <div class="audit-change-groups">
+                {% for section in grouped_changes %}
+                    <article class="audit-change-section audit-protocol-section">
+                        <h3>{{ section.section_label }}</h3>
+                        <ul class="audit-protocol-list">
+                            {% for change in section.changes %}
+                                {{ render_change_line(change) }}
+                            {% endfor %}
+                        </ul>
+                    </article>
+                {% endfor %}
+            </div>
+        {% else %}
+            <div class="audit-empty-state">
+                <h3>Подробных медицинских изменений нет</h3>
+                <p>Для этого события сохранён только служебный факт: пользователь, действие, результат и ошибка/отказ доступа.</p>
+            </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

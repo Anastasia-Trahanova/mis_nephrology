@@ -5,11 +5,11 @@
 - создаёт FastAPI-приложение;
 - отключает публичные /docs, /redoc, /openapi.json;
 - подключает статические файлы /static;
-- подключает middleware логирования, авторизации и cookie-сессий;
+- подключает middleware логирования, аудита, авторизации и cookie-сессий;
 - подключает все роутеры проекта.
 
 Что редактировать здесь:
-- подключение новых роутеров;
+- подключение новых роутеров и middleware;
 - порядок middleware;
 - общие настройки приложения.
 
@@ -28,6 +28,7 @@ import logging
 import time
 
 from .routers import (
+    admin,
     appointment_filters,
     appointment_pages,
     appointments,
@@ -39,6 +40,7 @@ from .routers import (
     patient_pages,
     patients,
 )
+from .middleware.audit import AuditMiddleware
 from .settings import settings
 
 
@@ -104,6 +106,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 # Важно: SessionMiddleware добавляется последним, чтобы он был внешним слоем
 # и request.session был доступен внутри AuthRequiredMiddleware.
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(AuditMiddleware)
 app.add_middleware(auth.AuthRequiredMiddleware)
 app.add_middleware(
     SessionMiddleware,
@@ -118,6 +121,7 @@ app.add_middleware(
 # Подключаем роутеры: auth содержит /login, /logout и служебные endpoints сессии.
 # Все остальные страницы закрываются AuthRequiredMiddleware.
 app.include_router(auth.router)
+app.include_router(admin.router)
 app.include_router(home.router)
 app.include_router(patient_pages.router)
 app.include_router(appointment_pages.router)

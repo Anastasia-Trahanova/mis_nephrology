@@ -47,6 +47,8 @@
                     value=""
                     data-autofill-ckd-main="true"
                 >
+                <input type="hidden" name="icd10_main_diagnosis_autofilled_value" id="icd10MainDiagnosisAutofilledValue" value="">
+                <input type="hidden" name="icd10_main_diagnosis_user_edited" id="icd10MainDiagnosisUserEdited" value="false">
                 <div class="icd10-suggestions list-group shadow-sm d-none"></div>
             </div>
             <div class="form-text icd10-autofill-note text-muted">
@@ -315,6 +317,7 @@ function renderIcd10Suggestions(input, showAll = false) {
             input.value = diagnosis;
             input.dataset.userEdited = "true";
             input.dataset.autofilledValue = "";
+            syncMainIcd10AuditState(input);
             suggestionsBlock.classList.add("d-none");
             suggestionsBlock.innerHTML = "";
         });
@@ -329,6 +332,7 @@ function initIcd10Search(root = document) {
         input.addEventListener("input", () => {
             input.dataset.userEdited = "true";
             input.dataset.autofilledValue = "";
+            syncMainIcd10AuditState(input);
             renderIcd10Suggestions(input, false);
         });
         input.addEventListener("focus", () => renderIcd10Suggestions(input, true));
@@ -489,6 +493,13 @@ function getLatestCurrentCkdStageFromForm() {
     return latest ? latest.stage : null;
 }
 
+function syncMainIcd10AuditState(input) {
+    const autofilledInput = document.querySelector('[name="icd10_main_diagnosis_autofilled_value"]');
+    const userEditedInput = document.querySelector('[name="icd10_main_diagnosis_user_edited"]');
+    if (autofilledInput) autofilledInput.value = input?.dataset?.autofilledValue || "";
+    if (userEditedInput) userEditedInput.value = input?.dataset?.userEdited === "true" ? "true" : "false";
+}
+
 function updateMainIcd10DiagnosisFromCkdStage() {
     const input = document.querySelector('[name="icd10_main_diagnosis"]');
     if (!input) return;
@@ -503,12 +514,14 @@ function updateMainIcd10DiagnosisFromCkdStage() {
     const userEdited = input.dataset.userEdited === "true";
 
     if (userEdited && currentValue !== lastAutofilledValue) {
+        syncMainIcd10AuditState(input);
         return;
     }
 
     input.value = diagnosis;
     input.dataset.autofilledValue = diagnosis;
     input.dataset.userEdited = "false";
+    syncMainIcd10AuditState(input);
 }
 
 function scheduleMainIcd10Autofill() {
