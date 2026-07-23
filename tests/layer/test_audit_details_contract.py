@@ -6,7 +6,7 @@
 - проверяет, что app/services/audit_details.py правильно классифицирует изменения формы;
 - проверяет, что для сохранённого приёма появляются подробности по анализам, МКБ-10,
   KDIGO, рекомендациям и лекарствам;
-- проверяет, что admin может открыть страницу подробностей события, а doctor получает 403.
+- не дублирует HTTP-тесты административных страниц из test_admin_audit_contract.py.
 
 Что редактировать здесь:
 - ожидаемые статусы изменений, если меняется модель audit_event_changes;
@@ -21,29 +21,19 @@
 from __future__ import annotations
 
 import os
-from types import SimpleNamespace
 
 os.environ.setdefault("DB_NAME", "test_db")
 os.environ.setdefault("DB_USER", "test_user")
 os.environ.setdefault("DB_PASSWORD", "test_password")
 os.environ.setdefault("SESSION_SECRET_KEY", "test-session-secret")
 
-import pytest
-from fastapi import FastAPI, Request
-from fastapi.responses import PlainTextResponse
-from fastapi.testclient import TestClient
 from starlette.datastructures import FormData
-from starlette.middleware.sessions import SessionMiddleware
 
 from app.repositories import audit_log
-from app.routers import admin as admin_router
 from app.services.audit_details import (
     build_appointment_medical_audit_changes,
     build_patient_creation_audit_changes,
 )
-
-
-TEST_SESSION_COOKIE = "test_audit_details_session"
 
 
 def change_types(changes):
@@ -235,8 +225,10 @@ def test_09_icd10_main_accepts_system_suggestion_when_form_provides_it():
         appointment_id=28,
     )
 
-    assert find_change(changes, section="icd10", change_type="system_suggested_main")
-    assert find_change(changes, section="icd10", change_type="accepted_system_main")
+    change = find_change(changes, section="icd10", change_type="accepted_system_main")
+    assert change
+    assert change["new_value"].startswith("N18.2")
+    assert "автоматически" in change["details"]
 
 
 def test_10_icd10_main_override_is_logged_when_doctor_replaces_system_value():
@@ -275,9 +267,10 @@ def test_11_icd10_complications_and_notes_are_logged():
         appointment_id=28,
     )
 
-    change = find_change(changes, section="icd10", field_name="icd10_complication_diagnosis")
+    change = find_change(changes, section="icd10", field_name="icd10_diagnosis")
     assert change["change_type"] == "diagnosis_added"
-    assert change["details"] == "почечный генез"
+    assert change["field_label"] == "Осложнение"
+    assert "почечный генез" in change["new_value"]
 
 
 def test_12_kdigo_selected_option_is_logged():
@@ -384,129 +377,3 @@ def test_16_repository_decorates_change_type_labels():
     )
 
     assert change["change_type_label"] == "Добавлен препарат"
-
-
-@pytest.fixture()
-def admin_detail_app(monkeypatch):
-    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
-    app.add_middleware(
-        SessionMiddleware,
-        secret_key="test-secret-key",
-        session_cookie=TEST_SESSION_COOKIE,
-        max_age=604800,
-        same_site="lax",
-        https_only=False,
-    )
-
-    @app.get("/set-admin")
-    def set_admin(request: Request):
-        request.session.update(
-            {
-                "user_id": 1,
-                "login": "admin",
-                "display_name": "Администратор",
-                "role": "admin",
-                "last_seen_at": 1_700_000_000,
-            }
-        )
-        return PlainTextResponse("admin")
-
-    @app.get("/set-doctor")
-    def set_doctor(request: Request):
-        request.session.update(
-            {
-                "user_id": 2,
-                "login": "doctor",
-                "display_name": "Лобанова",
-                "role": "doctor",
-                "doctor_id": 7,
-                "last_seen_at": 1_700_000_000,
-            }
-        )
-        return PlainTextResponse("doctor")
-
-    monkeypatch.setattr(
-        admin_router,
-        "get_audit_event",
-        lambda event_id: {
-            "id": event_id,
-            "created_at": None,
-            "user_login": "Лобанова",
-            "user_role": "doctor",
-            "action": "create_appointment",
-            "action_label": "Создал повторный приём",
-            "result": "success",
-            "result_label": "успешно",
-            "patient_id": 6,
-            "patient_name": "Волкова Татьяна Николаевна",
-            "appointment_id": 28,
-            "entity_type": "appointment",
-            "entity_id": 28,
-            "method": "POST",
-            "path": "/api/patients/6/appointments/new",
-            "status_code": 303,
-            "details": "создан повторный приём",
-            "error_message": None,
-            "event_sentence": "пользователь Лобанова — создал повторный приём",
-        },
-    )
-    monkeypatch.setattr(
-        admin_router,
-        "get_audit_event_changes",
-        lambda event_id: [
-            {
-                "section": "biochemistry",
-                "section_label": "Биохимия крови",
-                "field_label": "Биохимия от 2026-07-09",
-                "field_name": "biochemistry_investigation_date",
-                "change_type": "lab_added",
-                "change_type_label": "Добавлен анализ",
-                "old_value": None,
-                "new_value": "2026-07-09",
-                "details": "Креатинин: 110",
-            }
-        ],
-    )
-    monkeypatch.setattr(
-        admin_router,
-        "group_audit_changes_by_section",
-        audit_log.group_audit_changes_by_section,
-    )
-    monkeypatch.setattr(admin_router, "log_audit_event", lambda *args, **kwargs: 999)
-
-    app.include_router(admin_router.router)
-    return app
-
-
-@pytest.fixture()
-def admin_detail_client(admin_detail_app):
-    with TestClient(admin_detail_app) as client:
-        yield client
-
-
-def test_17_admin_can_open_audit_detail_page(admin_detail_client):
-    admin_detail_client.get("/set-admin")
-
-    response = admin_detail_client.get("/admin/audit/123")
-
-    assert response.status_code == 200
-    assert "Подробности события аудита №123" in response.text
-    assert "Биохимия крови" in response.text
-    assert "Креатинин: 110" in response.text
-
-
-def test_18_doctor_cannot_open_audit_detail_page(admin_detail_client):
-    admin_detail_client.get("/set-doctor")
-
-    response = admin_detail_client.get("/admin/audit/123")
-
-    assert response.status_code == 403
-
-
-def test_19_unknown_audit_event_returns_404(admin_detail_client, monkeypatch):
-    monkeypatch.setattr(admin_router, "get_audit_event", lambda event_id: None)
-    admin_detail_client.get("/set-admin")
-
-    response = admin_detail_client.get("/admin/audit/999")
-
-    assert response.status_code == 404

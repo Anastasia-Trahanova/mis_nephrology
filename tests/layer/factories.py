@@ -37,6 +37,10 @@ class FakeForm:
     def getlist(self, key: str) -> list[Any]:
         return list(self._data.get(key, []))
 
+    def keys(self):
+        """Возвращает имена полей, как Starlette FormData.keys()."""
+        return self._data.keys()
+
 
 class FakeCursor:
     """

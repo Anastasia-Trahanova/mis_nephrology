@@ -58,8 +58,9 @@ def test_create_new_patient_router_redirects_to_patient_card(monkeypatch):
     """
     called = {}
 
-    def fake_create_patient_with_first_appointment(form):
+    def fake_create_patient_with_first_appointment(form, *, current_doctor_id):
         called["form"] = form
+        called["doctor_id"] = current_doctor_id
         return FakeSaveResult(patient_id=101, appointment_id=202)
 
     monkeypatch.setattr(
@@ -67,12 +68,16 @@ def test_create_new_patient_router_redirects_to_patient_card(monkeypatch):
         "create_patient_with_first_appointment",
         fake_create_patient_with_first_appointment,
     )
+    monkeypatch.setattr(patients_router, "require_doctor_with_id", lambda request: 7)
+    monkeypatch.setattr(patients_router, "log_audit_event", lambda *args, **kwargs: 900)
+    monkeypatch.setattr(patients_router, "log_audit_changes", lambda *args, **kwargs: None)
 
     response = anyio.run(patients_router.create_new_patient, FakeRequest())
 
     assert response.status_code == 303
     assert response.headers["location"] == "/patient/101?appointment_id=202"
     assert called["form"].get("last_name") == "Тестова"
+    assert called["doctor_id"] == 7
 
 
 def test_create_new_appointment_router_redirects_to_patient_card(monkeypatch):
@@ -89,9 +94,15 @@ def test_create_new_appointment_router_redirects_to_patient_card(monkeypatch):
     """
     called = {}
 
-    def fake_create_appointment_for_existing_patient(patient_id, form):
+    def fake_create_appointment_for_existing_patient(
+        patient_id,
+        form,
+        *,
+        current_doctor_id,
+    ):
         called["patient_id"] = patient_id
         called["form"] = form
+        called["doctor_id"] = current_doctor_id
         return FakeSaveResult(patient_id=101, appointment_id=303)
 
     monkeypatch.setattr(
@@ -99,6 +110,10 @@ def test_create_new_appointment_router_redirects_to_patient_card(monkeypatch):
         "create_appointment_for_existing_patient",
         fake_create_appointment_for_existing_patient,
     )
+    monkeypatch.setattr(appointments_router, "require_doctor_with_id", lambda request: 7)
+    monkeypatch.setattr(appointments_router, "get_last_appointment_data", lambda patient_id: None)
+    monkeypatch.setattr(appointments_router, "log_audit_event", lambda *args, **kwargs: 901)
+    monkeypatch.setattr(appointments_router, "log_audit_changes", lambda *args, **kwargs: None)
 
     response = anyio.run(
         appointments_router.create_new_appointment_for_existing_patient,
@@ -110,6 +125,7 @@ def test_create_new_appointment_router_redirects_to_patient_card(monkeypatch):
     assert response.headers["location"] == "/patient/101?appointment_id=303"
     assert called["patient_id"] == 101
     assert called["form"].get("last_name") == "Тестова"
+    assert called["doctor_id"] == 7
 
 
 def test_api_appointments_filtered_builds_filters_and_serializes_dates(monkeypatch):

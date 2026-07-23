@@ -3,10 +3,12 @@
 
 Этот модуль нужен, чтобы одинаково формировать текстовые блоки для:
 - первого приёма нового пациента;
-- повторного приёма существующего пациента.
+- повторного приёма существующего пациента;
+- подробного аудита уже сохранённой формы.
 
-Здесь нет SQL и сохранения в БД. Модуль только превращает набор отдельных полей
-формы в готовые строки, которые затем сохраняются в examinations.
+Форма может быть представлена как Starlette FormData либо как обычный dict.
+Последний вариант используется после подготовки данных для аудита, поэтому helper-функции
+ниже обязаны поддерживать оба формата.
 """
 
 from __future__ import annotations
@@ -16,30 +18,45 @@ from typing import Any
 from .form_parsing import empty_to_none, join_form_values
 
 
+def _form_get(form: Any, key: str, default: Any = None) -> Any:
+    """Безопасно получает одно значение из FormData или обычного словаря."""
+    try:
+        return form.get(key, default)
+    except AttributeError:
+        return default
+
+
+def _form_getlist(form: Any, key: str) -> list[Any]:
+    """Безопасно получает список значений из FormData или обычного словаря."""
+    if hasattr(form, "getlist"):
+        return list(form.getlist(key))
+
+    value = _form_get(form, key)
+    if value is None:
+        return []
+    if isinstance(value, (list, tuple)):
+        return list(value)
+    return [value]
+
+
 def build_skin_condition(form: Any) -> str | None:
     """
-    Формирует строку описания кожных покровов.
+    Формирует строку старого checkbox-описания кожных покровов.
 
-    Источники из формы:
-    - skin_color;
-    - skin_color_other;
-    - skin_moisture;
-    - skin_moisture_other;
-    - skin_rash;
-    - skin_rash_description;
-    - skin_other.
+    Функция оставлена только для обратной совместимости старых сценариев и тестовых данных.
+    Новая форма этапа 2 сохраняет поле skin_and_mucous_membranes как обычный текст.
     """
     skin_color = join_form_values(
-        form.getlist("skin_color"),
-        form.get("skin_color_other"),
+        _form_getlist(form, "skin_color"),
+        _form_get(form, "skin_color_other"),
     )
     skin_moisture = join_form_values(
-        form.getlist("skin_moisture"),
-        form.get("skin_moisture_other"),
+        _form_getlist(form, "skin_moisture"),
+        _form_get(form, "skin_moisture_other"),
     )
-    skin_rash = empty_to_none(form.get("skin_rash"))
-    skin_rash_description = empty_to_none(form.get("skin_rash_description"))
-    skin_other = empty_to_none(form.get("skin_other"))
+    skin_rash = empty_to_none(_form_get(form, "skin_rash"))
+    skin_rash_description = empty_to_none(_form_get(form, "skin_rash_description"))
+    skin_other = empty_to_none(_form_get(form, "skin_other"))
 
     skin_parts: list[str] = []
 
@@ -65,22 +82,19 @@ def build_edema_location(form: Any) -> str | None:
     """
     Формирует строку описания отёков.
 
-    Источники из формы:
-    - edema_peripheral;
-    - edema_peripheral_other;
-    - edema_serositis;
-    - edema_serositis_other;
-    - edema_other.
+    Поддерживаются оба варианта входа:
+    - реальный FormData из HTTP-запроса;
+    - обычный dict, который создаётся перед записью подробного аудита.
     """
     edema_peripheral = join_form_values(
-        form.getlist("edema_peripheral"),
-        form.get("edema_peripheral_other"),
+        _form_getlist(form, "edema_peripheral"),
+        _form_get(form, "edema_peripheral_other"),
     )
     edema_serositis = join_form_values(
-        form.getlist("edema_serositis"),
-        form.get("edema_serositis_other"),
+        _form_getlist(form, "edema_serositis"),
+        _form_get(form, "edema_serositis_other"),
     )
-    edema_other = empty_to_none(form.get("edema_other"))
+    edema_other = empty_to_none(_form_get(form, "edema_other"))
 
     edema_parts: list[str] = []
 

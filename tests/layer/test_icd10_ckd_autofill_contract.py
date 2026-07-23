@@ -59,15 +59,14 @@ def test_parser_and_save_service_do_not_use_text_diagnoses_section():
     assert 'INSERT INTO diagnoses' not in diagnoses_repo
 
 
-def test_appointments_repository_does_not_join_dropped_diagnoses_table():
+def test_appointments_repository_does_not_use_dropped_text_diagnoses_table():
     content = read("app/repositories/appointments.py")
     normalized = " ".join(content.lower().split())
 
+    # Диагнозы МКБ-10 читаются отдельным repository. Старую таблицу diagnoses
+    # нельзя возвращать ни через JOIN, ни через прямой SELECT.
     assert "left join diagnoses" not in normalized
     assert "from diagnoses" not in normalized
-    assert "null::text as main_diagnosis" in normalized
-    assert "null::text as complications" in normalized
-    assert "null::text as diag_comorbidities" in normalized
 
 
 def test_drop_text_diagnoses_alembic_migration_exists_in_versions():

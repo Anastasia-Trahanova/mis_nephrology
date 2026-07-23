@@ -4,8 +4,7 @@
 Как работает:
 - проверяет формирование детальных изменений без подключения к БД;
 - фиксирует договорённости по текстам статусов для страницы /admin/audit/{event_id};
-- проверяет, что кожные покровы и отёки логируются как сохранённые значения текущего приёма,
-  а не как удалённые автоподстановки;
+- проверяет, что текстовое поле кожи и checkbox-поля отёков логируются как сохранённые значения;
 - проверяет, что альбуминурия выводится без лишних слов про единицы;
 - проверяет, что пустая дата контроля не считается удалением.
 
@@ -71,10 +70,10 @@ def test_albuminuria_details_are_human_readable_without_unit_words():
     assert "Единицы креатинина" not in lab["details"]
 
 
-def test_skin_and_edema_are_logged_as_current_saved_values_not_deleted_prefill():
+def test_skin_text_and_edema_are_logged_as_current_saved_values():
     form = FakeForm(
         {
-            "skin_color": ["Цианотичные", "мраморный"],
+            "skin_and_mucous_membranes": "Кожные покровы обычной окраски, слизистые влажные",
             "edema_peripheral": ["Голени", "стопы"],
         }
     )
@@ -82,7 +81,7 @@ def test_skin_and_edema_are_logged_as_current_saved_values_not_deleted_prefill()
     changes = build_appointment_medical_audit_changes(
         form,
         previous_appointment={
-            "skin_condition": "Высыпания: нет",
+            "skin_and_mucous_membranes": "Кожные покровы бледные",
             "edema_location": "Периферические отёки: нет",
         },
         previous_medications=[],
@@ -90,12 +89,12 @@ def test_skin_and_edema_are_logged_as_current_saved_values_not_deleted_prefill()
         appointment_id=30,
     )
 
-    skin = changes_by_field(changes, "skin_condition")[0]
+    skin = changes_by_field(changes, "skin_and_mucous_membranes")[0]
     edema = changes_by_field(changes, "edema_location")[0]
 
     assert skin["change_type"] == "changed_from_prefill"
-    assert "Окраска: Цианотичные, мраморный" in skin["new_value"]
-    assert skin["old_value"] == "Высыпания: нет"
+    assert skin["new_value"] == "Кожные покровы обычной окраски, слизистые влажные"
+    assert skin["old_value"] == "Кожные покровы бледные"
 
     assert edema["change_type"] == "changed_from_prefill"
     assert "Периферические отёки: Голени, стопы" in edema["new_value"]

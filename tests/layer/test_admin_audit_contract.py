@@ -204,10 +204,18 @@ def test_04_doctor_role_is_not_admin(doctor_session):
     assert permissions.is_doctor(request) is True
 
 
-def test_05_admin_audit_page_requires_admin(monkeypatch, admin_session):
+def _patch_admin_page_dependencies(monkeypatch):
+    """Изолирует страницу журнала от БД и побочного логирования."""
     monkeypatch.setattr(admin_router, "get_audit_events", lambda **kwargs: [])
-    monkeypatch.setattr(admin_router, "get_audit_summary", lambda: {})
+    monkeypatch.setattr(admin_router, "get_audit_summary", lambda **kwargs: {})
     monkeypatch.setattr(admin_router, "get_audit_action_choices", lambda: [])
+    monkeypatch.setattr(admin_router, "get_audit_action_category_choices", lambda: [])
+    monkeypatch.setattr(admin_router, "get_audit_role_choices", lambda: [])
+    monkeypatch.setattr(admin_router, "log_audit_event", lambda *args, **kwargs: 1)
+
+
+def test_05_admin_audit_page_requires_admin(monkeypatch, admin_session):
+    _patch_admin_page_dependencies(monkeypatch)
 
     app = FastAPI()
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
@@ -233,9 +241,7 @@ def test_05_admin_audit_page_requires_admin(monkeypatch, admin_session):
 
 
 def test_06_doctor_cannot_open_admin_audit_page(monkeypatch, doctor_session):
-    monkeypatch.setattr(admin_router, "get_audit_events", lambda **kwargs: [])
-    monkeypatch.setattr(admin_router, "get_audit_summary", lambda: {})
-    monkeypatch.setattr(admin_router, "get_audit_action_choices", lambda: [])
+    _patch_admin_page_dependencies(monkeypatch)
 
     app = FastAPI()
     app.mount("/static", StaticFiles(directory="app/static"), name="static")
