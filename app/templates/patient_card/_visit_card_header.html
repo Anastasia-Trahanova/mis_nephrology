@@ -2,11 +2,17 @@
 Назначение файла:
 Заголовок правой карточки выбранного приёма.
 
-Что делает:
-- выводит дату и время выбранного приёма;
-- сохраняет исходный стиль: card-header bg-secondary text-white.
+Первичным считается самый ранний приём пациента в списке appointments.
+Все последующие приёмы отображаются как повторные.
 #}
-<!-- КОД ОТОБРАЖЕНИЯ ПРИЁМА -->
-<div class="card-header bg-secondary text-white">
-  <h5 class="mb-0">Приём от {{ selected_appointment.appointment_date.strftime('%d.%m.%Y %H:%M') if selected_appointment.appointment_date else '—' }}</h5>
+{% set visit_kind = namespace(value='повторный') %}
+{% if appointments %}
+  {% set oldest_appointment = appointments | last %}
+  {% if oldest_appointment.appointment_id == selected_appointment.id %}
+    {% set visit_kind.value = 'первичный' %}
+  {% endif %}
+{% endif %}
+
+<div class="card-header bg-secondary text-white text-center">
+  <h5 class="mb-0">Консультативный приём ({{ visit_kind.value }})</h5>
 </div>

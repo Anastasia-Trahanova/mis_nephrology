@@ -1,18 +1,16 @@
-{#
-Назначение файла:
-Краткая шапка выбранного приёма.
-
-Что делает:
-- показывает врача, отделение/филиал и дату приёма;
-- сохраняет исходную двухколоночную разметку row mb-4.
-#}
-<!-- Шапка приёма (врач, отделение, дата) -->
-<div class="row mb-4">
-  <div class="col-md-6">
-    <p><strong> Врач:</strong> {{ selected_appointment.doctor_name }}</p>
-    <p><strong> Отделение:</strong> {{ selected_appointment.location_name }} ({{ selected_appointment.branch_name }})</p>
-  </div>
-  <div class="col-md-6">
-    <p><strong> Дата приёма:</strong> {{ selected_appointment.appointment_date.strftime('%d.%m.%Y %H:%M') if selected_appointment.appointment_date else '—' }}</p>
-  </div>
+{# Назначение файла: дата, место и врач выбранного приёма. #}
+<div class="mb-4">
+  <p class="mb-2">
+    <strong>Дата:</strong>
+    {{ selected_appointment.appointment_date.strftime('%d.%m.%Y %H:%M') if selected_appointment.appointment_date else '—' }}
+  </p>
+  <p class="mb-2">
+    <strong>Место приёма:</strong>
+    {% if selected_appointment.location_name %}
+      {{ selected_appointment.location_name }}{% if selected_appointment.branch_name %} ({{ selected_appointment.branch_name }}){% endif %}
+    {% else %}
+      —
+    {% endif %}
+  </p>
+  <p class="mb-0"><strong>Врач:</strong> {{ selected_appointment.doctor_name or '—' }}</p>
 </div>

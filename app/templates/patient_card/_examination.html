@@ -5,52 +5,93 @@
 {% set constitution_labels = {'normosthenic': 'Нормостеник', 'asthenic': 'Астеник', 'hypersthenic': 'Гиперстеник'} %}
 {% set kidney_labels = {'palpable': 'Пальпируются', 'not_palpable': 'Не пальпируются'} %}
 {% set pasternatsky_result_labels = {'positive': 'Положительный', 'negative': 'Отрицательный'} %}
-{% set pasternatsky_side_labels = {'right': 'Справа', 'left': 'Слева', 'bilateral': 'С двух сторон'} %}
+{% set pasternatsky_side_labels = {'right': 'справа', 'left': 'слева', 'bilateral': 'с двух сторон'} %}
 
 <h5 class="mt-3">Данные объективного исследования больного</h5>
 
-<div class="row mb-3">
-    <div class="col-md-4">
-        <p><strong>Общее состояние:</strong> {{ general_condition_labels.get(selected_appointment.general_condition, '—') }}</p>
-        <p><strong>Сознание:</strong> {{ consciousness_labels.get(selected_appointment.consciousness, '—') }}</p>
-        <p><strong>Положение в постели:</strong> {{ bed_position_labels.get(selected_appointment.bed_position, '—') }}</p>
-        {% if selected_appointment.bed_position_details %}<p><strong>Особенности положения:</strong> {{ selected_appointment.bed_position_details }}</p>{% endif %}
-        <p><strong>Телосложение:</strong> {{ selected_appointment.body_build or '—' }}</p>
-        <p><strong>Тип конституции:</strong> {{ constitution_labels.get(selected_appointment.constitution_type, '—') }}</p>
-    </div>
+<div class="mb-3">
+  {% if selected_appointment.general_condition %}
+  <p><strong>Общее состояние:</strong> {{ general_condition_labels.get(selected_appointment.general_condition, selected_appointment.general_condition) }}</p>
+  {% endif %}
 
-    <div class="col-md-4">
-        <p><strong>Рост:</strong> {{ selected_appointment.height or '—' }}{% if selected_appointment.height %} см{% endif %}</p>
-        <p><strong>Вес:</strong> {{ selected_appointment.weight or '—' }}{% if selected_appointment.weight %} кг{% endif %}</p>
-        <p><strong>ИМТ:</strong> {{ selected_appointment.bmi or '—' }}{% if selected_appointment.bmi %} кг/м²{% endif %}</p>
-        <p><strong>Кожа и слизистые оболочки:</strong> {{ selected_appointment.skin_and_mucous_membranes or '—' }}</p>
-        <p><strong>Отёки:</strong> {{ selected_appointment.edema_location or '—' }}</p>
-        <p><strong>Температура тела:</strong> {{ selected_appointment.body_temperature or '—' }}{% if selected_appointment.body_temperature %} °C{% endif %}</p>
-    </div>
+  {% if selected_appointment.consciousness %}
+  <p><strong>Сознание:</strong> {{ consciousness_labels.get(selected_appointment.consciousness, selected_appointment.consciousness) }}</p>
+  {% endif %}
 
-    <div class="col-md-4">
-        <p><strong>АД:</strong>
-            {% if selected_appointment.systolic_pressure and selected_appointment.diastolic_pressure %}
-                {{ selected_appointment.systolic_pressure }}/{{ selected_appointment.diastolic_pressure }} мм рт.ст.{% if selected_appointment.bp_note %} ({{ selected_appointment.bp_note }}){% endif %}
-            {% else %}—{% endif %}
-        </p>
-        <p><strong>ЧСС:</strong> {{ selected_appointment.heart_rate or '—' }}{% if selected_appointment.heart_rate %} уд/мин{% endif %}</p>
-        <p><strong>Лимфатические узлы:</strong> {{ selected_appointment.lymph_nodes or '—' }}</p>
-        <p><strong>Щитовидная железа:</strong> {{ selected_appointment.thyroid_gland or '—' }}</p>
-        <p><strong>Опорно-двигательный аппарат:</strong> {{ selected_appointment.musculoskeletal_system or '—' }}</p>
-    </div>
-</div>
+  {% if selected_appointment.bed_position %}
+  <p><strong>Положение в постели:</strong> {{ bed_position_labels.get(selected_appointment.bed_position, selected_appointment.bed_position) }}</p>
+  {% endif %}
 
-<div class="row mb-3">
-    <div class="col-md-6">
-        <p><strong>Состояние вен:</strong> {{ selected_appointment.veins_condition or '—' }}</p>
-        <p><strong>Аускультация лёгких:</strong> {{ selected_appointment.lung_auscultation or '—' }}</p>
-        <p><strong>Живот:</strong> {{ selected_appointment.abdomen or '—' }}</p>
-    </div>
-    <div class="col-md-6">
-        <p><strong>Пальпация почек:</strong> {{ kidney_labels.get(selected_appointment.kidney_palpation, '—') }}</p>
-        {% if selected_appointment.kidney_palpation_details %}<p><strong>Уточнение:</strong> {{ selected_appointment.kidney_palpation_details }}</p>{% endif %}
-        <p><strong>Симптом Пастернацкого:</strong> {{ pasternatsky_result_labels.get(selected_appointment.pasternatsky_result, '—') }}</p>
-        <p><strong>Сторона:</strong> {{ pasternatsky_side_labels.get(selected_appointment.pasternatsky_side, '—') }}</p>
-    </div>
+  {% if selected_appointment.bed_position_details %}
+  <p><strong>Особенности положения:</strong> {{ selected_appointment.bed_position_details }}</p>
+  {% endif %}
+
+  {% if selected_appointment.body_build %}
+  <p><strong>Телосложение:</strong> {{ selected_appointment.body_build }}</p>
+  {% endif %}
+
+  {% if selected_appointment.height or selected_appointment.weight or selected_appointment.bmi %}
+  <p>
+    {% if selected_appointment.height %}<strong>Рост:</strong> {{ selected_appointment.height }} см{% endif %}{% if selected_appointment.height and (selected_appointment.weight or selected_appointment.bmi) %}, {% endif %}{% if selected_appointment.weight %}<strong>Вес:</strong> {{ selected_appointment.weight }} кг{% endif %}{% if selected_appointment.weight and selected_appointment.bmi %}, {% endif %}{% if selected_appointment.bmi %}<strong>ИМТ:</strong> {{ selected_appointment.bmi }} кг/м²{% endif %}
+  </p>
+  {% endif %}
+
+  {% if selected_appointment.constitution_type %}
+  <p><strong>Тип конституции:</strong> {{ constitution_labels.get(selected_appointment.constitution_type, selected_appointment.constitution_type) }}</p>
+  {% endif %}
+
+  {% if selected_appointment.skin_and_mucous_membranes %}
+  <p><strong>Кожа и слизистые оболочки:</strong> {{ selected_appointment.skin_and_mucous_membranes }}</p>
+  {% endif %}
+
+  {% if selected_appointment.edema_location %}
+  <p><strong>Отёки:</strong> {{ selected_appointment.edema_location }}</p>
+  {% endif %}
+
+  {% if selected_appointment.lymph_nodes %}
+  <p><strong>Лимфатические узлы:</strong> {{ selected_appointment.lymph_nodes }}</p>
+  {% endif %}
+
+  {% if selected_appointment.thyroid_gland %}
+  <p><strong>Щитовидная железа:</strong> {{ selected_appointment.thyroid_gland }}</p>
+  {% endif %}
+
+  {% if selected_appointment.musculoskeletal_system %}
+  <p><strong>Опорно-двигательный аппарат:</strong> {{ selected_appointment.musculoskeletal_system }}</p>
+  {% endif %}
+
+  {% if selected_appointment.body_temperature %}
+  <p><strong>Температура тела:</strong> {{ selected_appointment.body_temperature }} °C</p>
+  {% endif %}
+
+  {% if (selected_appointment.systolic_pressure and selected_appointment.diastolic_pressure) or selected_appointment.bp_note or selected_appointment.heart_rate %}
+  <p>
+    {% if selected_appointment.systolic_pressure and selected_appointment.diastolic_pressure %}<strong>АД:</strong> {{ selected_appointment.systolic_pressure }}/{{ selected_appointment.diastolic_pressure }} мм рт.ст.{% if selected_appointment.bp_note %} ({{ selected_appointment.bp_note }}){% endif %}{% elif selected_appointment.bp_note %}<strong>Комментарий к АД:</strong> {{ selected_appointment.bp_note }}{% endif %}{% if ((selected_appointment.systolic_pressure and selected_appointment.diastolic_pressure) or selected_appointment.bp_note) and selected_appointment.heart_rate %}, {% endif %}{% if selected_appointment.heart_rate %}<strong>ЧСС:</strong> {{ selected_appointment.heart_rate }} уд/мин{% endif %}
+  </p>
+  {% endif %}
+
+  {% if selected_appointment.veins_condition %}
+  <p><strong>Состояние вен:</strong> {{ selected_appointment.veins_condition }}</p>
+  {% endif %}
+
+  {% if selected_appointment.lung_auscultation %}
+  <p><strong>Аускультация лёгких:</strong> {{ selected_appointment.lung_auscultation }}</p>
+  {% endif %}
+
+  {% if selected_appointment.abdomen %}
+  <p><strong>Живот:</strong> {{ selected_appointment.abdomen }}</p>
+  {% endif %}
+
+  {% if selected_appointment.kidney_palpation %}
+  <p><strong>Пальпация почек:</strong> {{ kidney_labels.get(selected_appointment.kidney_palpation, selected_appointment.kidney_palpation) }}{% if selected_appointment.kidney_palpation_details %}, {{ selected_appointment.kidney_palpation_details }}{% endif %}</p>
+  {% elif selected_appointment.kidney_palpation_details %}
+  <p><strong>Пальпация почек:</strong> {{ selected_appointment.kidney_palpation_details }}</p>
+  {% endif %}
+
+  {% if selected_appointment.pasternatsky_result or selected_appointment.pasternatsky_side %}
+  <p class="mb-0">
+    <strong>Симптом Пастернацкого:</strong>
+    {% if selected_appointment.pasternatsky_result %}{{ pasternatsky_result_labels.get(selected_appointment.pasternatsky_result, selected_appointment.pasternatsky_result) }}{% endif %}{% if selected_appointment.pasternatsky_result and selected_appointment.pasternatsky_side %}, {% endif %}{% if selected_appointment.pasternatsky_side %}{{ pasternatsky_side_labels.get(selected_appointment.pasternatsky_side, selected_appointment.pasternatsky_side) }}{% endif %}
+  </p>
+  {% endif %}
 </div>

@@ -1,19 +1,20 @@
 {# Назначение файла: краткая паспортная информация пациента внутри выбранного приёма. #}
-<div class="row mb-3">
-    <div class="col-md-4">
-        <p><strong>Дата рождения:</strong> {{ patient.birth_date.strftime('%d.%m.%Y') if patient.birth_date else '—' }}</p>
-        <p><strong>Номер телефона:</strong> {{ patient.phone or '—' }}</p>
-    </div>
-    <div class="col-md-4">
-        <p><strong>Возраст на момент приёма:</strong>
-            {% if selected_appointment.age_at_appointment is not none %}
-                {{ selected_appointment.age_at_appointment }} лет
-            {% else %}
-                —
-            {% endif %}
-        </p>
-    </div>
-    <div class="col-md-4">
-        <p><strong>Пол:</strong> {{ patient.gender_str if patient.gender_str else '—' }}</p>
-    </div>
-</div>
+{% if patient.birth_date or selected_appointment.age_at_appointment is not none or patient.gender_str %}
+<p class="mb-2">
+  {% if patient.birth_date %}
+    <strong>Дата рождения:</strong> {{ patient.birth_date.strftime('%d.%m.%Y') }}
+  {% endif %}
+  {% if patient.birth_date and (selected_appointment.age_at_appointment is not none or patient.gender_str) %}, {% endif %}
+  {% if selected_appointment.age_at_appointment is not none %}
+    <strong>Возраст:</strong> {{ selected_appointment.age_at_appointment }} лет
+  {% endif %}
+  {% if selected_appointment.age_at_appointment is not none and patient.gender_str %}, {% endif %}
+  {% if patient.gender_str %}
+    <strong>Пол:</strong> {{ patient.gender_str }}
+  {% endif %}
+</p>
+{% endif %}
+
+{% if patient.phone %}
+<p class="mb-0"><strong>Номер телефона:</strong> {{ patient.phone }}</p>
+{% endif %}

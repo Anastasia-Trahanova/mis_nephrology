@@ -1,36 +1,69 @@
-{# Назначение файла: структурированные жалобы и анамнез выбранного приёма. #}
+{# Назначение файла: жалобы и заполненные поля анамнеза выбранного приёма. #}
 
+{% if selected_appointment.complaints %}
 <h5 class="mt-3">Жалобы</h5>
-<div class="row mb-3">
-    <div class="col-12">
-        <p><strong>Жалобы:</strong> {{ selected_appointment.complaints or '—' }}</p>
-    </div>
-</div>
+<p class="mb-3">{{ selected_appointment.complaints }}</p>
+{% endif %}
 
+{% set has_life_anamnesis =
+  selected_appointment.education_and_professional_history
+  or selected_appointment.housing_conditions
+  or selected_appointment.past_diseases
+  or selected_appointment.habitual_intoxications
+  or selected_appointment.gynecological_history
+  or selected_appointment.heredity_description
+  or selected_appointment.family_life
+  or selected_appointment.allergological_history
+  or selected_appointment.epidemiological_history
+  or selected_appointment.insurance_history
+%}
+
+{% if has_life_anamnesis %}
+{% if selected_appointment.complaints %}<hr class="my-4">{% endif %}
 <h5 class="mt-3">Анамнез жизни</h5>
-<div class="row mb-3">
-    <div class="col-md-6">
-        <p><strong>Образование и профессиональный анамнез:</strong> {{ selected_appointment.education_and_professional_history or '—' }}</p>
-        <p><strong>Жилищные условия:</strong> {{ selected_appointment.housing_conditions or '—' }}</p>
-        <p><strong>Перенесённые заболевания:</strong> {{ selected_appointment.past_diseases or '—' }}</p>
-        <p><strong>Привычные интоксикации:</strong> {{ selected_appointment.habitual_intoxications or '—' }}</p>
-        <p><strong>Гинекологический анамнез:</strong> {{ selected_appointment.gynecological_history or '—' }}</p>
-    </div>
-    <div class="col-md-6">
-        <p><strong>Наследственность:</strong> {{ selected_appointment.heredity_description or '—' }}</p>
-        <p><strong>Семейная жизнь:</strong> {{ selected_appointment.family_life or '—' }}</p>
-        <p><strong>Аллергологический анамнез:</strong> {{ selected_appointment.allergological_history or '—' }}</p>
-        <p><strong>Эпидемиологический анамнез:</strong> {{ selected_appointment.epidemiological_history or '—' }}</p>
-        <p><strong>Страховой анамнез:</strong> {{ selected_appointment.insurance_history or '—' }}</p>
-    </div>
+<div class="mb-3">
+  {% if selected_appointment.education_and_professional_history %}
+  <p><strong>Образование и профессиональный анамнез:</strong> {{ selected_appointment.education_and_professional_history }}</p>
+  {% endif %}
+  {% if selected_appointment.housing_conditions %}
+  <p><strong>Жилищные условия:</strong> {{ selected_appointment.housing_conditions }}</p>
+  {% endif %}
+  {% if selected_appointment.past_diseases %}
+  <p><strong>Перенесённые заболевания:</strong> {{ selected_appointment.past_diseases }}</p>
+  {% endif %}
+  {% if selected_appointment.habitual_intoxications %}
+  <p><strong>Привычные интоксикации:</strong> {{ selected_appointment.habitual_intoxications }}</p>
+  {% endif %}
+  {% if selected_appointment.gynecological_history %}
+  <p><strong>Гинекологический анамнез:</strong> {{ selected_appointment.gynecological_history }}</p>
+  {% endif %}
+  {% if selected_appointment.heredity_description %}
+  <p><strong>Наследственность:</strong> {{ selected_appointment.heredity_description }}</p>
+  {% endif %}
+  {% if selected_appointment.family_life %}
+  <p><strong>Семейная жизнь:</strong> {{ selected_appointment.family_life }}</p>
+  {% endif %}
+  {% if selected_appointment.allergological_history %}
+  <p><strong>Аллергологический анамнез:</strong> {{ selected_appointment.allergological_history }}</p>
+  {% endif %}
+  {% if selected_appointment.epidemiological_history %}
+  <p><strong>Эпидемиологический анамнез:</strong> {{ selected_appointment.epidemiological_history }}</p>
+  {% endif %}
+  {% if selected_appointment.insurance_history %}
+  <p class="mb-0"><strong>Страховой анамнез:</strong> {{ selected_appointment.insurance_history }}</p>
+  {% endif %}
 </div>
+{% endif %}
 
+{% if selected_appointment.disease_onset or selected_appointment.disease_course %}
+{% if selected_appointment.complaints or has_life_anamnesis %}<hr class="my-4">{% endif %}
 <h5 class="mt-3">Анамнез данного заболевания</h5>
-<div class="row mb-3">
-    <div class="col-md-6">
-        <p><strong>Начало болезни:</strong> {{ selected_appointment.disease_onset or '—' }}</p>
-    </div>
-    <div class="col-md-6">
-        <p><strong>Течение заболевания:</strong> {{ selected_appointment.disease_course or '—' }}</p>
-    </div>
+<div class="mb-3">
+  {% if selected_appointment.disease_onset %}
+  <p><strong>Начало болезни:</strong> {{ selected_appointment.disease_onset }}</p>
+  {% endif %}
+  {% if selected_appointment.disease_course %}
+  <p class="mb-0"><strong>Течение заболевания:</strong> {{ selected_appointment.disease_course }}</p>
+  {% endif %}
 </div>
+{% endif %}
