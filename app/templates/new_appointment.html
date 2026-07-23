@@ -1,10 +1,18 @@
-{# Назначение файла: страница повторного приёма. Стили и общий дизайн сохранены. #}
+{# Назначение файла: страница повторного консультативного приёма. #}
 {% extends "base.html" %}
 {% block content %}
 {% set appointment_form_mode = 'new_appointment' %}
 
 <style>
     .text-danger { color: #dc3545; }
+    .appointment-page-title { text-align: center; margin-bottom: 1.25rem; }
+    .appointment-passport { margin-bottom: 1.5rem; }
+    .appointment-passport-row {
+    padding: 0.25rem 0;
+    font-size: 1.125rem;
+    line-height: 1.5;
+}
+    .appointment-passport-label { font-weight: 600; margin-right: 0.35rem; }
     .prefilled-field {
         background-color: #fff8d6 !important;
         border-color: #f1d887 !important;
@@ -18,44 +26,53 @@
         background-color: #fff3cd !important;
         border-color: #e0b84f !important;
     }
+    .conditional-required-message { color: #dc3545; font-size: 0.875rem; margin-top: 0.25rem; }
 </style>
 
-<h2>➕ Добавление нового приёма</h2>
 <form method="post" action="/api/patients/{{ patient.id }}/appointments/new">
-    <div class="card mb-4">
-        <div class="card-header bg-primary text-white">
-            <h5 class="mb-0"> Паспортная часть</h5>
-        </div>
-        <div class="card-body">
-            <div class="row">
-                <div class="col-md-4">
-                    <p class="mb-1"><strong>ФИО:</strong></p>
-                    <p>{{ patient.last_name }} {{ patient.first_name }} {{ patient.patronymic or '' }}</p>
-                </div>
-                <div class="col-md-4">
-                    <p class="mb-1"><strong>Дата рождения:</strong></p>
-                    <p>{{ patient.birth_date.strftime('%d.%m.%Y') if patient.birth_date else '—' }}</p>
-                    <p class="mb-1"><strong>Номер телефона:</strong></p>
-                    <p>{{ patient.phone or '—' }}</p>
-                </div>
-                <div class="col-md-4">
-                    <p class="mb-1"><strong>Пол:</strong></p>
-                    <p>{{ patient.gender_str if patient.gender_str else '—' }}</p>
-                </div>
+    <div class="appointment-passport">
+        <h2 class="appointment-page-title">Консультативный приём (повторный)</h2>
+
+        <div class="row appointment-passport-row">
+            <div class="col-md-8">
+                <span class="appointment-passport-label">ФИО:</span>
+                {{ patient.last_name }} {{ patient.first_name }} {{ patient.patronymic or '' }}
             </div>
-            <input type="hidden" name="birth_date" value="{{ patient.birth_date.strftime('%Y-%m-%d') if patient.birth_date else '' }}">
-            <input type="hidden" name="gender" value="{{ 'true' if patient.gender_str == 'Мужской' else 'false' }}">
-            {% if last_appointment %}
-            <div class="alert alert-info mis-form-info mb-3">
-                В форму подгружены данные последнего приёма{% if last_appointment.appointment_date %} ({{ last_appointment.appointment_date.strftime('%d.%m.%Y') }}).{% else %}.{% endif %}
+            <div class="col-md-4">
+                <span class="appointment-passport-label">Пол:</span>
+                {{ patient.gender_str if patient.gender_str else '—' }}
             </div>
-            {% endif %}
         </div>
+
+        <div class="row appointment-passport-row">
+            <div class="col-md-8">
+                <span class="appointment-passport-label">Дата рождения:</span>
+                {{ patient.birth_date.strftime('%d.%m.%Y') if patient.birth_date else '—' }}
+            </div>
+            <div class="col-md-4">
+                <span class="appointment-passport-label">Возраст:</span>
+                {% if patient.age is not none %}{{ patient.age }} лет{% else %}—{% endif %}
+            </div>
+        </div>
+
+        <div class="appointment-passport-row">
+            <span class="appointment-passport-label">Номер телефона:</span>
+            {{ patient.phone or '—' }}
+        </div>
+
+        <input type="hidden" name="birth_date" value="{{ patient.birth_date.strftime('%Y-%m-%d') if patient.birth_date else '' }}">
+        <input type="hidden" name="gender" value="{{ 'true' if patient.gender_str == 'Мужской' else 'false' }}">
+
+        {% if last_appointment %}
+        <div class="alert alert-info mis-form-info mt-3 mb-0">
+            В форму подгружены данные последнего приёма{% if last_appointment.appointment_date %} ({{ last_appointment.appointment_date.strftime('%d.%m.%Y') }}).{% else %}.{% endif %}
+        </div>
+        {% endif %}
     </div>
 
     <div class="card mb-4">
         <div class="card-header bg-success text-white">
-            <h5 class="mb-0"> Данные нового приёма</h5>
+            <h5 class="mb-0">Данные нового приёма</h5>
         </div>
         <div class="card-body">
             <div class="row">

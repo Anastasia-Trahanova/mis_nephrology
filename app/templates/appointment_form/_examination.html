@@ -87,29 +87,35 @@
     </div>
 </div>
 
-<!-- Блок отёков сохранён в прежнем виде -->
-<div class="row mb-3">
-    <div class="col-md-6">
-        <label class="form-label"><strong>Отёки</strong></label>
-        <div class="mb-2">
-            <label class="form-label">Периферические отёки</label>
-            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="нет" id="edema_none" {% if last_appointment and last_appointment.edema_location and 'нет' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="edema_none">Нет</label></div>
-            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="нижние конечности" id="edema_lower_limbs" {% if last_appointment and last_appointment.edema_location and 'нижние конечности' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="edema_lower_limbs">Нижние конечности</label></div>
-            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="лицо/веки" id="edema_face" {% if last_appointment and last_appointment.edema_location and 'лицо/веки' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="edema_face">Лицо/веки</label></div>
-            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="верхние конечности" id="edema_upper_limbs" {% if last_appointment and last_appointment.edema_location and 'верхние конечности' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="edema_upper_limbs">Верхние конечности</label></div>
-            <input type="text" name="edema_peripheral_other" class="form-control form-control-sm mt-1">
+<div class="mb-3">
+    <h6 class="mb-1">Отёки</h6>
+    {% if appointment_form_mode == 'new_appointment' and last_appointment and last_appointment.edema_location %}
+    <div class="form-text mb-2"><strong>На прошлом приёме:</strong> {{ last_appointment.edema_location }}</div>
+    {% endif %}
+
+    <div class="row g-3">
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Периферические отёки</label>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="нет" id="edema_none"><label class="form-check-label" for="edema_none">Нет</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="нижние конечности" id="edema_lower_limbs"><label class="form-check-label" for="edema_lower_limbs">Нижние конечности</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="лицо/веки" id="edema_face"><label class="form-check-label" for="edema_face">Лицо/веки</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="верхние конечности" id="edema_upper_limbs"><label class="form-check-label" for="edema_upper_limbs">Верхние конечности</label></div>
+            <label class="form-label mt-2" for="edemaPeripheralComment">Комментарий</label>
+            <input id="edemaPeripheralComment" type="text" name="edema_peripheral_other" class="form-control">
+        </div>
+
+        <div class="col-md-6">
+            <label class="form-label fw-semibold">Серозиты</label>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="нет" id="serositis_none"><label class="form-check-label" for="serositis_none">Нет</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="гидроторакс" id="serositis_hydrothorax"><label class="form-check-label" for="serositis_hydrothorax">Гидроторакс</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="гидроперикард" id="serositis_hydropericardium"><label class="form-check-label" for="serositis_hydropericardium">Гидроперикард</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="асцит" id="serositis_ascites"><label class="form-check-label" for="serositis_ascites">Асцит</label></div>
+            <label class="form-label mt-2" for="edemaSerositisComment">Комментарий</label>
+            <input id="edemaSerositisComment" type="text" name="edema_serositis_other" class="form-control">
         </div>
     </div>
-    <div class="col-md-6 border-start ps-4">
-        <label class="form-label">Серозиты</label>
-        <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="нет" id="serositis_none" {% if last_appointment and last_appointment.edema_location and 'Серозиты: нет' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="serositis_none">Нет</label></div>
-        <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="гидроторакс" id="serositis_hydrothorax" {% if last_appointment and last_appointment.edema_location and 'гидроторакс' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="serositis_hydrothorax">Гидроторакс</label></div>
-        <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="гидроперикард" id="serositis_hydropericardium" {% if last_appointment and last_appointment.edema_location and 'гидроперикард' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="serositis_hydropericardium">Гидроперикард</label></div>
-        <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="асцит" id="serositis_ascites" {% if last_appointment and last_appointment.edema_location and 'асцит' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="serositis_ascites">Асцит</label></div>
-        <input type="text" name="edema_serositis_other" class="form-control form-control-sm mt-1">
-        <label class="form-label mt-2">Дополнительно</label>
-        <input type="text" name="edema_other" class="form-control form-control-sm">
-    </div>
+
+    
 </div>
 
 <div class="row mb-2"><div class="col-12"><label class="form-label">Лимфатические узлы</label><input type="text" name="lymph_nodes" class="form-control" value="{{ last_appointment.lymph_nodes if last_appointment and last_appointment.lymph_nodes else '' }}"></div></div>
@@ -149,20 +155,53 @@
 
 <div class="row mb-2">
     <div class="col-md-6">
-        <label class="form-label">Симптом Пастернацкого</label>
-        <select name="pasternatsky_result" class="form-select">
+        <label class="form-label" for="pasternatskyResult">Симптом Пастернацкого</label>
+        <select id="pasternatskyResult" name="pasternatsky_result" class="form-select">
             <option value="">—</option>
             <option value="positive" {% if last_appointment and last_appointment.pasternatsky_result == 'positive' %}selected{% endif %}>Положительный</option>
             <option value="negative" {% if last_appointment and last_appointment.pasternatsky_result == 'negative' %}selected{% endif %}>Отрицательный</option>
         </select>
     </div>
     <div class="col-md-6">
-        <label class="form-label">Сторона</label>
-        <select name="pasternatsky_side" class="form-select">
+        <label class="form-label" for="pasternatskySide">Сторона</label>
+        <select id="pasternatskySide" name="pasternatsky_side" class="form-select" aria-describedby="pasternatskySideMessage">
             <option value="">—</option>
             <option value="right" {% if last_appointment and last_appointment.pasternatsky_side == 'right' %}selected{% endif %}>Справа</option>
             <option value="left" {% if last_appointment and last_appointment.pasternatsky_side == 'left' %}selected{% endif %}>Слева</option>
             <option value="bilateral" {% if last_appointment and last_appointment.pasternatsky_side == 'bilateral' %}selected{% endif %}>С двух сторон</option>
         </select>
+        <div id="pasternatskySideMessage" class="conditional-required-message d-none">Укажите сторону симптома Пастернацкого</div>
     </div>
 </div>
+
+<script>
+(function () {
+    const result = document.getElementById('pasternatskyResult');
+    const side = document.getElementById('pasternatskySide');
+    const message = document.getElementById('pasternatskySideMessage');
+    if (!result || !side || !message) return;
+
+    function updatePasternatskyState() {
+        const needsSide = Boolean(result.value);
+        const sideIsEmpty = !side.value;
+        side.required = needsSide;
+
+        if (needsSide && sideIsEmpty) {
+            side.classList.add('is-invalid');
+            side.setAttribute('aria-invalid', 'true');
+            message.classList.remove('d-none');
+        } else {
+            side.classList.remove('is-invalid');
+            side.removeAttribute('aria-invalid');
+            message.classList.add('d-none');
+        }
+    }
+
+    result.addEventListener('change', function () {
+        side.value = '';
+        updatePasternatskyState();
+    });
+    side.addEventListener('change', updatePasternatskyState);
+    updatePasternatskyState();
+})();
+</script>
