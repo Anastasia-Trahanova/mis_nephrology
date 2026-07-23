@@ -6,7 +6,7 @@ from typing import Any
 
 
 def insert_survey(cur: Any, appointment_id: int, survey_data: dict[str, Any]) -> None:
-    """Сохраняет верхнюю часть истории болезни в структуру миграции 0009."""
+    """Сохраняет верхнюю часть истории болезни в структуру миграции 0010."""
     cur.execute(
         """
         INSERT INTO surveys (
@@ -17,7 +17,6 @@ def insert_survey(cur: Any, appointment_id: int, survey_data: dict[str, Any]) ->
             past_diseases,
             habitual_intoxications,
             gynecological_history,
-            heredity,
             heredity_description,
             family_life,
             allergological_history,
@@ -29,7 +28,7 @@ def insert_survey(cur: Any, appointment_id: int, survey_data: dict[str, Any]) ->
         VALUES (
             %s, %s, %s, %s, %s,
             %s, %s, %s, %s, %s,
-            %s, %s, %s, %s, %s
+            %s, %s, %s, %s
         )
         """,
         (
@@ -40,7 +39,6 @@ def insert_survey(cur: Any, appointment_id: int, survey_data: dict[str, Any]) ->
             survey_data.get("past_diseases"),
             survey_data.get("habitual_intoxications"),
             survey_data.get("gynecological_history"),
-            survey_data.get("heredity", False),
             survey_data.get("heredity_description"),
             survey_data.get("family_life"),
             survey_data.get("allergological_history"),

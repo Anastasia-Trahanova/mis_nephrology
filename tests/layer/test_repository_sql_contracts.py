@@ -10,6 +10,7 @@
 from __future__ import annotations
 
 from datetime import date, datetime
+from pathlib import Path
 
 from app.repositories.appointments import create_appointment
 from app.repositories.diagnoses import (
@@ -82,6 +83,12 @@ def test_get_patient_for_appointment_sql_contract():
     assert cur.last_params == (101,)
 
 
+def test_appointments_queries_do_not_select_removed_heredity_flag():
+    source = Path("app/repositories/appointments.py").read_text(encoding="utf-8")
+    assert "s.heredity," not in source
+    assert "s.heredity_description" in source
+
+
 def test_insert_survey_sql_contract():
     cur = FakeCursor()
     survey = {
@@ -91,7 +98,6 @@ def test_insert_survey_sql_contract():
         "past_diseases": "past",
         "habitual_intoxications": "intoxications",
         "gynecological_history": "gynecology",
-        "heredity": True,
         "heredity_description": "desc",
         "family_life": "family",
         "allergological_history": "allergy",
@@ -107,6 +113,7 @@ def test_insert_survey_sql_contract():
     assert "life_anamnesis" not in normalized
     assert "disease_anamnesis" not in normalized
     assert "comorbidities" not in normalized
+    assert " heredity," not in normalized
     assert cur.last_params == (
         202,
         "complaints",
@@ -115,7 +122,6 @@ def test_insert_survey_sql_contract():
         "past",
         "intoxications",
         "gynecology",
-        True,
         "desc",
         "family",
         "allergy",

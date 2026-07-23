@@ -268,10 +268,8 @@ def _append_if_changed_from_previous(
     current_value = _form_get(form, field_name)
     # Условные уточнения сохраняются только вместе с выбранным основным значением.
     # Аудит должен сравнивать именно итог, который попадёт в БД, а не скрытый текст,
-    # оставшийся в браузере после снятия checkbox или смены выпадающего списка.
-    if field_name == "heredity_description" and str(_form_get(form, "heredity") or "").lower() != "true":
-        current_value = None
-    elif field_name == "bed_position_details" and _form_get(form, "bed_position") != "forced":
+    # оставшийся в браузере после смены зависимого выпадающего списка.
+    if field_name == "bed_position_details" and _form_get(form, "bed_position") != "forced":
         current_value = None
     elif field_name == "kidney_palpation_details" and _form_get(form, "kidney_palpation") != "palpable":
         current_value = None

@@ -1,6 +1,6 @@
 """
 Назначение файла: точечные тесты серверной валидации верхней части формы
-после миграции 0009.
+после миграций 0009–0010.
 
 Проверяем только новые структурированные поля. Лабораторные исследования,
 KDIGO и нижняя часть формы этим файлом не затрагиваются.
@@ -30,7 +30,6 @@ def error_fields(errors):
 def test_valid_structured_previsit_fields_are_accepted():
     form = FakeForm(
         {
-            "heredity": "true",
             "heredity_description": "У матери артериальная гипертензия",
             "general_condition": "moderate",
             "consciousness": "clear",
@@ -57,11 +56,11 @@ def test_forced_position_requires_details():
     assert "bed_position_details" in error_fields(errors)
 
 
-def test_positive_heredity_requires_description():
-    errors = validate_appointment_form(
-        FakeForm({"heredity": "true"}), date(2026, 7, 4)
-    )
-    assert "heredity_description" in error_fields(errors)
+def test_heredity_is_optional_free_text():
+    assert validate_appointment_form(
+        FakeForm({"heredity_description": "Не отягощена"}), date(2026, 7, 4)
+    ) == []
+    assert validate_appointment_form(FakeForm({}), date(2026, 7, 4)) == []
 
 
 def test_palpable_kidney_requires_details():

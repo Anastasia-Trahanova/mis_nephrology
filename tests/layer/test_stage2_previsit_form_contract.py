@@ -33,7 +33,6 @@ def test_survey_fields_follow_approved_order():
             'name="past_diseases"',
             'name="habitual_intoxications"',
             'name="gynecological_history"',
-            'name="heredity"',
             'name="heredity_description"',
             'name="family_life"',
             'name="allergological_history"',
@@ -43,6 +42,12 @@ def test_survey_fields_follow_approved_order():
             'name="disease_course"',
         ],
     )
+    assert 'name="heredity"' not in text
+    assert 'name="heredity_description"' in text
+    assert 'Добавьте анамнез по наследственности' not in text
+    card = (TEMPLATES / "patient_card/_survey.html").read_text(encoding="utf-8")
+    assert "selected_appointment.heredity " not in card
+    assert "selected_appointment.heredity_description" in card
 
 
 def test_examination_fields_follow_approved_order_and_keep_bp_edema():
@@ -89,8 +94,10 @@ def test_passport_sections_have_phone_and_stage2_adds_no_css_file():
     new_patient = (TEMPLATES / "new_patient.html").read_text(encoding="utf-8")
     new_appointment = (TEMPLATES / "new_appointment.html").read_text(encoding="utf-8")
 
-    assert "Паспортная часть" in new_patient
-    assert "Паспортная часть" in new_appointment
+    assert "Консультативный приём (первичный)" in new_patient
+    assert "Консультативный приём (повторный)" in new_appointment
+    assert "Паспортная часть" not in new_patient
+    assert "Паспортная часть" not in new_appointment
     assert 'name="phone"' in new_patient
     assert "patient.phone" in new_appointment
     assert not Path("app/static/css/07_stage2_previsit.css").exists()

@@ -87,7 +87,8 @@ def test_parse_appointment_form_returns_stage2_sections_and_bmi():
     assert survey["complaints"] == "Жалобы из автотеста"
     assert survey["education_and_professional_history"] == "Высшее образование, бухгалтер"
     assert survey["disease_onset"] == "Заболевание началось около пяти лет назад"
-    assert survey["heredity"] is True
+    assert survey["heredity_description"].startswith("Наследственность отягощена")
+    assert "heredity" not in survey
     assert "life_anamnesis" not in survey
     assert "disease_anamnesis" not in survey
     assert "comorbidities" not in survey
@@ -120,7 +121,7 @@ def test_parser_clears_details_that_do_not_match_selected_value():
             "bed_position_details": "не должно сохраниться",
             "kidney_palpation": "not_palpable",
             "kidney_palpation_details": "не должно сохраниться",
-            "heredity_description": "не должно сохраниться",
+            "heredity_description": "Не отягощена",
             "medication": [],
             "dosage": [],
             "schedule": [],
@@ -129,7 +130,7 @@ def test_parser_clears_details_that_do_not_match_selected_value():
 
     data = parse_appointment_form(form, datetime(2026, 7, 4, 10, 30))
 
-    assert data["survey"]["heredity"] is False
-    assert data["survey"]["heredity_description"] is None
+    assert "heredity" not in data["survey"]
+    assert data["survey"]["heredity_description"] == "Не отягощена"
     assert data["examination"]["bed_position_details"] is None
     assert data["examination"]["kidney_palpation_details"] is None

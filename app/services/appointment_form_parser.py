@@ -1,7 +1,7 @@
 """
 Парсер HTML-формы приёма.
 
-Верхняя часть формы соответствует структуре миграции 0009. Лабораторные
+Верхняя часть формы соответствует структуре миграции 0010. Лабораторные
 исследования, УЗИ, заключение и назначения на втором этапе не изменяются.
 """
 
@@ -81,11 +81,6 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
     height = empty_to_none(form.get("height"))
     weight = empty_to_none(form.get("weight"))
 
-    heredity = form.get("heredity") == "true"
-    heredity_description = (
-        empty_to_none(form.get("heredity_description")) if heredity else None
-    )
-
     bed_position = empty_to_none(form.get("bed_position"))
     bed_position_details = (
         empty_to_none(form.get("bed_position_details"))
@@ -110,8 +105,7 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
             "past_diseases": empty_to_none(form.get("past_diseases")),
             "habitual_intoxications": empty_to_none(form.get("habitual_intoxications")),
             "gynecological_history": empty_to_none(form.get("gynecological_history")),
-            "heredity": heredity,
-            "heredity_description": heredity_description,
+            "heredity_description": empty_to_none(form.get("heredity_description")),
             "family_life": empty_to_none(form.get("family_life")),
             "allergological_history": empty_to_none(form.get("allergological_history")),
             "epidemiological_history": empty_to_none(form.get("epidemiological_history")),

@@ -17,14 +17,11 @@
         <p><strong>Гинекологический анамнез:</strong> {{ selected_appointment.gynecological_history or '—' }}</p>
     </div>
     <div class="col-md-6">
-        <p><strong>Наследственность:</strong> {{ 'Отягощена' if selected_appointment.heredity else 'Не отягощена' }}</p>
-        {% if selected_appointment.heredity_description %}
-        <p><strong>Описание наследственности:</strong> {{ selected_appointment.heredity_description }}</p>
-        {% endif %}
+        <p><strong>Наследственность:</strong> {{ selected_appointment.heredity_description or '—' }}</p>
         <p><strong>Семейная жизнь:</strong> {{ selected_appointment.family_life or '—' }}</p>
         <p><strong>Аллергологический анамнез:</strong> {{ selected_appointment.allergological_history or '—' }}</p>
         <p><strong>Эпидемиологический анамнез:</strong> {{ selected_appointment.epidemiological_history or '—' }}</p>
-        <p><strong>Экспертно-трудовой анамнез:</strong> {{ selected_appointment.insurance_history or '—' }}</p>
+        <p><strong>Страховой анамнез:</strong> {{ selected_appointment.insurance_history or '—' }}</p>
     </div>
 </div>
 

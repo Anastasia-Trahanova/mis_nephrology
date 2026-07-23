@@ -100,6 +100,21 @@ def test_02_prefilled_text_changed_is_logged():
     assert change["new_value"] == "Слабость, отёки к вечеру"
 
 
+def test_03a_heredity_text_is_logged_without_checkbox():
+    form = FormData([("heredity_description", "Не отягощена")])
+
+    changes = build_appointment_medical_audit_changes(
+        form,
+        previous_appointment={},
+        previous_medications=[],
+        appointment_id=28,
+    )
+
+    change = find_change(changes, section="survey", field_name="heredity_description")
+    assert change["change_type"] == "filled_new"
+    assert change["new_value"] == "Не отягощена"
+
+
 def test_03_prefilled_text_cleared_is_logged():
     form = FormData([("heredity_description", "")])
     previous = {"heredity_description": "У матери сахарный диабет"}

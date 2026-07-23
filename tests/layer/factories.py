@@ -93,7 +93,6 @@ def full_form_data() -> dict[str, Any]:
         "past_diseases": "ОРВИ, аппендэктомия",
         "habitual_intoxications": "Не курит, алкоголь редко",
         "gynecological_history": "Менопауза с 50 лет",
-        "heredity": "true",
         "heredity_description": "Наследственность отягощена по артериальной гипертензии",
         "family_life": "Замужем, двое детей",
         "allergological_history": "Аллергии не отмечает",

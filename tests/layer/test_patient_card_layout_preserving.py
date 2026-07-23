@@ -91,7 +91,6 @@ def _context() -> dict:
         past_diseases="Аппендэктомия",
         habitual_intoxications="Не курит",
         gynecological_history="Менопауза",
-        heredity=True,
         heredity_description="Наследственность отягощена",
         family_life="Замужем",
         allergological_history="Аллергий нет",
@@ -280,6 +279,7 @@ def test_patient_card_template_renders_medical_blocks_without_changing_layout():
     assert "Жалобы" in html
     assert "Анамнез жизни" in html
     assert "Анамнез данного заболевания" in html
+    assert "Наследственность отягощена" in html
     assert "Данные объективного исследования больного" in html
     assert "+7 900 000-00-00" in html
     assert "Примечание к АД" not in html  # комментарий показывается внутри строки АД

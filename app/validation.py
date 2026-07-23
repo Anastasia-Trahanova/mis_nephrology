@@ -285,7 +285,7 @@ def validate_appointment_form(
                 _add_error(errors, field_name, ERROR_INVALID_VALUE, index)
 
 
-    # Структурированные поля верхней части формы (миграция 0009).
+    # Структурированные поля верхней части формы (миграции 0009–0010).
     allowed_select_values = {
         "general_condition": {"satisfactory", "moderate", "severe"},
         "consciousness": {"clear", "confused", "sopor", "coma"},
@@ -299,11 +299,6 @@ def validate_appointment_form(
         value = _empty_to_none(form.get(field_name))
         if value is not None and value not in allowed:
             _add_error(errors, field_name, ERROR_INVALID_VALUE)
-
-    heredity_enabled = str(form.get("heredity") or "").lower() == "true"
-    heredity_description = _empty_to_none(form.get("heredity_description"))
-    if heredity_enabled and not heredity_description:
-        _add_error(errors, "heredity_description", ERROR_REQUIRED_FIELDS)
 
     bed_position = _empty_to_none(form.get("bed_position"))
     bed_position_details = _empty_to_none(form.get("bed_position_details"))
