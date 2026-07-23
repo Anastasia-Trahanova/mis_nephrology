@@ -1,16 +1,9 @@
 """
-Назначение файла: repository для таблицы appointments и близких данных приёма.
+Repository для таблицы appointments и агрегированного чтения приёма.
 
-Что редактировать:
-- SQL по appointments;
-- JOIN-ы, которые нужны для выбранного приёма;
-- состав данных последнего приёма.
-
-Что не редактировать здесь:
-- сохранение ОАК/биохимии/ОАМ/альбуминурии;
-- расчёт прогноза ХБП;
-- сборку context для шаблонов;
-- вывод диагнозов МКБ-10.
+После миграции 0009 возраст хранится непосредственно у приёма. Полный SELECT
+возвращает новые структурированные поля, а также временные вычисляемые алиасы
+старых полей для совместимости Word-экспорта. Сам модуль экспорта не изменяется.
 """
 
 from __future__ import annotations
@@ -26,17 +19,19 @@ def create_appointment(
     doctor_id: int,
     location_id: int,
     appointment_datetime: Any,
+    age_at_appointment: int,
 ) -> int:
-    """Создаёт приём и возвращает его id."""
+    """Создаёт приём и сохраняет возраст пациента на дату этого приёма."""
     cur.execute(
         """
         INSERT INTO appointments (
             patient_id,
             doctor_id,
             location_id,
-            appointment_date
+            appointment_date,
+            age_at_appointment
         )
-        VALUES (%s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s)
         RETURNING id
         """,
         (
@@ -44,6 +39,7 @@ def create_appointment(
             doctor_id,
             location_id,
             appointment_datetime,
+            age_at_appointment,
         ),
     )
     return cur.fetchone()["id"]
@@ -58,7 +54,7 @@ def get_all_appointments(filters: dict | None = None):
             p.id AS patient_id,
             p.last_name || ' ' || p.first_name || ' ' || COALESCE(p.patronymic, '') AS patient_fio,
             a.appointment_date,
-            EXTRACT(YEAR FROM AGE(CURRENT_DATE, p.birth_date)) AS age,
+            a.age_at_appointment AS age,
             d.last_name || ' ' || d.first_name || ' ' || COALESCE(d.patronymic, '') AS doctor_fio,
             l.name AS location_name,
             b.name AS branch_name
@@ -149,7 +145,7 @@ def get_patient_appointments(patient_id: int):
 
 
 def _fetch_appointment_full_data(cur: Any, appointment_id: int):
-    """Возвращает основные данные одного приёма через уже открытый cursor."""
+    """Возвращает полные данные выбранного приёма и совместимые алиасы для Word."""
     cur.execute(
         """
         SELECT
@@ -157,30 +153,78 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
             a.appointment_date,
             a.patient_id,
             a.location_id,
+            a.age_at_appointment,
             p.last_name || ' ' || p.first_name || ' ' || COALESCE(p.patronymic, '') AS patient_fio,
             p.birth_date,
-            EXTRACT(YEAR FROM AGE(a.appointment_date, p.birth_date)) AS age_at_appointment,
+            p.phone,
             d.last_name || ' ' || d.first_name || ' ' || COALESCE(d.patronymic, '') AS doctor_name,
             l.name AS location_name,
             b.name AS branch_name,
-            s.life_anamnesis,
-            s.disease_anamnesis,
+
             s.complaints,
+            s.education_and_professional_history,
+            s.housing_conditions,
+            s.past_diseases,
+            s.habitual_intoxications,
+            s.gynecological_history,
             s.heredity,
             s.heredity_description,
-            s.comorbidities,
-            e.skin_condition,
+            s.family_life,
+            s.allergological_history,
+            s.epidemiological_history,
+            s.insurance_history,
+            s.disease_onset,
+            s.disease_course,
+
+            e.general_condition,
+            e.consciousness,
+            e.bed_position,
+            e.bed_position_details,
+            e.body_build,
+            e.height,
+            e.weight,
+            e.bmi,
+            e.constitution_type,
+            e.skin_and_mucous_membranes,
             e.edema_location,
+            e.lymph_nodes,
+            e.thyroid_gland,
+            e.musculoskeletal_system,
+            e.body_temperature,
             e.systolic_pressure,
             e.diastolic_pressure,
             e.bp_note,
             e.heart_rate,
-            e.height,
-            e.weight,
-            e.bmi,
+            e.veins_condition,
+            e.lung_auscultation,
+            e.abdomen,
+            e.kidney_palpation,
+            e.kidney_palpation_details,
+            e.pasternatsky_result,
+            e.pasternatsky_side,
+
             ad.diet,
             ad.next_control_date,
-            ad.recommendations
+            ad.recommendations,
+
+            /*
+             * Временные алиасы только для старого Word-экспорта.
+             * Они не являются столбцами БД и не используются при сохранении.
+             */
+            CONCAT_WS(E'\n',
+                s.education_and_professional_history,
+                s.housing_conditions,
+                s.past_diseases,
+                s.habitual_intoxications,
+                s.gynecological_history,
+                s.family_life,
+                s.allergological_history,
+                s.epidemiological_history,
+                s.insurance_history
+            ) AS life_anamnesis,
+            CONCAT_WS(E'\n', s.disease_onset, s.disease_course) AS disease_anamnesis,
+            NULL::text AS comorbidities,
+            e.skin_and_mucous_membranes AS skin_condition
         FROM appointments a
         JOIN patients p ON a.patient_id = p.id
         JOIN doctors d ON a.doctor_id = d.id
@@ -204,7 +248,7 @@ def get_appointment_full_data(appointment_id: int):
 
 
 def _fetch_last_appointment_data(cur: Any, patient_id: int):
-    """Возвращает данные последнего приёма пациента для автоподстановки."""
+    """Возвращает последний приём для автоподстановки новой формы."""
     cur.execute(
         """
         SELECT
@@ -212,21 +256,46 @@ def _fetch_last_appointment_data(cur: Any, patient_id: int):
             a.doctor_id,
             a.location_id,
             a.appointment_date,
-            s.life_anamnesis,
-            s.disease_anamnesis,
             s.complaints,
+            s.education_and_professional_history,
+            s.housing_conditions,
+            s.past_diseases,
+            s.habitual_intoxications,
+            s.gynecological_history,
             s.heredity,
             s.heredity_description,
-            s.comorbidities,
-            e.skin_condition,
+            s.family_life,
+            s.allergological_history,
+            s.epidemiological_history,
+            s.insurance_history,
+            s.disease_onset,
+            s.disease_course,
+            e.general_condition,
+            e.consciousness,
+            e.bed_position,
+            e.bed_position_details,
+            e.body_build,
+            e.height,
+            e.weight,
+            e.bmi,
+            e.constitution_type,
+            e.skin_and_mucous_membranes,
             e.edema_location,
+            e.lymph_nodes,
+            e.thyroid_gland,
+            e.musculoskeletal_system,
+            e.body_temperature,
             e.systolic_pressure,
             e.diastolic_pressure,
             e.bp_note,
             e.heart_rate,
-            e.height,
-            e.weight,
-            e.bmi,
+            e.veins_condition,
+            e.lung_auscultation,
+            e.abdomen,
+            e.kidney_palpation,
+            e.kidney_palpation_details,
+            e.pasternatsky_result,
+            e.pasternatsky_side,
             ad.diet,
             ad.next_control_date,
             ad.recommendations
@@ -244,7 +313,7 @@ def _fetch_last_appointment_data(cur: Any, patient_id: int):
 
 
 def get_last_appointment_data(patient_id: int):
-    """Возвращает основные данные последнего приёма пациента для автоподстановки."""
+    """Возвращает данные последнего приёма пациента."""
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             return _fetch_last_appointment_data(cur, patient_id)
@@ -254,11 +323,7 @@ def _fetch_appointment_medications(cur: Any, appointment_id: int):
     """Возвращает лекарства приёма через уже открытый cursor."""
     cur.execute(
         """
-        SELECT
-            id,
-            medication,
-            dosage,
-            schedule
+        SELECT id, medication, dosage, schedule
         FROM prescriptions
         WHERE appointment_id = %s
         ORDER BY id
@@ -279,10 +344,7 @@ def _fetch_appointment_diet(cur: Any, appointment_id: int):
     """Возвращает диету, дату контроля и рекомендации приёма."""
     cur.execute(
         """
-        SELECT
-            diet,
-            next_control_date,
-            recommendations
+        SELECT diet, next_control_date, recommendations
         FROM appointment_diets
         WHERE appointment_id = %s
         LIMIT 1
@@ -293,7 +355,7 @@ def _fetch_appointment_diet(cur: Any, appointment_id: int):
 
 
 def get_appointment_diet(appointment_id: int):
-    """Возвращает диету, дату следующего контроля и рекомендации для приёма."""
+    """Возвращает диету, дату контроля и рекомендации."""
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             return _fetch_appointment_diet(cur, appointment_id)

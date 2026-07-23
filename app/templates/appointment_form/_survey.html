@@ -1,33 +1,107 @@
 {#
-Назначение файла: блок «Опрос» общей формы приёма: анамнез, жалобы, наследственность и сопутствующие заболевания.
-Файл выделен при разделении большой формы приёма на структурные части.
-Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
+Назначение файла: верхняя часть истории болезни — жалобы, анамнез жизни и анамнез заболевания.
+Порядок полей соответствует утверждённой схеме формы. Стили и общие классы
+остаются прежними — используются стандартные классы текущего Bootstrap-шаблона.
 #}
+
 <hr>
-            <h5>Опрос</h5>
-            <div class="row">
-                <div class="col-md-6">
-                    <label class="form-label">Анамнез жизни</label>
-                    <textarea name="life_anamnesis" class="form-control" rows="2">{{ last_appointment.life_anamnesis if last_appointment and last_appointment.life_anamnesis else '' }}</textarea>
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Анамнез заболевания</label>
-                    <textarea name="disease_anamnesis" class="form-control" rows="2">{{ last_appointment.disease_anamnesis if last_appointment and last_appointment.disease_anamnesis else '' }}</textarea>
-                </div>
-            </div>
-            <div class="row mt-2">
-                <div class="col-12">
-                    <label class="form-label">Жалобы</label>
-                    <textarea name="complaints" class="form-control" rows="2">{{ last_appointment.complaints if last_appointment and last_appointment.complaints else '' }}</textarea>
-                </div>
-                <div class="col-12">
-                    <div class="form-check">
-                        <input type="checkbox" name="heredity" class="form-check-input" value="true" {% if last_appointment and last_appointment.heredity %}checked{% endif %}>
-                        <label class="form-check-label">Отягощённая наследственность</label>
-                    </div>
-                    <label class="form-label">Описание наследственности</label>
-                    <textarea name="heredity_description" class="form-control" rows="2">{{ last_appointment.heredity_description if last_appointment and last_appointment.heredity_description else '' }}</textarea>
-                    <label class="form-label">Сопутствующие заболевания</label>
-                    <textarea name="comorbidities" class="form-control" rows="2">{{ last_appointment.comorbidities if last_appointment and last_appointment.comorbidities else '' }}</textarea>
-                </div>
-            </div>
+
+<h5>Жалобы</h5>
+<div class="row">
+    <div class="col-12">
+        <label class="form-label">Жалобы</label>
+        <textarea name="complaints" class="form-control" rows="2">{{ last_appointment.complaints if last_appointment and last_appointment.complaints else '' }}</textarea>
+    </div>
+</div>
+
+<h5 class="mt-3">Анамнез жизни</h5>
+
+<div class="row">
+    <div class="col-12">
+        <label class="form-label">Образование и профессиональный анамнез</label>
+        <textarea name="education_and_professional_history" class="form-control" rows="2">{{ last_appointment.education_and_professional_history if last_appointment and last_appointment.education_and_professional_history else '' }}</textarea>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-12">
+        <label class="form-label">Жилищные условия</label>
+        <textarea name="housing_conditions" class="form-control" rows="2">{{ last_appointment.housing_conditions if last_appointment and last_appointment.housing_conditions else '' }}</textarea>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-12">
+        <label class="form-label">Перенесённые заболевания</label>
+        <textarea name="past_diseases" class="form-control" rows="2">{{ last_appointment.past_diseases if last_appointment and last_appointment.past_diseases else '' }}</textarea>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-12">
+        <label class="form-label">Привычные интоксикации</label>
+        <textarea name="habitual_intoxications" class="form-control" rows="2">{{ last_appointment.habitual_intoxications if last_appointment and last_appointment.habitual_intoxications else '' }}</textarea>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-12">
+        <label class="form-label">Гинекологический анамнез</label>
+        <textarea name="gynecological_history" class="form-control" rows="2">{{ last_appointment.gynecological_history if last_appointment and last_appointment.gynecological_history else '' }}</textarea>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-12">
+        <div class="form-check">
+            <input type="checkbox" name="heredity" class="form-check-input" value="true" id="heredity" {% if last_appointment and last_appointment.heredity %}checked{% endif %}>
+            <label class="form-check-label" for="heredity">Отягощённая наследственность</label>
+        </div>
+        <label class="form-label mt-1">Описание наследственности</label>
+        <textarea name="heredity_description" class="form-control" rows="2">{{ last_appointment.heredity_description if last_appointment and last_appointment.heredity_description else '' }}</textarea>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-12">
+        <label class="form-label">Семейная жизнь</label>
+        <textarea name="family_life" class="form-control" rows="2">{{ last_appointment.family_life if last_appointment and last_appointment.family_life else '' }}</textarea>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-12">
+        <label class="form-label">Аллергологический анамнез</label>
+        <textarea name="allergological_history" class="form-control" rows="2">{{ last_appointment.allergological_history if last_appointment and last_appointment.allergological_history else '' }}</textarea>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-12">
+        <label class="form-label">Эпидемиологический анамнез</label>
+        <textarea name="epidemiological_history" class="form-control" rows="2">{{ last_appointment.epidemiological_history if last_appointment and last_appointment.epidemiological_history else '' }}</textarea>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-12">
+        <label class="form-label">Экспертно-трудовой анамнез</label>
+        <textarea name="insurance_history" class="form-control" rows="2">{{ last_appointment.insurance_history if last_appointment and last_appointment.insurance_history else '' }}</textarea>
+    </div>
+</div>
+
+<h5 class="mt-3">Анамнез данного заболевания</h5>
+
+<div class="row">
+    <div class="col-12">
+        <label class="form-label">Начало болезни</label>
+        <textarea name="disease_onset" class="form-control" rows="2">{{ last_appointment.disease_onset if last_appointment and last_appointment.disease_onset else '' }}</textarea>
+    </div>
+</div>
+
+<div class="row mt-2">
+    <div class="col-12">
+        <label class="form-label">Течение заболевания</label>
+        <textarea name="disease_course" class="form-control" rows="2">{{ last_appointment.disease_course if last_appointment and last_appointment.disease_course else '' }}</textarea>
+    </div>
+</div>

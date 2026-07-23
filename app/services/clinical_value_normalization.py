@@ -98,6 +98,7 @@ GENERIC_NUMERIC_FIELDS: set[str] = {
     # Осмотр
     "height",
     "weight",
+    "body_temperature",
     "systolic_pressure",
     "diastolic_pressure",
     "heart_rate",

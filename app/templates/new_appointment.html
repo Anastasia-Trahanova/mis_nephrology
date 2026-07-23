@@ -1,134 +1,104 @@
-{#
-Назначение файла: страница создания нового приёма для уже существующего пациента.
-Каркас страницы оставлен здесь, а общие блоки приёма вынесены в app/templates/appointment_form/.
-Файл выделен при разделении большой формы приёма на структурные части.
-Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
-#}
+{# Назначение файла: страница повторного приёма. Стили и общий дизайн сохранены. #}
 {% extends "base.html" %}
-
 {% block content %}
-
 {% set appointment_form_mode = 'new_appointment' %}
 
 <style>
- .text-danger { color: #dc3545; }
- .prefilled-field {
-  background-color: #fff8d6 !important;
-  border-color: #f1d887 !important;
- }
- .prefilled-field:focus {
-  background-color: #fffbea !important;
-  border-color: #e0b84f !important;
-  box-shadow: 0 0 0 0.2rem rgba(224, 184, 79, 0.2);
- }
- .form-check-input.prefilled-field {
-  background-color: #fff3cd !important;
-  border-color: #e0b84f !important;
- }
+    .text-danger { color: #dc3545; }
+    .prefilled-field {
+        background-color: #fff8d6 !important;
+        border-color: #f1d887 !important;
+    }
+    .prefilled-field:focus {
+        background-color: #fffbea !important;
+        border-color: #e0b84f !important;
+        box-shadow: 0 0 0 0.2rem rgba(224, 184, 79, 0.2);
+    }
+    .form-check-input.prefilled-field {
+        background-color: #fff3cd !important;
+        border-color: #e0b84f !important;
+    }
 </style>
 
 <h2>➕ Добавление нового приёма</h2>
-
 <form method="post" action="/api/patients/{{ patient.id }}/appointments/new">
-
- <!-- ===================================================== -->
- <!-- БЛОК 1: ИНФОРМАЦИЯ О ПАЦИЕНТЕ -->
- <!-- ===================================================== -->
- <div class="card mb-4">
-  <div class="card-header bg-primary text-white">
-   <h5 class="mb-0"> Пациент</h5>
-  </div>
-
-  <div class="card-body">
-   <div class="row">
-    <div class="col-md-4">
-     <p class="mb-1"><strong>ФИО:</strong></p>
-     <p>{{ patient.last_name }} {{ patient.first_name }} {{ patient.patronymic or '' }}</p>
+    <div class="card mb-4">
+        <div class="card-header bg-primary text-white">
+            <h5 class="mb-0"> Паспортная часть</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-4">
+                    <p class="mb-1"><strong>ФИО:</strong></p>
+                    <p>{{ patient.last_name }} {{ patient.first_name }} {{ patient.patronymic or '' }}</p>
+                </div>
+                <div class="col-md-4">
+                    <p class="mb-1"><strong>Дата рождения:</strong></p>
+                    <p>{{ patient.birth_date.strftime('%d.%m.%Y') if patient.birth_date else '—' }}</p>
+                    <p class="mb-1"><strong>Номер телефона:</strong></p>
+                    <p>{{ patient.phone or '—' }}</p>
+                </div>
+                <div class="col-md-4">
+                    <p class="mb-1"><strong>Пол:</strong></p>
+                    <p>{{ patient.gender_str if patient.gender_str else '—' }}</p>
+                </div>
+            </div>
+            <input type="hidden" name="birth_date" value="{{ patient.birth_date.strftime('%Y-%m-%d') if patient.birth_date else '' }}">
+            <input type="hidden" name="gender" value="{{ 'true' if patient.gender_str == 'Мужской' else 'false' }}">
+            {% if last_appointment %}
+            <div class="alert alert-info mis-form-info mb-3">
+                В форму подгружены данные последнего приёма{% if last_appointment.appointment_date %} ({{ last_appointment.appointment_date.strftime('%d.%m.%Y') }}).{% else %}.{% endif %}
+            </div>
+            {% endif %}
+        </div>
     </div>
 
-    <div class="col-md-4">
-     <p class="mb-1"><strong>Дата рождения:</strong></p>
-     <p>{{ patient.birth_date.strftime('%d.%m.%Y') if patient.birth_date else '—' }}</p>
+    <div class="card mb-4">
+        <div class="card-header bg-success text-white">
+            <h5 class="mb-0"> Данные нового приёма</h5>
+        </div>
+        <div class="card-body">
+            <div class="row">
+                <div class="col-md-6">
+                    <label class="form-label">Врач <span class="text-danger">*</span></label>
+                    <input type="text" class="form-control" value="{{ current_doctor.last_name }} {{ current_doctor.first_name }} {{ current_doctor.patronymic or '' }}" readonly>
+                    <input type="hidden" name="doctor_id" value="{{ current_doctor.id }}">
+                </div>
+                <div class="col-md-6">
+                    <label class="form-label">Отделение <span class="text-danger">*</span></label>
+                    <select name="location_id" id="locationSelect" class="form-select" required>
+                        <option value="">Выберите отделение</option>
+                        {% for location in doctor_locations %}
+                        <option value="{{ location.id }}">{{ location.name }} ({{ location.branch_name }})</option>
+                        {% endfor %}
+                    </select>
+                </div>
+            </div>
+            <div class="row mt-3">
+                <div class="col-md-4">
+                    <label class="form-label">Дата приёма</label>
+                    <input type="date" name="appointment_date" class="form-control" value="{{ now_date }}" required>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">Время приёма</label>
+                    <input type="time" name="appointment_time" class="form-control" value="{{ now_time }}" required>
+                </div>
+            </div>
+
+            {% include "appointment_form/_survey.html" %}
+            {% include "appointment_form/_examination.html" %}
+            {% include "appointment_form/_cbc.html" %}
+            {% include "appointment_form/_biochemistry.html" %}
+            {% include "appointment_form/_metrics.html" %}
+            {% include "appointment_form/_urinalysis.html" %}
+            {% include "appointment_form/_albuminuria.html" %}
+            {% include "appointment_form/_ultrasound.html" %}
+            {% include "appointment_form/_conclusion.html" %}
+        </div>
     </div>
-
-    <div class="col-md-4">
-     <p class="mb-1"><strong>Пол:</strong></p>
-     <p>{{ patient.gender_str if patient.gender_str else '—' }}</p>
-    </div>
-   </div>
-
-   <input type="hidden" name="birth_date" value="{{ patient.birth_date.strftime('%Y-%m-%d') if patient.birth_date else '' }}">
-   <input type="hidden" name="gender" value="{{ 'true' if patient.gender_str == 'Мужской' else 'false' }}">
-
-   {% if last_appointment %}
-   <div class="alert alert-info mis-form-info mb-3">
-    В форму подгружены данные последнего приёма
-    {% if last_appointment.appointment_date %}
-     ({{ last_appointment.appointment_date.strftime('%d.%m.%Y') }}).
-    {% else %}
-     .
-    {% endif %}
-   </div>
-   {% endif %}
-  </div>
- </div>
-
- <!-- ===================================================== -->
- <!-- БЛОК 2: ДАННЫЕ ПРИЁМА -->
- <!-- ===================================================== -->
- <div class="card mb-4">
-  <div class="card-header bg-success text-white">
-   <h5 class="mb-0"> Данные нового приёма</h5>
-  </div>
-
-  <div class="card-body">
-   <div class="row">
-    <div class="col-md-6">
-     <label class="form-label">Врач <span class="text-danger">*</span></label>
-     <input type="text"
-            class="form-control"
-            value="{{ current_doctor.last_name }} {{ current_doctor.first_name }} {{ current_doctor.patronymic or '' }}"
-            readonly>
-     <input type="hidden" name="doctor_id" value="{{ current_doctor.id }}">
-    </div>
-
-    <div class="col-md-6">
-     <label class="form-label">Отделение <span class="text-danger">*</span></label>
-     <select name="location_id" id="locationSelect" class="form-select" required>
-      <option value="">Выберите отделение</option>
-      {% for location in doctor_locations %}
-       <option value="{{ location.id }}">{{ location.name }} ({{ location.branch_name }})</option>
-      {% endfor %}
-     </select>
-    </div>
-   </div>
-
-   <div class="row mt-3">
-    <div class="col-md-4">
-     <label class="form-label">Дата приёма</label>
-     <input type="date" name="appointment_date" class="form-control" value="{{ now_date }}" required>
-    </div>
-
-    <div class="col-md-4">
-     <label class="form-label">Время приёма</label>
-     <input type="time" name="appointment_time" class="form-control" value="{{ now_time }}" required>
-    </div>
-   </div>
-
-{% include "appointment_form/_survey.html" %}
-{% include "appointment_form/_examination.html" %}
-{% include "appointment_form/_cbc.html" %}
-{% include "appointment_form/_biochemistry.html" %}
-{% include "appointment_form/_metrics.html" %}
-{% include "appointment_form/_urinalysis.html" %}
-{% include "appointment_form/_albuminuria.html" %}
-{% include "appointment_form/_ultrasound.html" %}
-{% include "appointment_form/_conclusion.html" %}
-
 </form>
 
 {% include "appointment_form/_scripts.html" %}
 {% include "appointment_form/_bmi.html" %}
 {% include "_clinical_validation.html" %}
-
 {% endblock %}

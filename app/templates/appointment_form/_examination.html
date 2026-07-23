@@ -1,187 +1,168 @@
 {#
-Назначение файла: блок «Осмотр» общей формы приёма: кожа, отёки, АД, ЧСС, рост и вес.
-Файл выделен при разделении большой формы приёма на структурные части.
-Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
+Назначение файла: данные объективного исследования пациента. Порядок полей
+соответствует утверждённой форме. Блок отёков и блок АД, включая примечание
+к АД, сохранены без изменения имён полей и формата хранения.
 #}
+
 <hr>
-            <h5>Осмотр</h5>
-            {% if last_appointment and (last_appointment.skin_condition or last_appointment.edema_location) %}
-            <div class="alert alert-secondary small">
-                <strong>Прошлый осмотр:</strong>
-                {% if last_appointment.skin_condition %}Кожные покровы — {{ last_appointment.skin_condition }}.{% endif %}
-                {% if last_appointment.edema_location %} Отёки — {{ last_appointment.edema_location }}.{% endif %}
-            </div>
-            {% endif %}
-            <div class="row mb-3">
-                <!-- Кожные покровы -->
-                <div class="col-md-6">
-                    <label class="form-label"><strong>Кожные покровы</strong></label>
+<h5>Данные объективного исследования больного</h5>
 
-                    <div class="mb-2">
-                        <label class="form-label">Окраска</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="skin_color" value="физиологической окраски" id="skin_color_normal" {% if last_appointment and last_appointment.skin_condition and 'физиологической окраски' in last_appointment.skin_condition %}checked{% endif %}>
-                            <label class="form-check-label" for="skin_color_normal">Физиологической окраски</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="skin_color" value="бледные" id="skin_color_pale" {% if last_appointment and last_appointment.skin_condition and 'бледные' in last_appointment.skin_condition %}checked{% endif %}>
-                            <label class="form-check-label" for="skin_color_pale">Бледные</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="skin_color" value="синюшные" id="skin_color_cyanotic" {% if last_appointment and last_appointment.skin_condition and 'синюшные' in last_appointment.skin_condition %}checked{% endif %}>
-                            <label class="form-check-label" for="skin_color_cyanotic">Синюшные</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="skin_color" value="гиперпигментация" id="skin_color_hyperpigmentation" {% if last_appointment and last_appointment.skin_condition and 'гиперпигментация' in last_appointment.skin_condition %}checked{% endif %}>
-                            <label class="form-check-label" for="skin_color_hyperpigmentation">Гиперпигментация</label>
-                        </div>
-                        <input type="text" name="skin_color_other" class="form-control form-control-sm mt-1" >
-                    </div>
+<div class="row mb-2">
+    <div class="col-md-6">
+        <label class="form-label">Общее состояние</label>
+        <select name="general_condition" class="form-select">
+            <option value="">—</option>
+            <option value="satisfactory" {% if last_appointment and last_appointment.general_condition == 'satisfactory' %}selected{% endif %}>Удовлетворительное</option>
+            <option value="moderate" {% if last_appointment and last_appointment.general_condition == 'moderate' %}selected{% endif %}>Средней тяжести</option>
+            <option value="severe" {% if last_appointment and last_appointment.general_condition == 'severe' %}selected{% endif %}>Тяжёлое</option>
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Сознание</label>
+        <select name="consciousness" class="form-select">
+            <option value="">—</option>
+            <option value="clear" {% if last_appointment and last_appointment.consciousness == 'clear' %}selected{% endif %}>Ясное</option>
+            <option value="confused" {% if last_appointment and last_appointment.consciousness == 'confused' %}selected{% endif %}>Спутанное</option>
+            <option value="sopor" {% if last_appointment and last_appointment.consciousness == 'sopor' %}selected{% endif %}>Сопорозное</option>
+            <option value="coma" {% if last_appointment and last_appointment.consciousness == 'coma' %}selected{% endif %}>Коматозное</option>
+        </select>
+    </div>
+</div>
 
-                    <div class="mb-2">
-                        <label class="form-label">Влажность</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="skin_moisture" value="обычной влажности" id="skin_moisture_normal" {% if last_appointment and last_appointment.skin_condition and 'обычной влажности' in last_appointment.skin_condition %}checked{% endif %}>
-                            <label class="form-check-label" for="skin_moisture_normal">Обычной влажности</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="skin_moisture" value="сухие" id="skin_moisture_dry" {% if last_appointment and last_appointment.skin_condition and 'сухие' in last_appointment.skin_condition %}checked{% endif %}>
-                            <label class="form-check-label" for="skin_moisture_dry">Сухие</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="skin_moisture" value="влажные" id="skin_moisture_wet" {% if last_appointment and last_appointment.skin_condition and 'влажные' in last_appointment.skin_condition %}checked{% endif %}>
-                            <label class="form-check-label" for="skin_moisture_wet">Влажные</label>
-                        </div>
-                        <input type="text" name="skin_moisture_other" class="form-control form-control-sm mt-1">
-                    </div>
+<div class="row mb-2">
+    <div class="col-md-4">
+        <label class="form-label">Положение в постели</label>
+        <select name="bed_position" class="form-select">
+            <option value="">—</option>
+            <option value="active" {% if last_appointment and last_appointment.bed_position == 'active' %}selected{% endif %}>Активное</option>
+            <option value="passive" {% if last_appointment and last_appointment.bed_position == 'passive' %}selected{% endif %}>Пассивное</option>
+            <option value="forced" {% if last_appointment and last_appointment.bed_position == 'forced' %}selected{% endif %}>Вынужденное</option>
+        </select>
+    </div>
+    <div class="col-md-8">
+        <label class="form-label">Особенности вынужденного положения</label>
+        <input type="text" name="bed_position_details" class="form-control" value="{{ last_appointment.bed_position_details if last_appointment and last_appointment.bed_position_details else '' }}">
+    </div>
+</div>
 
-                    <div class="mb-2">
-                        <label class="form-label">Высыпания</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="skin_rash" value="нет" id="skin_rash_no" {% if not last_appointment or not last_appointment.skin_condition or 'Высыпания: есть' not in last_appointment.skin_condition %}checked{% endif %}>
-                            <label class="form-check-label" for="skin_rash_no">Нет</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="radio" name="skin_rash" value="есть" id="skin_rash_yes" {% if last_appointment and last_appointment.skin_condition and 'Высыпания: есть' in last_appointment.skin_condition %}checked{% endif %}>
-                            <label class="form-check-label" for="skin_rash_yes">Есть</label>
-                        </div>
-                        <input type="text" name="skin_rash_description" class="form-control form-control-sm mt-1" >
-                    </div>
+<div class="row mb-2">
+    <div class="col-12">
+        <label class="form-label">Телосложение</label>
+        <input type="text" name="body_build" class="form-control" value="{{ last_appointment.body_build if last_appointment and last_appointment.body_build else '' }}">
+    </div>
+</div>
 
-                    <div class="mb-2">
-                        <label class="form-label">Дополнительно</label>
-                        <input type="text" name="skin_other" class="form-control form-control-sm" >
-                    </div>
-                </div>
+<div class="row mb-2">
+    <div class="col-md-4">
+        <label class="form-label">Рост (см)</label>
+        <input type="text" id="heightInput" name="height" class="form-control" value="{{ last_appointment.height if last_appointment and last_appointment.height is not none else '' }}">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">Вес (кг)</label>
+        <input type="text" id="weightInput" name="weight" class="form-control" value="{{ last_appointment.weight if last_appointment and last_appointment.weight is not none else '' }}">
+    </div>
+    <div class="col-md-4">
+        <label class="form-label">ИМТ (кг/м²)</label>
+        <input type="text" id="bmiInput" name="bmi" class="form-control" value="{{ last_appointment.bmi if last_appointment and last_appointment.bmi is not none else '' }}" readonly>
+        <div class="form-text">Считается автоматически по росту и весу.</div>
+    </div>
+</div>
 
-                <!-- Отёки -->
-                <div class="col-md-6 border-start ps-4">
-                    <label class="form-label"><strong>Отёки</strong></label>
+<div class="row mb-2">
+    <div class="col-md-4">
+        <label class="form-label">Тип конституции</label>
+        <select name="constitution_type" class="form-select">
+            <option value="">—</option>
+            <option value="normosthenic" {% if last_appointment and last_appointment.constitution_type == 'normosthenic' %}selected{% endif %}>Нормостеник</option>
+            <option value="asthenic" {% if last_appointment and last_appointment.constitution_type == 'asthenic' %}selected{% endif %}>Астеник</option>
+            <option value="hypersthenic" {% if last_appointment and last_appointment.constitution_type == 'hypersthenic' %}selected{% endif %}>Гиперстеник</option>
+        </select>
+    </div>
+</div>
 
-                    <div class="mb-2">
-                        <label class="form-label">Периферические отёки</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="edema_peripheral" value="нет" id="edema_none" {% if last_appointment and last_appointment.edema_location and 'нет' in last_appointment.edema_location %}checked{% endif %}>
-                            <label class="form-check-label" for="edema_none">Нет</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="edema_peripheral" value="нижние конечности" id="edema_lower_limbs" {% if last_appointment and last_appointment.edema_location and 'нижние конечности' in last_appointment.edema_location %}checked{% endif %}>
-                            <label class="form-check-label" for="edema_lower_limbs">Нижние конечности</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="edema_peripheral" value="лицо/веки" id="edema_face" {% if last_appointment and last_appointment.edema_location and 'лицо/веки' in last_appointment.edema_location %}checked{% endif %}>
-                            <label class="form-check-label" for="edema_face">Лицо/веки</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="edema_peripheral" value="верхние конечности" id="edema_upper_limbs" {% if last_appointment and last_appointment.edema_location and 'верхние конечности' in last_appointment.edema_location %}checked{% endif %}>
-                            <label class="form-check-label" for="edema_upper_limbs">Верхние конечности</label>
-                        </div>
-                        <input type="text" name="edema_peripheral_other" class="form-control form-control-sm mt-1" >
-                    </div>
+<div class="row mb-3">
+    <div class="col-12">
+        <label class="form-label">Кожа и слизистые оболочки</label>
+        <textarea name="skin_and_mucous_membranes" class="form-control" rows="2">{{ last_appointment.skin_and_mucous_membranes if last_appointment and last_appointment.skin_and_mucous_membranes else '' }}</textarea>
+    </div>
+</div>
 
-                    <div class="mb-2">
-                        <label class="form-label">Серозиты</label>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="edema_serositis" value="нет" id="serositis_none" {% if last_appointment and last_appointment.edema_location and 'нет' in last_appointment.edema_location %}checked{% endif %}>
-                            <label class="form-check-label" for="serositis_none">Нет</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="edema_serositis" value="гидроторакс" id="serositis_hydrothorax" {% if last_appointment and last_appointment.edema_location and 'гидроторакс' in last_appointment.edema_location %}checked{% endif %}>
-                            <label class="form-check-label" for="serositis_hydrothorax">Гидроторакс</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="edema_serositis" value="гидроперикард" id="serositis_hydropericardium" {% if last_appointment and last_appointment.edema_location and 'гидроперикард' in last_appointment.edema_location %}checked{% endif %}>
-                            <label class="form-check-label" for="serositis_hydropericardium">Гидроперикард</label>
-                        </div>
-                        <div class="form-check">
-                            <input class="form-check-input" type="checkbox" name="edema_serositis" value="асцит" id="serositis_ascites" {% if last_appointment and last_appointment.edema_location and 'асцит' in last_appointment.edema_location %}checked{% endif %}>
-                            <label class="form-check-label" for="serositis_ascites">Асцит</label>
-                        </div>
-                        <input type="text" name="edema_serositis_other" class="form-control form-control-sm mt-1">
-                    </div>
+<!-- Блок отёков сохранён в прежнем виде -->
+<div class="row mb-3">
+    <div class="col-md-6">
+        <label class="form-label"><strong>Отёки</strong></label>
+        <div class="mb-2">
+            <label class="form-label">Периферические отёки</label>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="нет" id="edema_none" {% if last_appointment and last_appointment.edema_location and 'нет' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="edema_none">Нет</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="нижние конечности" id="edema_lower_limbs" {% if last_appointment and last_appointment.edema_location and 'нижние конечности' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="edema_lower_limbs">Нижние конечности</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="лицо/веки" id="edema_face" {% if last_appointment and last_appointment.edema_location and 'лицо/веки' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="edema_face">Лицо/веки</label></div>
+            <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_peripheral" value="верхние конечности" id="edema_upper_limbs" {% if last_appointment and last_appointment.edema_location and 'верхние конечности' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="edema_upper_limbs">Верхние конечности</label></div>
+            <input type="text" name="edema_peripheral_other" class="form-control form-control-sm mt-1">
+        </div>
+    </div>
+    <div class="col-md-6 border-start ps-4">
+        <label class="form-label">Серозиты</label>
+        <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="нет" id="serositis_none" {% if last_appointment and last_appointment.edema_location and 'Серозиты: нет' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="serositis_none">Нет</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="гидроторакс" id="serositis_hydrothorax" {% if last_appointment and last_appointment.edema_location and 'гидроторакс' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="serositis_hydrothorax">Гидроторакс</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="гидроперикард" id="serositis_hydropericardium" {% if last_appointment and last_appointment.edema_location and 'гидроперикард' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="serositis_hydropericardium">Гидроперикард</label></div>
+        <div class="form-check"><input class="form-check-input" type="checkbox" name="edema_serositis" value="асцит" id="serositis_ascites" {% if last_appointment and last_appointment.edema_location and 'асцит' in last_appointment.edema_location %}checked{% endif %}><label class="form-check-label" for="serositis_ascites">Асцит</label></div>
+        <input type="text" name="edema_serositis_other" class="form-control form-control-sm mt-1">
+        <label class="form-label mt-2">Дополнительно</label>
+        <input type="text" name="edema_other" class="form-control form-control-sm">
+    </div>
+</div>
 
-                    <div class="mb-2">
-                        <label class="form-label">Дополнительно</label>
-                        <input type="text" name="edema_other" class="form-control form-control-sm" >
-                    </div>
-                </div>
-            </div>
+<div class="row mb-2"><div class="col-12"><label class="form-label">Лимфатические узлы</label><input type="text" name="lymph_nodes" class="form-control" value="{{ last_appointment.lymph_nodes if last_appointment and last_appointment.lymph_nodes else '' }}"></div></div>
+<div class="row mb-2"><div class="col-12"><label class="form-label">Щитовидная железа</label><input type="text" name="thyroid_gland" class="form-control" value="{{ last_appointment.thyroid_gland if last_appointment and last_appointment.thyroid_gland else '' }}"></div></div>
+<div class="row mb-2"><div class="col-12"><label class="form-label">Опорно-двигательный аппарат</label><input type="text" name="musculoskeletal_system" class="form-control" value="{{ last_appointment.musculoskeletal_system if last_appointment and last_appointment.musculoskeletal_system else '' }}"></div></div>
 
+<div class="row mb-2">
+    <div class="col-md-4">
+        <label class="form-label">Температура тела (°C)</label>
+        <input type="text" name="body_temperature" class="form-control" value="{{ last_appointment.body_temperature if last_appointment and last_appointment.body_temperature is not none else '' }}">
+    </div>
+</div>
 
-            <!-- Строка 2: Артериальное давление -->
-            <div class="row mb-2">
-                <div class="col-md-3">
-                    <label class="form-label">АД систолическое</label>
-                    <input type="text" name="systolic_pressure" class="form-control" value="{{ last_appointment.systolic_pressure if last_appointment and last_appointment.systolic_pressure is not none else '' }}">
-                </div>
-                <div class="col-md-3">
-                    <label class="form-label">АД диастолическое</label>
-                    <input type="text" name="diastolic_pressure" class="form-control" value="{{ last_appointment.diastolic_pressure if last_appointment and last_appointment.diastolic_pressure is not none else '' }}">
-                </div>
-                <div class="col-md-6">
-                    <label class="form-label">Примечание к АД</label>
-                    <input type="text" name="bp_note" class="form-control" value="{{ last_appointment.bp_note if last_appointment and last_appointment.bp_note else '' }}">
-                </div>
-            </div>
+<!-- Блок АД сохранён без изменения -->
+<div class="row mb-2">
+    <div class="col-md-3"><label class="form-label">АД систолическое</label><input type="text" name="systolic_pressure" class="form-control" value="{{ last_appointment.systolic_pressure if last_appointment and last_appointment.systolic_pressure is not none else '' }}"></div>
+    <div class="col-md-3"><label class="form-label">АД диастолическое</label><input type="text" name="diastolic_pressure" class="form-control" value="{{ last_appointment.diastolic_pressure if last_appointment and last_appointment.diastolic_pressure is not none else '' }}"></div>
+    <div class="col-md-6"><label class="form-label">Примечание к АД</label><input type="text" name="bp_note" class="form-control" value="{{ last_appointment.bp_note if last_appointment and last_appointment.bp_note else '' }}"></div>
+</div>
+<div class="row mb-2"><div class="col-md-4"><label class="form-label">ЧСС (уд/мин)</label><input type="text" name="heart_rate" class="form-control" value="{{ last_appointment.heart_rate if last_appointment and last_appointment.heart_rate is not none else '' }}"></div></div>
 
-            <!-- Строка 3: ЧСС -->
-            <div class="row mb-2">
-                <div class="col-md-4">
-                    <label class="form-label">ЧСС (уд/мин)</label>
-                    <input type="text" name="heart_rate" class="form-control" value="{{ last_appointment.heart_rate if last_appointment and last_appointment.heart_rate is not none else '' }}">
-                </div>
-            </div>
-            <div class="row mb-2">
-                <div class="col-md-4">
-                    <label class="form-label">Рост (см)</label>
-                    <input
-                        type="text"
-                        id="heightInput"
-                        name="height"
-                        class="form-control"
-                        value="{{ last_appointment.height if last_appointment and last_appointment.height is not none else '' }}"
-                    >
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">Вес (кг)</label>
-                    <input
-                        type="text"
-                        id="weightInput"
-                        name="weight"
-                        class="form-control"
-                        value="{{ last_appointment.weight if last_appointment and last_appointment.weight is not none else '' }}"
-                    >
-                </div>
-                <div class="col-md-4">
-                    <label class="form-label">ИМТ (кг/м²)</label>
-                    <input
-                        type="text"
-                        id="bmiInput"
-                        name="bmi"
-                        class="form-control"
-                        value="{{ last_appointment.bmi if last_appointment and last_appointment.bmi is not none else '' }}"
-                        readonly
-                    >
-                    <div class="form-text">Считается автоматически по росту и весу.</div>
-                </div>
-            </div>
+<div class="row mb-2"><div class="col-12"><label class="form-label">Состояние вен</label><input type="text" name="veins_condition" class="form-control" value="{{ last_appointment.veins_condition if last_appointment and last_appointment.veins_condition else '' }}"></div></div>
+<div class="row mb-2"><div class="col-12"><label class="form-label">Аускультация лёгких</label><input type="text" name="lung_auscultation" class="form-control" value="{{ last_appointment.lung_auscultation if last_appointment and last_appointment.lung_auscultation else '' }}"></div></div>
+<div class="row mb-2"><div class="col-12"><label class="form-label">Живот</label><input type="text" name="abdomen" class="form-control" value="{{ last_appointment.abdomen if last_appointment and last_appointment.abdomen else '' }}"></div></div>
+
+<div class="row mb-2">
+    <div class="col-md-4">
+        <label class="form-label">Пальпация почек</label>
+        <select name="kidney_palpation" class="form-select">
+            <option value="">—</option>
+            <option value="palpable" {% if last_appointment and last_appointment.kidney_palpation == 'palpable' %}selected{% endif %}>Пальпируются</option>
+            <option value="not_palpable" {% if last_appointment and last_appointment.kidney_palpation == 'not_palpable' %}selected{% endif %}>Не пальпируются</option>
+        </select>
+    </div>
+    <div class="col-md-8"><label class="form-label">Уточнение</label><input type="text" name="kidney_palpation_details" class="form-control" value="{{ last_appointment.kidney_palpation_details if last_appointment and last_appointment.kidney_palpation_details else '' }}"></div>
+</div>
+
+<div class="row mb-2">
+    <div class="col-md-6">
+        <label class="form-label">Симптом Пастернацкого</label>
+        <select name="pasternatsky_result" class="form-select">
+            <option value="">—</option>
+            <option value="positive" {% if last_appointment and last_appointment.pasternatsky_result == 'positive' %}selected{% endif %}>Положительный</option>
+            <option value="negative" {% if last_appointment and last_appointment.pasternatsky_result == 'negative' %}selected{% endif %}>Отрицательный</option>
+        </select>
+    </div>
+    <div class="col-md-6">
+        <label class="form-label">Сторона</label>
+        <select name="pasternatsky_side" class="form-select">
+            <option value="">—</option>
+            <option value="right" {% if last_appointment and last_appointment.pasternatsky_side == 'right' %}selected{% endif %}>Справа</option>
+            <option value="left" {% if last_appointment and last_appointment.pasternatsky_side == 'left' %}selected{% endif %}>Слева</option>
+            <option value="bilateral" {% if last_appointment and last_appointment.pasternatsky_side == 'bilateral' %}selected{% endif %}>С двух сторон</option>
+        </select>
+    </div>
+</div>

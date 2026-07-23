@@ -46,6 +46,7 @@ def test_create_patient_sql_contract():
             "patronymic": "Автотестовна",
             "birth_date": date(1980, 1, 15),
             "gender": True,
+            "phone": "+7 900 000-00-00",
         },
     )
 
@@ -57,16 +58,19 @@ def test_create_patient_sql_contract():
         "Автотестовна",
         date(1980, 1, 15),
         True,
+        "+7 900 000-00-00",
     )
 
 
 def test_create_appointment_sql_contract():
     cur = FakeCursor({"id": 202})
-    appointment_id = create_appointment(cur, 101, 1, 2, datetime(2026, 7, 4, 10, 30))
+    appointment_id = create_appointment(
+        cur, 101, 1, 2, datetime(2026, 7, 4, 10, 30), 46
+    )
 
     assert appointment_id == 202
     assert "insert into appointments" in _normalized_sql(cur.last_query)
-    assert cur.last_params == (101, 1, 2, datetime(2026, 7, 4, 10, 30))
+    assert cur.last_params == (101, 1, 2, datetime(2026, 7, 4, 10, 30), 46)
 
 
 def test_get_patient_for_appointment_sql_contract():
@@ -80,43 +84,87 @@ def test_get_patient_for_appointment_sql_contract():
 
 def test_insert_survey_sql_contract():
     cur = FakeCursor()
-    insert_survey(
-        cur,
-        202,
-        {
-            "life_anamnesis": "life",
-            "disease_anamnesis": "disease",
-            "complaints": "complaints",
-            "heredity": True,
-            "heredity_description": "desc",
-            "comorbidities": "comorb",
-        },
-    )
+    survey = {
+        "complaints": "complaints",
+        "education_and_professional_history": "education",
+        "housing_conditions": "housing",
+        "past_diseases": "past",
+        "habitual_intoxications": "intoxications",
+        "gynecological_history": "gynecology",
+        "heredity": True,
+        "heredity_description": "desc",
+        "family_life": "family",
+        "allergological_history": "allergy",
+        "epidemiological_history": "epidemiology",
+        "insurance_history": "insurance",
+        "disease_onset": "onset",
+        "disease_course": "course",
+    }
+    insert_survey(cur, 202, survey)
 
-    assert "insert into surveys" in _normalized_sql(cur.last_query)
-    assert cur.last_params == (202, "life", "disease", "complaints", True, "desc", "comorb")
+    normalized = _normalized_sql(cur.last_query)
+    assert "insert into surveys" in normalized
+    assert "life_anamnesis" not in normalized
+    assert "disease_anamnesis" not in normalized
+    assert "comorbidities" not in normalized
+    assert cur.last_params == (
+        202,
+        "complaints",
+        "education",
+        "housing",
+        "past",
+        "intoxications",
+        "gynecology",
+        True,
+        "desc",
+        "family",
+        "allergy",
+        "epidemiology",
+        "insurance",
+        "onset",
+        "course",
+    )
 
 
 def test_insert_examination_sql_contract():
     cur = FakeCursor()
-    insert_examination(
-        cur,
-        202,
-        {
-            "skin_condition": "skin",
-            "edema_location": "edema",
-            "systolic_pressure": "130",
-            "diastolic_pressure": "80",
-            "bp_note": "сидя",
-            "heart_rate": "72",
-            "height": "170",
-            "weight": "70",
-            "bmi": 24.22,
-        },
-    )
+    examination = {
+        "general_condition": "moderate",
+        "consciousness": "clear",
+        "bed_position": "forced",
+        "bed_position_details": "полусидя",
+        "body_build": "правильное",
+        "height": "170",
+        "weight": "70",
+        "bmi": 24.22,
+        "constitution_type": "normosthenic",
+        "skin_and_mucous_membranes": "кожа бледная",
+        "edema_location": "edema",
+        "lymph_nodes": "не увеличены",
+        "thyroid_gland": "не увеличена",
+        "musculoskeletal_system": "без особенностей",
+        "body_temperature": "36.6",
+        "systolic_pressure": "130",
+        "diastolic_pressure": "80",
+        "bp_note": "сидя",
+        "heart_rate": "72",
+        "veins_condition": "без особенностей",
+        "lung_auscultation": "дыхание везикулярное",
+        "abdomen": "мягкий",
+        "kidney_palpation": "palpable",
+        "kidney_palpation_details": "правая",
+        "pasternatsky_result": "negative",
+        "pasternatsky_side": "bilateral",
+    }
+    insert_examination(cur, 202, examination)
 
-    assert "insert into examinations" in _normalized_sql(cur.last_query)
-    assert cur.last_params[-3:] == ("170", "70", 24.22)
+    normalized = _normalized_sql(cur.last_query)
+    assert "insert into examinations" in normalized
+    assert "skin_condition" not in normalized
+    assert "skin_and_mucous_membranes" in normalized
+    # Блок АД сохраняет прежний контракт, включая примечание.
+    assert ("130", "80", "сидя", "72") == cur.last_params[16:20]
+    assert cur.last_params[6:9] == ("170", "70", 24.22)
 
 
 def test_insert_lab_sql_contracts():

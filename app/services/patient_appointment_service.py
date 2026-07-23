@@ -82,6 +82,16 @@ def _ensure_doctor_location_allowed(cur: Any, doctor_id: int, location_id: int) 
         )
 
 
+def _calculate_age_at_appointment(birth_date: Any, appointment_date: Any) -> int:
+    """Возвращает полное число лет пациента на дату конкретного приёма."""
+    age = appointment_date.year - birth_date.year
+    if (appointment_date.month, appointment_date.day) < (birth_date.month, birth_date.day):
+        age -= 1
+    if age < 0 or age > 130:
+        raise HTTPException(status_code=400, detail="Некорректный возраст на дату приёма")
+    return age
+
+
 def create_patient_with_first_appointment(
     form: Any,
     *,
@@ -99,9 +109,16 @@ def create_patient_with_first_appointment(
     appointment_required = parse_required_appointment_fields(normalized_form)
     appointment_datetime = appointment_required["appointment_datetime"]
 
-    validation_errors = validate_appointment_form(normalized_form, appointment_datetime.date())
+    validation_errors = validate_appointment_form(
+        normalized_form,
+        appointment_datetime.date(),
+        birth_date_value=patient_data["birth_date"],
+    )
     _raise_validation_errors(validation_errors)
 
+    age_at_appointment = _calculate_age_at_appointment(
+        patient_data["birth_date"], appointment_datetime.date()
+    )
     appointment_data = parse_appointment_form(normalized_form, appointment_datetime)
 
     with get_db_connection() as conn:
@@ -120,6 +137,7 @@ def create_patient_with_first_appointment(
                     doctor_id=doctor_id,
                     location_id=appointment_required["location_id"],
                     appointment_datetime=appointment_datetime,
+                    age_at_appointment=age_at_appointment,
                 )
 
                 save_appointment_details(
@@ -161,7 +179,11 @@ def create_appointment_for_existing_patient(
     appointment_required = parse_required_appointment_fields(normalized_form)
     appointment_datetime = appointment_required["appointment_datetime"]
 
-    validation_errors = validate_appointment_form(normalized_form, appointment_datetime.date())
+    validation_errors = validate_appointment_form(
+        normalized_form,
+        appointment_datetime.date(),
+        birth_date_value=normalized_form.get("birth_date"),
+    )
     _raise_validation_errors(validation_errors)
 
     appointment_data = parse_appointment_form(normalized_form, appointment_datetime)
@@ -172,6 +194,10 @@ def create_appointment_for_existing_patient(
                 patient = get_patient_for_appointment(cur, patient_id)
                 if not patient:
                     raise HTTPException(status_code=404, detail="Пациент не найден")
+
+                age_at_appointment = _calculate_age_at_appointment(
+                    patient["birth_date"], appointment_datetime.date()
+                )
 
                 _ensure_doctor_location_allowed(
                     cur,
@@ -185,6 +211,7 @@ def create_appointment_for_existing_patient(
                     doctor_id=doctor_id,
                     location_id=appointment_required["location_id"],
                     appointment_datetime=appointment_datetime,
+                    age_at_appointment=age_at_appointment,
                 )
 
                 save_appointment_details(

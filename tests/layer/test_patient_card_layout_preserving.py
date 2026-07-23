@@ -74,7 +74,8 @@ def _context() -> dict:
         first_name="Пациентка",
         patronymic="Карточковна",
         birth_date=date(1980, 1, 15),
-        gender_str="женский",
+        phone="+7 900 000-00-00",
+        gender_str="Женский",
     )
 
     selected = ns(
@@ -84,14 +85,32 @@ def _context() -> dict:
         location_name="Нефрология",
         branch_name="Филиал 1",
         age_at_appointment=46,
-        life_anamnesis="Анамнез жизни",
-        disease_anamnesis="Анамнез заболевания",
         complaints="Жалобы",
+        education_and_professional_history="Высшее образование, бухгалтер",
+        housing_conditions="Удовлетворительные",
+        past_diseases="Аппендэктомия",
+        habitual_intoxications="Не курит",
+        gynecological_history="Менопауза",
         heredity=True,
         heredity_description="Наследственность отягощена",
-        comorbidities="АГ",
-        skin_condition="обычные",
+        family_life="Замужем",
+        allergological_history="Аллергий нет",
+        epidemiological_history="Без особенностей",
+        insurance_history="Полис ОМС",
+        disease_onset="Пять лет назад",
+        disease_course="Волнообразное",
+        general_condition="moderate",
+        consciousness="clear",
+        bed_position="active",
+        bed_position_details=None,
+        body_build="Правильное",
+        constitution_type="normosthenic",
+        skin_and_mucous_membranes="Кожа бледная, сухая",
         edema_location="голени",
+        lymph_nodes="Не увеличены",
+        thyroid_gland="Не увеличена",
+        musculoskeletal_system="Без особенностей",
+        body_temperature=36.6,
         systolic_pressure=130,
         diastolic_pressure=80,
         bp_note="самоконтроль",
@@ -99,6 +118,13 @@ def _context() -> dict:
         height=170,
         weight=70,
         bmi=24.22,
+        veins_condition="Без особенностей",
+        lung_auscultation="Дыхание везикулярное",
+        abdomen="Мягкий",
+        kidney_palpation="not_palpable",
+        kidney_palpation_details=None,
+        pasternatsky_result="negative",
+        pasternatsky_side="bilateral",
         main_diagnosis="Хроническая болезнь почек",
         complications="Нет",
         diag_comorbidities="АГ",
@@ -251,8 +277,13 @@ def test_patient_card_template_renders_medical_blocks_without_changing_layout():
     assert "Приём от 04.07.2026 10:30" in html
     assert "id=\"printContent\"" in html
 
-    assert "Опрос" in html
-    assert "Осмотр" in html
+    assert "Жалобы" in html
+    assert "Анамнез жизни" in html
+    assert "Анамнез данного заболевания" in html
+    assert "Данные объективного исследования больного" in html
+    assert "+7 900 000-00-00" in html
+    assert "Примечание к АД" not in html  # комментарий показывается внутри строки АД
+    assert "самоконтроль" in html
     assert "Общий анализ крови" in html
     assert "Биохимический анализ крови" in html
     assert "Расчётные показатели" in html

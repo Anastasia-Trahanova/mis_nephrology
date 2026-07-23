@@ -98,6 +98,7 @@ NUMERIC_RULES = {
     "systolic_pressure": (50, 300, ERROR_INVALID_VALUE),
     "diastolic_pressure": (30, 200, ERROR_INVALID_VALUE),
     "heart_rate": (20, 250, ERROR_INVALID_VALUE),
+    "body_temperature": (25, 45, ERROR_INVALID_VALUE),
 
     # ОАК
     "hemoglobin": (20, 250, ERROR_INVALID_VALUE),
@@ -282,6 +283,45 @@ def validate_appointment_form(
                 continue
             if value not in allowed:
                 _add_error(errors, field_name, ERROR_INVALID_VALUE, index)
+
+
+    # Структурированные поля верхней части формы (миграция 0009).
+    allowed_select_values = {
+        "general_condition": {"satisfactory", "moderate", "severe"},
+        "consciousness": {"clear", "confused", "sopor", "coma"},
+        "bed_position": {"active", "passive", "forced"},
+        "constitution_type": {"normosthenic", "asthenic", "hypersthenic"},
+        "kidney_palpation": {"palpable", "not_palpable"},
+        "pasternatsky_result": {"positive", "negative"},
+        "pasternatsky_side": {"right", "left", "bilateral"},
+    }
+    for field_name, allowed in allowed_select_values.items():
+        value = _empty_to_none(form.get(field_name))
+        if value is not None and value not in allowed:
+            _add_error(errors, field_name, ERROR_INVALID_VALUE)
+
+    heredity_enabled = str(form.get("heredity") or "").lower() == "true"
+    heredity_description = _empty_to_none(form.get("heredity_description"))
+    if heredity_enabled and not heredity_description:
+        _add_error(errors, "heredity_description", ERROR_REQUIRED_FIELDS)
+
+    bed_position = _empty_to_none(form.get("bed_position"))
+    bed_position_details = _empty_to_none(form.get("bed_position_details"))
+    if bed_position == "forced" and not bed_position_details:
+        _add_error(errors, "bed_position_details", ERROR_REQUIRED_FIELDS)
+
+    kidney_palpation = _empty_to_none(form.get("kidney_palpation"))
+    kidney_palpation_details = _empty_to_none(form.get("kidney_palpation_details"))
+    if kidney_palpation == "palpable" and not kidney_palpation_details:
+        _add_error(errors, "kidney_palpation_details", ERROR_REQUIRED_FIELDS)
+
+    pasternatsky_result = _empty_to_none(form.get("pasternatsky_result"))
+    pasternatsky_side = _empty_to_none(form.get("pasternatsky_side"))
+    if bool(pasternatsky_result) != bool(pasternatsky_side):
+        if not pasternatsky_result:
+            _add_error(errors, "pasternatsky_result", ERROR_REQUIRED_FIELDS)
+        if not pasternatsky_side:
+            _add_error(errors, "pasternatsky_side", ERROR_REQUIRED_FIELDS)
 
     # ВАЖНО: частично заполненную альбуминурию больше не блокируем.
     # Если введён только альбумин или только креатинин мочи, форма сохраняется,

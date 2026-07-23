@@ -27,7 +27,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from app.services.appointment_text_builder import build_edema_location, build_skin_condition
+from app.services.appointment_text_builder import build_edema_location
 
 
 MAX_AUDIT_VALUE_LENGTH = 500
@@ -35,7 +35,7 @@ MAX_AUDIT_VALUE_LENGTH = 500
 SECTION_LABELS = {
     "patient": "Пациент",
     "appointment": "Приём",
-    "survey": "Опрос",
+    "survey": "Жалобы и анамнез",
     "examination": "Осмотр",
     "cbc": "Общий анализ крови",
     "biochemistry": "Биохимия крови",
@@ -54,6 +54,7 @@ PATIENT_FIELDS = [
     ("patronymic", "Отчество"),
     ("birth_date", "Дата рождения"),
     ("gender", "Пол"),
+    ("phone", "Номер телефона"),
 ]
 
 APPOINTMENT_FIELDS = [
@@ -64,17 +65,43 @@ APPOINTMENT_FIELDS = [
 ]
 
 PREFILL_TEXT_FIELDS = [
-    ("survey", "life_anamnesis", "Анамнез жизни"),
-    ("survey", "disease_anamnesis", "Анамнез заболевания"),
     ("survey", "complaints", "Жалобы"),
-    ("survey", "heredity_description", "Описание наследственности"),
-    ("survey", "comorbidities", "Сопутствующие заболевания"),
+    ("survey", "education_and_professional_history", "Образование и профессиональный анамнез"),
+    ("survey", "housing_conditions", "Жилищные условия"),
+    ("survey", "past_diseases", "Перенесённые заболевания"),
+    ("survey", "habitual_intoxications", "Привычные интоксикации"),
+    ("survey", "gynecological_history", "Гинекологический анамнез"),
+    ("survey", "heredity_description", "Наследственность"),
+    ("survey", "family_life", "Семейная жизнь"),
+    ("survey", "allergological_history", "Аллергологический анамнез"),
+    ("survey", "epidemiological_history", "Эпидемиологический анамнез"),
+    ("survey", "insurance_history", "Страховой анамнез"),
+    ("survey", "disease_onset", "Начало болезни"),
+    ("survey", "disease_course", "Течение заболевания"),
+    ("examination", "general_condition", "Общее состояние"),
+    ("examination", "consciousness", "Сознание"),
+    ("examination", "bed_position", "Положение в постели"),
+    ("examination", "bed_position_details", "Особенности вынужденного положения"),
+    ("examination", "body_build", "Телосложение"),
+    ("examination", "constitution_type", "Тип конституции"),
+    ("examination", "skin_and_mucous_membranes", "Кожа и слизистые оболочки"),
+    ("examination", "lymph_nodes", "Лимфатические узлы"),
+    ("examination", "thyroid_gland", "Щитовидная железа"),
+    ("examination", "musculoskeletal_system", "Опорно-двигательный аппарат"),
     ("examination", "bp_note", "Примечание к АД"),
+    ("examination", "veins_condition", "Состояние вен"),
+    ("examination", "lung_auscultation", "Аускультация лёгких"),
+    ("examination", "abdomen", "Живот"),
+    ("examination", "kidney_palpation", "Пальпация почек"),
+    ("examination", "kidney_palpation_details", "Уточнение пальпации почек"),
+    ("examination", "pasternatsky_result", "Симптом Пастернацкого"),
+    ("examination", "pasternatsky_side", "Сторона симптома Пастернацкого"),
     ("diet", "diet", "Диета"),
     ("diet", "recommendations", "Рекомендации"),
 ]
 
 EXAMINATION_NUMERIC_FIELDS = [
+    ("body_temperature", "Температура тела"),
     ("systolic_pressure", "Систолическое АД"),
     ("diastolic_pressure", "Диастолическое АД"),
     ("heart_rate", "ЧСС"),
@@ -239,6 +266,16 @@ def _append_if_changed_from_previous(
 ) -> None:
     """Добавляет изменение предзаполненного поля только если врач реально поменял значение."""
     current_value = _form_get(form, field_name)
+    # Условные уточнения сохраняются только вместе с выбранным основным значением.
+    # Аудит должен сравнивать именно итог, который попадёт в БД, а не скрытый текст,
+    # оставшийся в браузере после снятия checkbox или смены выпадающего списка.
+    if field_name == "heredity_description" and str(_form_get(form, "heredity") or "").lower() != "true":
+        current_value = None
+    elif field_name == "bed_position_details" and _form_get(form, "bed_position") != "forced":
+        current_value = None
+    elif field_name == "kidney_palpation_details" and _form_get(form, "kidney_palpation") != "palpable":
+        current_value = None
+
     previous_value = previous.get(field_name) if previous else None
 
     current_clean = _clean(current_value)
@@ -395,50 +432,47 @@ def _append_structured_examination_text_changes(
     *,
     sort_base: int,
 ) -> int:
-    """Фиксирует кожные покровы и отёки как новые структурированные значения формы.
+    """Фиксирует отёки, которые по-прежнему собираются из checkbox-полей формы.
 
-    Эти поля не считаются удалением подставленного значения: врач заново отмечает
-    чекбоксы/дополнительные строки в текущем приёме, а сервер сохраняет итоговую строку.
+    Кожа и слизистые оболочки теперь вводятся обычным текстом и поэтому обрабатываются
+    общим списком PREFILL_TEXT_FIELDS. Отёки остаются в прежнем формате: сервер собирает
+    отмеченные пункты и дополнительное описание в одну итоговую строку.
     """
     sort_order = sort_base
+    current_value = build_edema_location(form)
+    previous_value = previous.get("edema_location") if previous else None
+    current_clean = _clean(current_value)
+    previous_clean = _clean(previous_value)
 
-    for field_name, field_label, current_value in [
-        ("skin_condition", "Кожные покровы", build_skin_condition(form)),
-        ("edema_location", "Отёки", build_edema_location(form)),
-    ]:
-        previous_value = previous.get(field_name) if previous else None
-        current_clean = _clean(current_value)
-        previous_clean = _clean(previous_value)
-
-        if current_clean and not previous_clean:
-            changes.append(
-                _change(
-                    "examination",
-                    field_name,
-                    field_label,
-                    "filled_new",
-                    new_value=current_value,
-                    details="значение сформировано из отмеченных пунктов текущего приёма",
-                    sort_order=sort_order,
-                )
+    if current_clean and not previous_clean:
+        changes.append(
+            _change(
+                "examination",
+                "edema_location",
+                "Отёки",
+                "filled_new",
+                new_value=current_value,
+                details="значение сформировано из отмеченных пунктов текущего приёма",
+                sort_order=sort_order,
             )
-            sort_order += 1
-        elif current_clean and previous_clean and not _same(current_value, previous_value):
-            changes.append(
-                _change(
-                    "examination",
-                    field_name,
-                    field_label,
-                    "changed_from_prefill",
-                    old_value=previous_value,
-                    new_value=current_value,
-                    details="значение сформировано из отмеченных пунктов текущего приёма",
-                    sort_order=sort_order,
-                )
+        )
+        sort_order += 1
+    elif current_clean and previous_clean and not _same(current_value, previous_value):
+        changes.append(
+            _change(
+                "examination",
+                "edema_location",
+                "Отёки",
+                "changed_from_prefill",
+                old_value=previous_value,
+                new_value=current_value,
+                details="значение сформировано из отмеченных пунктов текущего приёма",
+                sort_order=sort_order,
             )
-            sort_order += 1
-        # Если в текущем приёме врач ничего не отметил, это не считается удалением:
-        # эти поля не переносятся автоматически как активные чекбоксы.
+        )
+        sort_order += 1
+    # Если в текущем приёме врач ничего не отметил, это не считается удалением:
+    # checkbox отёков не переносятся автоматически как активные элементы.
 
     return sort_order
 

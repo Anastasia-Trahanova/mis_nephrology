@@ -72,6 +72,7 @@ def test_01_patient_creation_builds_patient_and_appointment_changes():
             ("patronymic", "Николаевна"),
             ("birth_date", "1960-01-01"),
             ("gender", "false"),
+            ("phone", "+7 900 000-00-00"),
             ("appointment_date", "2026-07-09"),
             ("appointment_time", "10:00"),
             ("doctor_id", "1"),
@@ -88,6 +89,7 @@ def test_01_patient_creation_builds_patient_and_appointment_changes():
     assert find_change(changes, section="patient", change_type="patient_created")
     assert find_change(changes, section="appointment", change_type="appointment_created")
     assert find_change(changes, section="patient", field_name="last_name")
+    assert find_change(changes, section="patient", field_name="phone")
     assert find_change(changes, section="appointment", field_name="appointment_date")
 
 
@@ -125,7 +127,7 @@ def test_03_prefilled_text_cleared_is_logged():
 
 
 def test_04_new_text_filled_is_logged():
-    form = FormData([("comorbidities", "Гипертоническая болезнь")])
+    form = FormData([("past_diseases", "Гипертоническая болезнь")])
 
     changes = build_appointment_medical_audit_changes(
         form,
@@ -134,14 +136,14 @@ def test_04_new_text_filled_is_logged():
         appointment_id=28,
     )
 
-    change = find_change(changes, section="survey", field_name="comorbidities")
+    change = find_change(changes, section="survey", field_name="past_diseases")
     assert change["change_type"] == "filled_new"
     assert change["new_value"] == "Гипертоническая болезнь"
 
 
 def test_05_unchanged_prefilled_text_is_not_logged():
-    form = FormData([("life_anamnesis", "Курит 30 лет")])
-    previous = {"life_anamnesis": "Курит 30 лет"}
+    form = FormData([("habitual_intoxications", "Курит 30 лет")])
+    previous = {"habitual_intoxications": "Курит 30 лет"}
 
     changes = build_appointment_medical_audit_changes(
         form,
@@ -150,7 +152,9 @@ def test_05_unchanged_prefilled_text_is_not_logged():
         appointment_id=28,
     )
 
-    assert not find_change(changes, section="survey", field_name="life_anamnesis")
+    assert not find_change(
+        changes, section="survey", field_name="habitual_intoxications"
+    )
 
 
 def test_06_biochemistry_added_and_gfr_autocalculated_are_logged():
