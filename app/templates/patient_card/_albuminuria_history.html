@@ -1,52 +1,72 @@
 {#
 Назначение файла:
-Блок альбуминурии по KDIGO.
+Таблица истории альбуминурии в карточке пациента.
 
-Что делает:
-- выводит альбумин мочи, креатинин мочи, ACR и категорию альбуминурии;
-- сохраняет табличный стиль карточки пациента.
+Что выполняет файл:
+- сохраняет существующие строки альбумина мочи, креатинина мочи, ACR и
+  категории альбуминурии;
+- добавляет суточную экскрецию альбумина, мг/сут;
+- не меняет матрицу или сохранённый прогноз KDIGO.
 #}
-<!-- Альбуминурия -->
 <h5 class="mt-3">Альбуминурия по KDIGO</h5>
+
 {% if albuminuria_history %}
-  <div class="table-responsive">
-    <table class="table table-bordered table-sm table-hover">
-      <thead class="table-light">
-        <tr>
-          <th style="min-width: 220px;">Показатель / Дата</th>
-          {% for item in albuminuria_history %}
-            <th class="text-center" style="min-width: 100px;">{{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}</th>
-          {% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        <tr>
-          <td><strong>Альбумин мочи</strong></td>
-          {% for item in albuminuria_history %}
-            <td class="text-center">
-              {% if item.urine_albumin is not none %}
-                {{ item.urine_albumin }}
-                {% if item.urine_albumin_unit == 'mg_l' %} мг/л{% elif item.urine_albumin_unit == 'g_l' %} г/л{% endif %}
-              {% else %}—{% endif %}
-            </td>
-          {% endfor %}
-        </tr>
-        <tr>
-          <td><strong>Креатинин мочи</strong></td>
-          {% for item in albuminuria_history %}
-            <td class="text-center">
-              {% if item.urine_creatinine is not none %}
-                {{ item.urine_creatinine }}
-                {% if item.urine_creatinine_unit == 'mmol_l' %} ммоль/л{% elif item.urine_creatinine_unit == 'umol_l' %} мкмоль/л{% endif %}
-              {% else %}—{% endif %}
-            </td>
-          {% endfor %}
-        </tr>
-        <tr><td><strong>Альбумин/креатинин мочи, мг/ммоль</strong></td>{% for item in albuminuria_history %}<td class="text-center">{{ item.albumin_creatinine_ratio if item.albumin_creatinine_ratio is not none else '—' }}</td>{% endfor %}</tr>
-        <tr><td><strong>Категория альбуминурии</strong></td>{% for item in albuminuria_history %}<td class="text-center">{{ item.albuminuria_category or '—' }}</td>{% endfor %}</tr>
-      </tbody>
-    </table>
-  </div>
+<div class="table-responsive">
+  <table class="table table-bordered table-sm table-hover">
+    <thead class="table-light">
+      <tr>
+        <th style="min-width: 240px;">Показатель / Дата</th>
+        {% for item in albuminuria_history %}
+        <th class="text-center" style="min-width: 110px;">
+          {{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}
+        </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Альбумин мочи</strong></td>
+        {% for item in albuminuria_history %}
+        <td class="text-center">
+          {% if item.urine_albumin is not none %}
+            {{ item.urine_albumin }}
+            {% if item.urine_albumin_unit == 'mg_l' %} мг/л{% elif item.urine_albumin_unit == 'g_l' %} г/л{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td><strong>Креатинин мочи</strong></td>
+        {% for item in albuminuria_history %}
+        <td class="text-center">
+          {% if item.urine_creatinine is not none %}
+            {{ item.urine_creatinine }}
+            {% if item.urine_creatinine_unit == 'mmol_l' %} ммоль/л{% elif item.urine_creatinine_unit == 'umol_l' %} мкмоль/л{% endif %}
+          {% else %}—{% endif %}
+        </td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td><strong>Экскреция альбумина суточная, мг/сут</strong></td>
+        {% for item in albuminuria_history %}
+        <td class="text-center">{{ item.daily_albumin_excretion if item.daily_albumin_excretion is not none else '—' }}</td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td><strong>Альбумин/креатинин мочи, мг/ммоль</strong></td>
+        {% for item in albuminuria_history %}
+        <td class="text-center">{{ item.albumin_creatinine_ratio if item.albumin_creatinine_ratio is not none else '—' }}</td>
+        {% endfor %}
+      </tr>
+      <tr>
+        <td><strong>Категория альбуминурии</strong></td>
+        {% for item in albuminuria_history %}
+        <td class="text-center">{{ item.albuminuria_category or '—' }}</td>
+        {% endfor %}
+      </tr>
+    </tbody>
+  </table>
+</div>
 {% else %}
-  <p class="text-muted">Данные об альбуминурии не предоставлены.</p>
+<p class="text-muted">Данные об альбуминурии не предоставлены.</p>
 {% endif %}

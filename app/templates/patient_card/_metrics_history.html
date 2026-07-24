@@ -2,30 +2,43 @@
 Назначение файла:
 Таблица расчётных показателей функции почек.
 
-Что делает:
-- выводит CKD-EPI, Cockcroft–Gault и категорию СКФ;
-- сохраняет исходный табличный формат карточки.
+Что выполняет файл:
+- выводит CKD-EPI, Cockcroft–Gault и стадию ХБП по СКФ;
+- сохраняет существующий табличный формат карточки;
+- меняет только медицинскую подпись «Категория СКФ» на
+  «Стадия ХБП по СКФ».
 #}
-<!-- Расчётные показатели -->
 <h5 class="mt-3">Расчётные показатели</h5>
+
 {% if metrics_history %}
-  <div class="table-responsive">
-    <table class="table table-bordered table-sm table-hover">
-      <thead class="table-light">
-        <tr>
-          <th style="min-width: 220px;">Показатель / Дата</th>
-          {% for item in metrics_history %}
-            <th class="text-center" style="min-width: 100px;">{{ item.investigation_date.strftime('%d.%m.%Y') }}</th>
-          {% endfor %}
-        </tr>
-      </thead>
-      <tbody>
-        <tr><td><strong>СКФ CKD-EPI, мл/мин/1.73 м²</strong></td>{% for item in metrics_history %}<td class="text-center">{{ item.egfr_ckdepi or '—' }}</td>{% endfor %}</tr>
-        <tr><td><strong>СКФ Кокрофт-Голт, мл/мин</strong></td>{% for item in metrics_history %}<td class="text-center">{{ item.crcl_cockcroft_gault or '—' }}</td>{% endfor %}</tr>
-        <tr><td><strong>Категория СКФ</strong></td>{% for item in metrics_history %}<td class="text-center">{{ item.ckd_stage or '—' }}</td>{% endfor %}</tr>
-      </tbody>
-    </table>
-  </div>
+<div class="table-responsive">
+  <table class="table table-bordered table-sm table-hover">
+    <thead class="table-light">
+      <tr>
+        <th style="min-width: 210px;">Показатель / Дата</th>
+        {% for item in metrics_history %}
+        <th class="text-center" style="min-width: 110px;">
+          {{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}
+        </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>СКФ CKD-EPI, мл/мин/1,73 м²</strong></td>
+        {% for item in metrics_history %}<td class="text-center">{{ item.egfr_ckdepi or '—' }}</td>{% endfor %}
+      </tr>
+      <tr>
+        <td><strong>СКФ Кокрофт–Голт, мл/мин</strong></td>
+        {% for item in metrics_history %}<td class="text-center">{{ item.crcl_cockcroft_gault or '—' }}</td>{% endfor %}
+      </tr>
+      <tr>
+        <td><strong>Стадия ХБП по СКФ</strong></td>
+        {% for item in metrics_history %}<td class="text-center">{{ item.ckd_stage or '—' }}</td>{% endfor %}
+      </tr>
+    </tbody>
+  </table>
+</div>
 {% else %}
-  <p class="text-muted">Расчётные показатели отсутствуют.</p>
+<p class="text-muted">Расчётные показатели отсутствуют.</p>
 {% endif %}

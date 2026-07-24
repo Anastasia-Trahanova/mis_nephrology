@@ -1,8 +1,14 @@
 """
+Назначение файла: контрактные тесты автоподстановки диагноза по стадии ХБП.
+
 Что тестируется:
 - свободные текстовые диагнозы удалены из формы заключения;
-- основной диагноз МКБ-10 автозаполняется по категории СКФ;
-- врач может редактировать основной диагноз вручную;
+- основной диагноз прошлого приёма подставляется прямо в поле врача;
+- техническое предложение по стадии ХБП ставится первым осложнением;
+- системное осложнение обновляется при изменении креатинина;
+- перенесённые диагнозы выделяются отдельно от системного осложнения;
+- жёлтая подсветка снимается после редактирования перенесённого диагноза;
+- щелчок по перенесённому диагнозу выделяет текст целиком;
 - таблица diagnoses удаляется миграцией и больше не используется в коде сохранения.
 """
 
@@ -26,20 +32,39 @@ def test_conclusion_no_longer_has_free_text_diagnosis_fields():
     assert '{% include "icd10_diagnosis_block.html" %}' in content
 
 
-def test_icd10_main_diagnosis_is_editable_and_autofilled_from_ckd_stage():
-    content = read("app/templates/icd10_diagnosis_block.html")
+def test_ckd_stage_diagnosis_is_first_live_complication():
+    block = read("app/templates/icd10_diagnosis_block.html")
+    form_js = read("app/static/js/history_studies_form.js")
+    new_patient = read("app/templates/new_patient.html")
+    new_appointment = read("app/templates/new_appointment.html")
 
-    assert 'name="icd10_main_diagnosis"' in content
-    assert 'readonly' not in content
-    assert 'disabled' not in content
-    assert 'data-autofill-ckd-main="true"' in content
-    assert 'updateMainIcd10DiagnosisFromCkdStage' in content
-    assert 'getIcd10CodeForCkdStage' in content
-    assert '"С2": "N18.2"' in content
-    assert '"С3а": "N18.3"' in content
-    assert '"С3б": "N18.3"' in content
-    assert 'Врач может изменить диагноз вручную' in content
-    assert 'В прошлом приёме' in content
+    # Исходный блок по-прежнему содержит поиск МКБ-10 и расчёт диагноза
+    # по текущему креатинину. Слой history_studies_form.js меняет только
+    # место отображения системного предложения.
+    assert 'name="icd10_main_diagnosis"' in block
+    assert 'data-autofill-ckd-main="true"' in block
+    assert "updateMainIcd10DiagnosisFromCkdStage" in block
+
+    assert "prefillMainDiagnosisFromPreviousVisit" in form_js
+    assert "extractPreviousMainDiagnosis" in form_js
+    assert 'input.classList.add("prefilled-field")' in form_js
+
+    assert "ensureAutomaticComplicationInput" in form_js
+    assert "container.prepend(row)" in form_js
+    assert "updateAutomaticCkdComplication" in form_js
+    assert "scheduleDiagnosisSync" in form_js
+    assert 'input.classList.remove("prefilled-field")' in form_js
+    assert "Осложнение основного диагноза проставляется автоматически" in form_js
+
+    # Изменение креатинина и даты биохимии должно запускать обновление
+    # первого системного осложнения.
+    assert '[name="creatinine"]' in form_js
+    assert '[name="biochemistry_investigation_date"]' in form_js
+    assert "scheduleDiagnosisSync();" in form_js
+
+    script_tag = '<script src="/static/js/history_studies_form.js"></script>'
+    assert script_tag in new_patient
+    assert script_tag in new_appointment
 
 
 def test_parser_and_save_service_do_not_use_text_diagnoses_section():
@@ -78,3 +103,16 @@ def test_drop_text_diagnoses_alembic_migration_exists_in_versions():
     assert "drop table if exists diagnoses cascade" in normalized
     assert "op.create_table" in content
     assert '"diagnoses"' in content
+
+
+def test_prefilled_diagnosis_is_selected_and_confirmed_on_edit():
+    form_js = read("app/static/js/history_studies_form.js")
+
+    assert "isPrefilledDiagnosisInput" in form_js
+    assert "selectWholePrefilledDiagnosis" in form_js
+    assert 'document.addEventListener("pointerdown", selectWholePrefilledDiagnosis)' in form_js
+    assert "target.select();" in form_js
+
+    assert "confirmEditedPrefilledValue" in form_js
+    assert 'target.classList.remove("prefilled-field")' in form_js
+    assert "confirmEditedPrefilledValue(target);" in form_js

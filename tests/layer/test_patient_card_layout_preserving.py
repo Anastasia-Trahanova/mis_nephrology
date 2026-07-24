@@ -273,7 +273,12 @@ def test_patient_card_template_renders_medical_blocks_without_changing_layout():
     assert "Тестова Пациентка Карточковна" in html
     assert "История приёмов" in html
     assert "➕ Добавить приём" in html
-    assert "Приём от 04.07.2026 10:30" in html
+    assert "Консультативный приём (первичный)" in html
+    assert "04.07.2026 10:30" in html
+    assert "Место приёма:" in html
+    assert "Нефрология" in html
+    assert "Врач:" in html
+    assert "Лобанова Н." in html
     assert "id=\"printContent\"" in html
 
     assert "Жалобы" in html

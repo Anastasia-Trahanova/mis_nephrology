@@ -6,7 +6,7 @@
 - биохимии;
 - расчётных показателей;
 - ОАМ;
-- альбуминурии;
+- альбуминурии, включая суточную экскрецию альбумина;
 - УЗИ почек.
 
 Что редактировать здесь:
@@ -254,6 +254,7 @@ def _fetch_patient_albuminuria_history(cur: Any, patient_id: int, until_date: da
             ar.urine_albumin_unit,
             ar.urine_creatinine,
             ar.urine_creatinine_unit,
+            ar.daily_albumin_excretion,
             ar.albumin_creatinine_ratio,
             ar.albuminuria_category
         FROM albuminuria_results ar

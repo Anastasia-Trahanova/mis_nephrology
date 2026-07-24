@@ -1,4 +1,6 @@
 """
+Назначение файла: тесты контракта парсера формы приёма.
+
 Что тестируется:
 - parse_new_patient_form, включая существующее поле patients.phone;
 - parse_required_appointment_fields;
@@ -76,6 +78,7 @@ def test_parse_appointment_form_returns_stage2_sections_and_bmi():
         "urinalysis",
         "albuminuria",
         "ultrasound",
+        "additional_studies",
         "icd10",
         "diet",
         "prescriptions",
@@ -134,3 +137,24 @@ def test_parser_clears_details_that_do_not_match_selected_value():
     assert data["survey"]["heredity_description"] == "Не отягощена"
     assert data["examination"]["bed_position_details"] is None
     assert data["examination"]["kidney_palpation_details"] is None
+
+
+def test_parser_reads_daily_albumin_and_additional_studies():
+    form = FakeForm(
+        {
+            "daily_albumin_excretion": ["42,5"],
+            "other_laboratory_studies": "Иммунологическое исследование без особенностей",
+            "other_instrumental_studies": "КТ органов брюшной полости",
+            "medication": [],
+            "dosage": [],
+            "schedule": [],
+        }
+    )
+
+    data = parse_appointment_form(form, datetime(2026, 7, 4, 10, 30))
+
+    assert data["albuminuria"]["daily_albumin_excretion"] == ["42.5"]
+    assert data["additional_studies"] == {
+        "other_laboratory_studies": "Иммунологическое исследование без особенностей",
+        "other_instrumental_studies": "КТ органов брюшной полости",
+    }

@@ -87,3 +87,11 @@ def test_temperature_outside_database_range_is_rejected():
         FakeForm({"body_temperature": "48"}), date(2026, 7, 4)
     )
     assert "body_temperature" in error_fields(errors)
+
+
+def test_daily_albumin_excretion_must_be_nonnegative_number():
+    errors = validate_appointment_form(
+        FakeForm({"daily_albumin_excretion": "-1"}),
+        date(2026, 7, 4),
+    )
+    assert "daily_albumin_excretion" in error_fields(errors)

@@ -1,0 +1,32 @@
+{#
+Назначение файла: свободное поле «Другие инструментальные исследования».
+
+Что делает:
+- позволяет врачу записать инструментальные исследования, для которых нет
+  отдельной таблицы;
+- на повторном приёме показывает сведения прошлого приёма как справку;
+- не переносит старый текст в новый приём автоматически.
+
+Важно:
+- поле необязательное;
+- блок УЗИ почек и его таблица остаются самостоятельными;
+- стили и шрифты формы не переопределяются.
+#}
+<hr>
+<h5>Другие инструментальные исследования</h5>
+
+{% if appointment_form_mode == 'new_appointment'
+      and last_appointment
+      and last_appointment.other_instrumental_studies %}
+<div class="alert alert-info mis-form-info mb-2">
+  <strong>На прошлом приёме:</strong>
+  {{ last_appointment.other_instrumental_studies }}
+</div>
+{% endif %}
+
+<textarea
+  name="other_instrumental_studies"
+  class="form-control"
+  rows="3"
+  placeholder="Введите результаты других инструментальных исследований"
+></textarea>

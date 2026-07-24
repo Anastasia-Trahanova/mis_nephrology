@@ -42,6 +42,7 @@ SECTION_LABELS = {
     "urinalysis": "Общий анализ мочи",
     "albuminuria": "Альбуминурия",
     "ultrasound": "УЗИ почек",
+    "additional_studies": "Другие исследования",
     "kdigo": "KDIGO",
     "icd10": "МКБ-10 диагнозы",
     "diet": "Диета и рекомендации",
@@ -165,19 +166,27 @@ LAB_GROUPS = [
             ("urine_albumin_unit", "Единицы альбумина"),
             ("urine_creatinine", "Креатинин мочи"),
             ("urine_creatinine_unit", "Единицы креатинина мочи"),
+            ("daily_albumin_excretion", "Экскреция альбумина суточная, мг/сут"),
         ],
-        "autocalculated_if": ["urine_albumin", "urine_creatinine"],
-        "autocalculated_details": "ACR и категория альбуминурии рассчитываются системой.",
+        "autocalculated_if": [
+            "urine_albumin",
+            "urine_creatinine",
+            "daily_albumin_excretion",
+        ],
+        "autocalculated_details": (
+            "ACR рассчитывается по альбумину и креатинину мочи; категория "
+            "альбуминурии также может определяться по суточной экскреции."
+        ),
     },
     {
         "section": "ultrasound",
         "date_field": "ultrasound_investigation_date",
         "field_prefix": "УЗИ",
         "fields": [
-            ("left_kidney_size", "Размер левой почки"),
             ("right_kidney_size", "Размер правой почки"),
-            ("left_parenchyma", "Паренхима слева"),
             ("right_parenchyma", "Паренхима справа"),
+            ("left_kidney_size", "Размер левой почки"),
+            ("left_parenchyma", "Паренхима слева"),
             ("ultrasound_desc", "Описание УЗИ"),
         ],
     },
@@ -931,6 +940,24 @@ def build_appointment_medical_audit_changes(
             section,
             field_name,
             label,
+            sort_order=sort_order,
+        )
+        sort_order += 1
+
+    # Эти два поля не подставляются в новый повторный приём, а показываются
+    # рядом как справка. Поэтому в audit они записываются только когда врач
+    # действительно внёс новый текст, без ложного события «очищено из прошлого».
+    for field_name, label in (
+        ("other_laboratory_studies", "Другие лабораторные исследования"),
+        ("other_instrumental_studies", "Другие инструментальные исследования"),
+    ):
+        _append_field_created(
+            changes,
+            form,
+            "additional_studies",
+            field_name,
+            label,
+            change_type="filled_new",
             sort_order=sort_order,
         )
         sort_order += 1

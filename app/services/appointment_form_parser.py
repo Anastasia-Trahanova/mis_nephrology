@@ -1,8 +1,13 @@
 """
-Парсер HTML-формы приёма.
+Назначение файла: разбор HTML-формы первичного и повторного приёма.
 
-Верхняя часть формы соответствует структуре миграции 0010. Лабораторные
-исследования, УЗИ, заключение и назначения на втором этапе не изменяются.
+Что выполняет файл
+-------------------
+Преобразует значения формы в структурированные словари для сервисов сохранения.
+
+Верхняя часть формы соответствует структуре миграции 0010. Начиная с
+лабораторных исследований парсер также читает поля миграции 0011. Существующие
+таблицы ОАК, ОАМ, биохимии, расчёты KDIGO и лекарства не перестраиваются.
 """
 
 from __future__ import annotations
@@ -181,6 +186,10 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
             "urine_albumin_unit": get_text_list(form, "urine_albumin_unit"),
             "urine_creatinine": get_numeric_list(form, "urine_creatinine"),
             "urine_creatinine_unit": get_text_list(form, "urine_creatinine_unit"),
+            "daily_albumin_excretion": get_numeric_list(
+                form,
+                "daily_albumin_excretion",
+            ),
         },
         "ultrasound": {
             "dates": get_text_list(form, "ultrasound_investigation_date"),
@@ -189,6 +198,14 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
             "left_parenchyma": get_numeric_list(form, "left_parenchyma"),
             "right_parenchyma": get_numeric_list(form, "right_parenchyma"),
             "ultrasound_desc": get_text_list(form, "ultrasound_desc"),
+        },
+        "additional_studies": {
+            "other_laboratory_studies": empty_to_none(
+                form.get("other_laboratory_studies")
+            ),
+            "other_instrumental_studies": empty_to_none(
+                form.get("other_instrumental_studies")
+            ),
         },
         "icd10": parse_icd10_diagnoses_from_form(form),
         "diet": {

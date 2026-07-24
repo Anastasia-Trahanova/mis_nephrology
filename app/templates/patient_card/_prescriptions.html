@@ -7,10 +7,10 @@
 - сохраняет исходное место блока: после заключения и перед кнопкой Word-экспорта.
 #}
 <!-- Назначения -->
-<h5 class="mt-3">Назначения</h5>
+<h5 class="mt-3"></h5>
 <p><strong>Диета:</strong> {{ diet_info.diet if diet_info and diet_info.diet else '—' }}</p>
 <p><strong>Рекомендации:</strong> {{ diet_info.recommendations if diet_info and diet_info.recommendations else '—' }}</p>
-<p><strong>Лекарства:</strong></p>
+<p><strong>Медикаментозная терапия:</strong></p>
 {% if medications %}
   <ul>
     {% for med in medications %}

@@ -1,96 +1,98 @@
 {#
-Назначение файла: блок «УЗИ почек». Для нового пациента используется ввод первичного УЗИ, для нового приёма — история УЗИ с добавлением новой колонки.
-Файл выделен при разделении большой формы приёма на структурные части.
-Важно: имена полей name="..." менять нельзя без синхронной правки app/routers/patients.py и app/validation.py.
+Назначение файла: блок «УЗИ почек» в форме первичного и повторного приёма.
+
+Что делает:
+- сохраняет существующие поля и механизм добавления исследований;
+- располагает строки в порядке утверждённой схемы истории болезни;
+- явно показывает единицы измерения;
+- не меняет SQL-структуру существующей таблицы ultrasound_results.
 #}
+
 {% if appointment_form_mode == 'new_appointment' %}
 <hr>
-
-            <!-- ===================================================== -->
-            <!-- УЗИ ПОЧЕК -->
-            <!-- ===================================================== -->
-            <div class="d-flex justify-content-between align-items-center mb-2">
-                <h5 class="mb-0">УЗИ почек</h5>
-                <button type="button" class="btn btn-outline-success btn-sm" id="addUltrasoundColumnBtn">
-                    ➕ Добавить УЗИ
-                </button>
-            </div>
-
-            <div class="table-responsive">
-                <table class="table table-bordered table-sm table-hover align-middle">
-                    <thead class="table-light">
-                        <tr id="ultrasoundHeaderRow">
-                            <th style="min-width: 190px;">Показатель / Дата</th>
-                            {% for item in ultrasound_history %}
-                            <th class="text-center" style="min-width: 140px;">
-                                {{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}
-                            </th>
-                            {% endfor %}
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr id="us_left_kidney_size_row">
-                            <td><strong>Левая почка, размер</strong></td>
-                            {% for item in ultrasound_history %}
-                            <td class="text-center">{{ item.left_kidney_size or '—' }}</td>
-                            {% endfor %}
-                        </tr>
-                        <tr id="us_right_kidney_size_row">
-                            <td><strong>Правая почка, размер</strong></td>
-                            {% for item in ultrasound_history %}
-                            <td class="text-center">{{ item.right_kidney_size or '—' }}</td>
-                            {% endfor %}
-                        </tr>
-                        <tr id="us_left_parenchyma_row">
-                            <td><strong>Паренхима левой, мм</strong></td>
-                            {% for item in ultrasound_history %}
-                            <td class="text-center">{{ item.left_parenchyma or '—' }}</td>
-                            {% endfor %}
-                        </tr>
-                        <tr id="us_right_parenchyma_row">
-                            <td><strong>Паренхима правой, мм</strong></td>
-                            {% for item in ultrasound_history %}
-                            <td class="text-center">{{ item.right_parenchyma or '—' }}</td>
-                            {% endfor %}
-                        </tr>
-                        <tr id="us_description_row">
-                            <td><strong>Описание</strong></td>
-                            {% for item in ultrasound_history %}
-                            <td class="text-center">{{ item.description or '—' }}</td>
-                            {% endfor %}
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
+<div class="d-flex justify-content-between align-items-center mb-2">
+  <h5 class="mb-0">УЗИ почек</h5>
+  <button type="button" class="btn btn-outline-success btn-sm" id="addUltrasoundColumnBtn">
+    ➕ Добавить УЗИ
+  </button>
+</div>
+<div class="table-responsive">
+  <table class="table table-bordered table-sm table-hover align-middle">
+    <thead class="table-light">
+      <tr id="ultrasoundHeaderRow">
+        <th style="min-width: 190px;">Показатель / Дата</th>
+        {% for item in ultrasound_history %}
+        <th class="text-center" style="min-width: 140px;">
+          {{ item.investigation_date.strftime('%d.%m.%Y') if item.investigation_date else '—' }}
+        </th>
+        {% endfor %}
+      </tr>
+    </thead>
+    <tbody>
+      <tr id="us_right_kidney_size_row">
+        <td><strong>Правая почка, размер, мм</strong></td>
+        {% for item in ultrasound_history %}<td class="text-center">{{ item.right_kidney_size or '—' }}</td>{% endfor %}
+      </tr>
+      <tr id="us_right_parenchyma_row">
+        <td><strong>Паренхима справа, мм</strong></td>
+        {% for item in ultrasound_history %}<td class="text-center">{{ item.right_parenchyma or '—' }}</td>{% endfor %}
+      </tr>
+      <tr id="us_left_kidney_size_row">
+        <td><strong>Левая почка, размер, мм</strong></td>
+        {% for item in ultrasound_history %}<td class="text-center">{{ item.left_kidney_size or '—' }}</td>{% endfor %}
+      </tr>
+      <tr id="us_left_parenchyma_row">
+        <td><strong>Паренхима слева, мм</strong></td>
+        {% for item in ultrasound_history %}<td class="text-center">{{ item.left_parenchyma or '—' }}</td>{% endfor %}
+      </tr>
+      <tr id="us_description_row">
+        <td><strong>Дополнительно</strong></td>
+        {% for item in ultrasound_history %}<td class="text-center">{{ item.description or '—' }}</td>{% endfor %}
+      </tr>
+    </tbody>
+  </table>
+</div>
 {% else %}
 <hr>
-            <h5>УЗИ почек</h5>
-
-            <div id="ultrasoundContainer">
-                <div class="lab-analysis-card border rounded p-3 mb-3 bg-light">
-                    <div class="row mb-2">
-                        <div class="col-md-3">
-                            <label class="form-label">Дата исследования</label>
-                            <input type="date" name="ultrasound_investigation_date" class="form-control" value="{{ now_date }}">
-                        </div>
-                        <div class="col-md-9 d-flex align-items-end justify-content-end">
-                            <button type="button" class="btn btn-sm btn-outline-danger remove-lab-card" style="display:none;">
-                                ✖ Удалить исследование
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="row g-2">
-                        <div class="col-md-3"><input type="text" name="left_kidney_size" class="form-control" placeholder="Левая почка (размер)"></div>
-                        <div class="col-md-3"><input type="text" name="right_kidney_size" class="form-control" placeholder="Правая почка (размер)"></div>
-                        <div class="col-md-3"><input type="text" name="left_parenchyma" class="form-control" placeholder="Паренхима слева"></div>
-                        <div class="col-md-3"><input type="text" name="right_parenchyma" class="form-control" placeholder="Паренхима справа"></div>
-                        <div class="col-md-12"><input type="text" name="ultrasound_desc" class="form-control" placeholder="Описание УЗИ"></div>
-                    </div>
-                </div>
-            </div>
-
-            <button type="button" class="btn btn-sm btn-outline-primary mb-3" data-add-lab="ultrasoundContainer">
-                ➕ Добавить ещё УЗИ
-            </button>
+<h5>УЗИ почек</h5>
+<div id="ultrasoundContainer">
+  <div class="lab-analysis-card border rounded p-3 mb-3 bg-light">
+    <div class="row mb-2">
+      <div class="col-md-3">
+        <label class="form-label">Дата исследования</label>
+        <input type="date" name="ultrasound_investigation_date" class="form-control" value="{{ now_date }}">
+      </div>
+      <div class="col-md-9 d-flex align-items-end justify-content-end">
+        <button type="button" class="btn btn-sm btn-outline-danger remove-lab-card" style="display:none;">
+          ✖ Удалить исследование
+        </button>
+      </div>
+    </div>
+    <div class="row g-2">
+      <div class="col-md-6">
+        <label class="form-label">Правая почка, размер, мм</label>
+        <input type="text" name="right_kidney_size" class="form-control" placeholder="Например: 110 × 50">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Паренхима справа, мм</label>
+        <input type="text" name="right_parenchyma" class="form-control">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Левая почка, размер, мм</label>
+        <input type="text" name="left_kidney_size" class="form-control" placeholder="Например: 108 × 49">
+      </div>
+      <div class="col-md-6">
+        <label class="form-label">Паренхима слева, мм</label>
+        <input type="text" name="left_parenchyma" class="form-control">
+      </div>
+      <div class="col-md-12">
+        <label class="form-label">Дополнительно</label>
+        <input type="text" name="ultrasound_desc" class="form-control">
+      </div>
+    </div>
+  </div>
+</div>
+<button type="button" class="btn btn-sm btn-outline-primary mb-3" data-add-lab="ultrasoundContainer">
+  ➕ Добавить ещё УЗИ
+</button>
 {% endif %}

@@ -21,7 +21,9 @@ from ..calculations import (
     calculate_albuminuria_metrics,
     calculate_all_metrics,
 )
+from ..medical_algorithms.albuminuria import get_daily_albumin_excretion_category
 from app.repositories.ckd_prognosis import save_ckd_prognosis_for_appointment
+from ..repositories.additional_studies import upsert_appointment_additional_studies
 from ..repositories.examinations import insert_examination
 from ..repositories.labs import (
     insert_albuminuria_result,
@@ -243,10 +245,19 @@ def save_albuminuria_results(
     appointment_date_default: Any,
     albuminuria_data: dict[str, list[Any]],
 ) -> None:
-    """Сохраняет альбуминурию и серверный расчёт ACR / категории A1-A3."""
+    """Сохраняет ACR, суточную экскрецию и серверную категорию A1-A3.
+
+    Приоритет итоговой категории:
+    1. категория по ACR, если заполнены альбумин и креатинин мочи;
+    2. категория по суточной экскреции, если ACR рассчитать нельзя.
+
+    Это сохраняет прежнюю логику ACR и добавляет второй предусмотренный схемой
+    способ классификации без изменения KDIGO.
+    """
     value_lists = [
         albuminuria_data.get("urine_albumin", []),
         albuminuria_data.get("urine_creatinine", []),
+        albuminuria_data.get("daily_albumin_excretion", []),
     ]
     max_count = max_list_length(
         albuminuria_data.get("dates", []),
@@ -254,6 +265,7 @@ def save_albuminuria_results(
         albuminuria_data.get("urine_albumin_unit", []),
         albuminuria_data.get("urine_creatinine", []),
         albuminuria_data.get("urine_creatinine_unit", []),
+        albuminuria_data.get("daily_albumin_excretion", []),
     )
 
     for index in range(max_count):
@@ -261,30 +273,57 @@ def save_albuminuria_results(
             continue
 
         current_albumin = value_at(albuminuria_data.get("urine_albumin"), index)
-        current_albumin_unit = value_at(albuminuria_data.get("urine_albumin_unit"), index) or "mg_l"
-        current_creatinine = value_at(albuminuria_data.get("urine_creatinine"), index)
-        current_creatinine_unit = value_at(albuminuria_data.get("urine_creatinine_unit"), index) or "mmol_l"
-
-        if current_albumin is None or current_creatinine is None:
-            continue
-
-        albuminuria_metrics = calculate_albuminuria_metrics(
-            urine_albumin=current_albumin,
-            urine_albumin_unit=current_albumin_unit,
-            urine_creatinine=current_creatinine,
-            urine_creatinine_unit=current_creatinine_unit,
+        current_albumin_unit = (
+            value_at(albuminuria_data.get("urine_albumin_unit"), index) or "mg_l"
         )
+        current_creatinine = value_at(
+            albuminuria_data.get("urine_creatinine"),
+            index,
+        )
+        current_creatinine_unit = (
+            value_at(albuminuria_data.get("urine_creatinine_unit"), index)
+            or "mmol_l"
+        )
+        daily_albumin_excretion = value_at(
+            albuminuria_data.get("daily_albumin_excretion"),
+            index,
+        )
+
+        albuminuria_metrics = {
+            "albumin_creatinine_ratio": None,
+            "albuminuria_category": None,
+        }
+        if current_albumin is not None and current_creatinine is not None:
+            albuminuria_metrics = calculate_albuminuria_metrics(
+                urine_albumin=current_albumin,
+                urine_albumin_unit=current_albumin_unit,
+                urine_creatinine=current_creatinine,
+                urine_creatinine_unit=current_creatinine_unit,
+            )
+
+        category = albuminuria_metrics.get("albuminuria_category")
+        if category is None:
+            category = get_daily_albumin_excretion_category(
+                daily_albumin_excretion
+            )
 
         insert_albuminuria_result(
             cur=cur,
             appointment_id=appointment_id,
-            investigation_date=date_at(albuminuria_data.get("dates"), index, appointment_date_default),
+            investigation_date=date_at(
+                albuminuria_data.get("dates"),
+                index,
+                appointment_date_default,
+            ),
             urine_albumin=current_albumin,
             urine_albumin_unit=current_albumin_unit,
             urine_creatinine=current_creatinine,
             urine_creatinine_unit=current_creatinine_unit,
-            albumin_creatinine_ratio=albuminuria_metrics["albumin_creatinine_ratio"],
-            albuminuria_category=albuminuria_metrics["albuminuria_category"],
+            daily_albumin_excretion=daily_albumin_excretion,
+            albumin_creatinine_ratio=albuminuria_metrics.get(
+                "albumin_creatinine_ratio"
+            ),
+            albuminuria_category=category,
         )
 
 
@@ -318,6 +357,19 @@ def save_ultrasound_results(
             right_parenchyma=value_at(ultrasound_data.get("right_parenchyma"), index),
             description=value_at(ultrasound_data.get("ultrasound_desc"), index),
         )
+
+
+def save_additional_studies(
+    cur: Any,
+    appointment_id: int,
+    additional_studies_data: dict[str, Any],
+) -> None:
+    """Сохраняет другие лабораторные и инструментальные исследования."""
+    upsert_appointment_additional_studies(
+        cur,
+        appointment_id,
+        additional_studies_data,
+    )
 
 
 def save_diet_and_recommendations(cur: Any, appointment_id: int, diet_data: dict[str, Any]) -> None:
@@ -397,6 +449,11 @@ def save_appointment_details(
         appointment_id,
         appointment_date_default,
         appointment_data["ultrasound"],
+    )
+    save_additional_studies(
+        cur,
+        appointment_id,
+        appointment_data["additional_studies"],
     )
 
     # Единственный источник диагнозов — структурированный МКБ-10 блок.

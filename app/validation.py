@@ -132,6 +132,7 @@ NUMERIC_RULES = {
     # Альбуминурия
     "urine_albumin": (0, 100000, ERROR_INVALID_VALUE),
     "urine_creatinine": (0.000001, 1000000, ERROR_INVALID_VALUE),
+    "daily_albumin_excretion": (0, 1000000, ERROR_INVALID_VALUE),
 
     # УЗИ
     "left_parenchyma": (1, 50, ERROR_INVALID_VALUE),

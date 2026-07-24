@@ -1,9 +1,16 @@
 """
-Repository для таблицы appointments и агрегированного чтения приёма.
+Назначение файла: repository таблицы appointments и агрегированного чтения приёма.
+
+Что выполняет файл
+-------------------
+Создаёт запись приёма и читает данные, необходимые форме повторного приёма,
+карточке пациента и существующему Word-экспорту.
 
 После миграции 0009 возраст хранится непосредственно у приёма. Полный SELECT
 возвращает новые структурированные поля, а также временные вычисляемые алиасы
-старых полей для совместимости Word-экспорта. Сам модуль экспорта не изменяется.
+старых полей для совместимости Word-экспорта. Начиная с миграции 0011 запросы
+также читают свободные описания других исследований. Сам модуль экспорта не
+изменяется.
 """
 
 from __future__ import annotations
@@ -205,6 +212,8 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
             ad.diet,
             ad.next_control_date,
             ad.recommendations,
+            ast.other_laboratory_studies,
+            ast.other_instrumental_studies,
 
             /*
              * Временные алиасы только для старого Word-экспорта.
@@ -232,6 +241,7 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
         LEFT JOIN surveys s ON a.id = s.appointment_id
         LEFT JOIN examinations e ON a.id = e.appointment_id
         LEFT JOIN appointment_diets ad ON a.id = ad.appointment_id
+        LEFT JOIN appointment_additional_studies ast ON a.id = ast.appointment_id
         WHERE a.id = %s
         """,
         (appointment_id,),
@@ -296,11 +306,14 @@ def _fetch_last_appointment_data(cur: Any, patient_id: int):
             e.pasternatsky_side,
             ad.diet,
             ad.next_control_date,
-            ad.recommendations
+            ad.recommendations,
+            ast.other_laboratory_studies,
+            ast.other_instrumental_studies
         FROM appointments a
         LEFT JOIN surveys s ON a.id = s.appointment_id
         LEFT JOIN examinations e ON a.id = e.appointment_id
         LEFT JOIN appointment_diets ad ON a.id = ad.appointment_id
+        LEFT JOIN appointment_additional_studies ast ON a.id = ast.appointment_id
         WHERE a.patient_id = %s
         ORDER BY a.appointment_date DESC
         LIMIT 1

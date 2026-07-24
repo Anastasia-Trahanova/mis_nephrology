@@ -1,12 +1,16 @@
 """
-Repository для лабораторных и инструментальных данных приёма.
+Назначение файла: repository лабораторных и инструментальных данных приёма.
+
+Что выполняет файл
+-------------------
+Содержит INSERT-запросы существующих таблиц анализов и УЗИ.
 
 Файл содержит только INSERT-запросы для таблиц:
 - cbc_results;
 - biochemistry_results;
 - calculated_metrics;
 - urinalysis_results;
-- albuminuria_results;
+- albuminuria_results, включая суточную экскрецию альбумина;
 - ultrasound_results.
 
 В этом файле нет циклов по форме и медицинских расчётов. Сервис выше решает,
@@ -201,10 +205,11 @@ def insert_albuminuria_result(
     urine_albumin_unit: str,
     urine_creatinine: Any,
     urine_creatinine_unit: str,
+    daily_albumin_excretion: Any,
     albumin_creatinine_ratio: Any,
     albuminuria_category: Any,
 ) -> None:
-    """Сохраняет одну строку альбуминурии с уже рассчитанными ACR и категорией."""
+    """Сохраняет строку альбуминурии, суточную экскрецию и итоговую категорию."""
     cur.execute(
         """
         INSERT INTO albuminuria_results (
@@ -214,10 +219,11 @@ def insert_albuminuria_result(
             urine_albumin_unit,
             urine_creatinine,
             urine_creatinine_unit,
+            daily_albumin_excretion,
             albumin_creatinine_ratio,
             albuminuria_category
         )
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """,
         (
             appointment_id,
@@ -226,6 +232,7 @@ def insert_albuminuria_result(
             urine_albumin_unit,
             urine_creatinine,
             urine_creatinine_unit,
+            daily_albumin_excretion,
             albumin_creatinine_ratio,
             albuminuria_category,
         ),

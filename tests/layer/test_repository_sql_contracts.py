@@ -1,4 +1,6 @@
 """
+Назначение файла: тесты SQL-контрактов repository-слоя.
+
 Что тестируется:
 - repository-функции вызывают cur.execute(...);
 - INSERT/SELECT идут в ожидаемые таблицы;
@@ -12,6 +14,7 @@ from __future__ import annotations
 from datetime import date, datetime
 from pathlib import Path
 
+from app.repositories.additional_studies import upsert_appointment_additional_studies
 from app.repositories.appointments import create_appointment
 from app.repositories.diagnoses import (
     find_active_icd10_diagnosis_id,
@@ -190,8 +193,21 @@ def test_insert_lab_sql_contracts():
     insert_urinalysis_result(cur, 202, date(2026, 7, 3), "1015", "0.1", "2", "1", "0")
     assert "insert into urinalysis_results" in _normalized_sql(cur.last_query)
 
-    insert_albuminuria_result(cur, 202, date(2026, 7, 3), "30", "mg_l", "10", "mmol_l", 3.0, "A1")
+    insert_albuminuria_result(
+        cur,
+        202,
+        date(2026, 7, 3),
+        "30",
+        "mg_l",
+        "10",
+        "mmol_l",
+        "45",
+        3.0,
+        "A2",
+    )
     assert "insert into albuminuria_results" in _normalized_sql(cur.last_query)
+    assert "daily_albumin_excretion" in _normalized_sql(cur.last_query)
+    assert cur.last_params[-3:] == ("45", 3.0, "A2")
 
     insert_ultrasound_result(cur, 202, date(2026, 7, 3), "110x55", "108x54", "16", "15", "desc")
     assert "insert into ultrasound_results" in _normalized_sql(cur.last_query)
@@ -217,3 +233,34 @@ def test_insert_icd10_diagnoses_and_prescriptions_sql_contracts():
 
     insert_prescription(cur, 202, "Лозартан", "50 мг", "1 раз")
     assert "insert into prescriptions" in _normalized_sql(cur.last_query)
+
+
+def test_additional_studies_repository_contract():
+    cur = FakeCursor()
+
+    upsert_appointment_additional_studies(
+        cur,
+        202,
+        {
+            "other_laboratory_studies": "Иммунологические исследования",
+            "other_instrumental_studies": "КТ почек",
+        },
+    )
+
+    normalized = _normalized_sql(cur.last_query)
+    assert "insert into appointment_additional_studies" in normalized
+    assert "on conflict (appointment_id) do update" in normalized
+    assert cur.last_params == (
+        202,
+        "Иммунологические исследования",
+        "КТ почек",
+    )
+
+
+def test_appointments_repository_reads_additional_studies():
+    source = Path("app/repositories/appointments.py").read_text(encoding="utf-8")
+    normalized = _normalized_sql(source)
+
+    assert "left join appointment_additional_studies" in normalized
+    assert "ast.other_laboratory_studies" in normalized
+    assert "ast.other_instrumental_studies" in normalized
