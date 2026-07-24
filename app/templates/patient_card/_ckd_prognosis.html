@@ -1,12 +1,12 @@
 {#
-Назначение файла: матрица и заключение по сохранённым оценкам риска KDIGO.
+Назначение файла: вывод сохранённого прогноза KDIGO и матрицы рисков в карточке приёма.
 
 Что выполняет файл:
-- показывает матрицу сохранённых комбинаций: строки = даты СКФ + категория СКФ,
-  столбцы = даты альбуминурии + категория альбуминурии;
-- подсвечивает ячейки по уровню риска KDIGO;
-- выводит сохранённые фразы прогноза для выбранного приёма;
-- не пересчитывает KDIGO и не создаёт новые комбинации.
+- сразу показывает текст прогноза для выбранного приёма;
+- открывает полную матрицу только по кнопке, как в форме приёма;
+- не создаёт второй заголовок «Заключение», потому что общий раздел уже задан
+  в patient_card.html;
+- не изменяет расчёт, категории или цвета риска KDIGO.
 #}
 
 <style>
@@ -14,7 +14,6 @@
     .kdigo-card-matrix th {
         vertical-align: middle;
     }
-
     .kdigo-card-risk {
         border-radius: 0.35rem;
         padding: 0.35rem 0.5rem;
@@ -22,35 +21,29 @@
         border: 1px solid transparent;
         font-size: 0.92rem;
     }
-
     .kdigo-card-risk:last-child {
         margin-bottom: 0;
     }
-
     .kdigo-card-risk-low {
         background: #d1e7dd;
         border-color: #badbcc;
         color: #0f5132;
     }
-
     .kdigo-card-risk-moderate {
         background: #fff3cd;
         border-color: #ffecb5;
         color: #664d03;
     }
-
     .kdigo-card-risk-high {
         background: #ffe5b4;
         border-color: #ffcc80;
         color: #5c3b00;
     }
-
     .kdigo-card-risk-very_high {
         background: #f8d7da;
         border-color: #f5c2c7;
         color: #842029;
     }
-
     .kdigo-card-risk-neutral {
         background: #ffffff;
         border-color: #dee2e6;
@@ -58,64 +51,87 @@
     }
 </style>
 
-<h5>Матрица риска по KDIGO</h5>
+<div class="fw-semibold mb-2">Прогноз по KDIGO</div>
+
+{% if ckd_prognosis_current_results %}
+    {% for item in ckd_prognosis_current_results %}
+    <p class="mb-1">{{ item.display_text }}</p>
+    {% endfor %}
+{% elif ckd_prognosis_current %}
+<p class="mb-1">
+    {{ ckd_prognosis_current.display_text if ckd_prognosis_current.display_text else 'По KDIGO: ' ~ ckd_prognosis_current.combined_category ~ ' — ' ~ ckd_prognosis_current.prognosis_text }}
+</p>
+{% else %}
+<p class="text-muted mb-1">Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены.</p>
+{% endif %}
 
 {% if ckd_prognosis_matrix and ckd_prognosis_matrix.has_values %}
-<div class="table-responsive">
-    <table class="table table-bordered table-sm kdigo-card-matrix">
-        <thead class="table-light">
-            <tr>
-                <th>СКФ \ Альбуминурия</th>
-                {% for column in ckd_prognosis_matrix.albuminuria_columns %}
+<div class="mt-3">
+    <button
+        type="button"
+        id="kdigoCardToggleMatrixButton"
+        class="btn btn-sm btn-outline-secondary"
+        aria-expanded="false"
+        aria-controls="kdigoCardMatrixPanel"
+    >Посмотреть матрицу прогнозов по KDIGO</button>
+</div>
+
+<div id="kdigoCardMatrixPanel" class="mt-3" hidden>
+    <div class="table-responsive">
+        <table class="table table-bordered table-sm kdigo-card-matrix mb-0">
+            <thead>
+                <tr>
+                    <th>СКФ \ Альбуминурия</th>
+                    {% for column in ckd_prognosis_matrix.albuminuria_columns %}
                     <th class="text-center">
                         <div>{{ column.date.strftime('%d.%m.%Y') }}</div>
                         <small class="text-muted">{{ column.categories|join(', ') if column.categories else '—' }}</small>
                     </th>
-                {% endfor %}
-            </tr>
-        </thead>
-        <tbody>
-            {% for row in ckd_prognosis_matrix.rows %}
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in ckd_prognosis_matrix.rows %}
                 <tr>
                     <th class="table-light">
                         <div>{{ row.gfr_date.strftime('%d.%m.%Y') }}</div>
                         <small class="text-muted">{{ row.gfr_categories|join(', ') if row.gfr_categories else '—' }}</small>
                     </th>
                     {% for cell in row.cells %}
-                        <td class="text-center">
-                            {% if cell["items"] %}
-                                {% for item in cell["items"] %}
-                                    {% set risk_class = 'kdigo-card-risk-' ~ (item.prognosis_level or 'neutral') %}
-                                    <div class="kdigo-card-risk {{ risk_class }}">
-                                        {{ item.prognosis_text }}
-                                    </div>
-                                {% endfor %}
-                            {% else %}
-                                <span class="text-muted">—</span>
-                            {% endif %}
-                        </td>
+                    <td class="text-center">
+                        {% if cell["items"] %}
+                            {% for item in cell["items"] %}
+                                {% set risk_class = 'kdigo-card-risk-' ~ (item.prognosis_level or 'neutral') %}
+                                <div class="kdigo-card-risk {{ risk_class }}">{{ item.prognosis_text }}</div>
+                            {% endfor %}
+                        {% else %}
+                            —
+                        {% endif %}
+                    </td>
                     {% endfor %}
                 </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
-{% else %}
-<p class="text-muted">Сохранённые оценки риска по KDIGO отсутствуют.</p>
-{% endif %}
 
-<h5>Заключение</h5>
+<script>
+(function () {
+    const button = document.getElementById('kdigoCardToggleMatrixButton');
+    const panel = document.getElementById('kdigoCardMatrixPanel');
+    if (!button || !panel) return;
 
-{% if ckd_prognosis_current_results %}
-    {% for item in ckd_prognosis_current_results %}
-        <p class="mb-1">{{ item.display_text }}</p>
-    {% endfor %}
-{% elif ckd_prognosis_current %}
-    <p class="mb-1">
-        {{ ckd_prognosis_current.display_text if ckd_prognosis_current.display_text else 'По KDIGO: ' ~ ckd_prognosis_current.combined_category ~ ' — ' ~ ckd_prognosis_current.prognosis_text }}
-    </p>
+    button.addEventListener('click', function () {
+        const open = panel.hidden;
+        panel.hidden = !open;
+        button.setAttribute('aria-expanded', String(open));
+        button.textContent = open
+            ? 'Скрыть матрицу прогнозов по KDIGO'
+            : 'Посмотреть матрицу прогнозов по KDIGO';
+    });
+})();
+</script>
 {% else %}
-    <p class="text-muted mb-1">
-        Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены.
-    </p>
+<p class="text-muted mb-0 mt-2">Сохранённые оценки риска по KDIGO отсутствуют.</p>
 {% endif %}

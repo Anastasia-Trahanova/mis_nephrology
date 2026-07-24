@@ -32,7 +32,7 @@
 <div class="row mb-2">
     <div class="col-md-4">
         <label class="form-label">Положение в постели</label>
-        <select name="bed_position" class="form-select">
+        <select id="bedPosition" name="bed_position" class="form-select">
             <option value="">—</option>
             <option value="active" {% if last_appointment and last_appointment.bed_position == 'active' %}selected{% endif %}>Активное</option>
             <option value="passive" {% if last_appointment and last_appointment.bed_position == 'passive' %}selected{% endif %}>Пассивное</option>
@@ -41,7 +41,8 @@
     </div>
     <div class="col-md-8">
         <label class="form-label">Особенности вынужденного положения</label>
-        <input type="text" name="bed_position_details" class="form-control" value="{{ last_appointment.bed_position_details if last_appointment and last_appointment.bed_position_details else '' }}">
+        <input type="text" id="bedPositionDetails" name="bed_position_details" class="form-control" aria-describedby="bedPositionDetailsMessage" value="{{ last_appointment.bed_position_details if last_appointment and last_appointment.bed_position_details else '' }}">
+        <div id="bedPositionDetailsMessage" class="mis-field-error-message" role="alert" aria-live="polite" hidden></div>
     </div>
 </div>
 
@@ -115,7 +116,10 @@
         </div>
     </div>
 
-    
+    <div class="mt-3">
+        <label class="form-label" for="edemaAdditional">Дополнительно</label>
+        <input id="edemaAdditional" type="text" name="edema_other" class="form-control">
+    </div>
 </div>
 
 <div class="row mb-2"><div class="col-12"><label class="form-label">Лимфатические узлы</label><input type="text" name="lymph_nodes" class="form-control" value="{{ last_appointment.lymph_nodes if last_appointment and last_appointment.lymph_nodes else '' }}"></div></div>
@@ -144,13 +148,17 @@
 <div class="row mb-2">
     <div class="col-md-4">
         <label class="form-label">Пальпация почек</label>
-        <select name="kidney_palpation" class="form-select">
+        <select id="kidneyPalpation" name="kidney_palpation" class="form-select">
             <option value="">—</option>
             <option value="palpable" {% if last_appointment and last_appointment.kidney_palpation == 'palpable' %}selected{% endif %}>Пальпируются</option>
             <option value="not_palpable" {% if last_appointment and last_appointment.kidney_palpation == 'not_palpable' %}selected{% endif %}>Не пальпируются</option>
         </select>
     </div>
-    <div class="col-md-8"><label class="form-label">Уточнение</label><input type="text" name="kidney_palpation_details" class="form-control" value="{{ last_appointment.kidney_palpation_details if last_appointment and last_appointment.kidney_palpation_details else '' }}"></div>
+    <div class="col-md-8">
+        <label class="form-label" for="kidneyPalpationDetails">Уточнение</label>
+        <input type="text" id="kidneyPalpationDetails" name="kidney_palpation_details" class="form-control" aria-describedby="kidneyPalpationDetailsMessage" value="{{ last_appointment.kidney_palpation_details if last_appointment and last_appointment.kidney_palpation_details else '' }}">
+        <div id="kidneyPalpationDetailsMessage" class="mis-field-error-message" role="alert" aria-live="polite" hidden></div>
+    </div>
 </div>
 
 <div class="row mb-2">
