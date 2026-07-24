@@ -58,6 +58,18 @@ def should_ignore_path(path: str) -> bool:
     )
 
 
+def _query_int(request: Request, name: str) -> int | None:
+    """Безопасно читает положительный integer из query string."""
+    value = request.query_params.get(name)
+    if value in (None, ""):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
 def classify_request(request: Request, status_code: int) -> AuditAction | None:
     """
     Определяет, какое событие записать для запроса.
@@ -97,7 +109,19 @@ def classify_request(request: Request, status_code: int) -> AuditAction | None:
     if method == "GET":
         patient_id = _match_int(r"/patient/(\d+)", path)
         if patient_id is not None:
-            return AuditAction(action="open_patient_card", patient_id=patient_id)
+            appointment_id = _query_int(request, "appointment_id")
+            if appointment_id is not None:
+                return AuditAction(
+                    action="open_patient_appointment",
+                    patient_id=patient_id,
+                    appointment_id=appointment_id,
+                    details="открыт конкретный приём в карточке пациента",
+                )
+            return AuditAction(
+                action="open_patient_card",
+                patient_id=patient_id,
+                details="открыта карточка пациента",
+            )
 
     if method == "GET" and path == "/new-patient":
         return AuditAction(action="open_new_patient_form")

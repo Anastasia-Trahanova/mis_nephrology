@@ -1,7 +1,7 @@
 {#
 Административная страница журнала действий МИС.
 Показывает события audit_events как рабочий контрольный журнал: фильтры, категории,
-ссылки на протокол события и протокол всего приёма, CSV-выгрузка.
+одну кнопку подробностей для каждого действия и CSV-выгрузку.
 #}
 {% extends "base.html" %}
 
@@ -158,7 +158,7 @@
       <div class="d-flex justify-content-between align-items-center mb-3 gap-3 flex-wrap">
         <div>
           <h2 class="h5 mb-1">Последние события</h2>
-          <p class="text-muted mb-0 small">Для приёма открывайте не только «Событие», но и общий «Протокол приёма».</p>
+          <p class="text-muted mb-0 small">Каждое действие можно открыть одной кнопкой «Подробнее».</p>
         </div>
         {% if offset > 0 %}
           <a class="btn btn-outline-secondary btn-sm" href="/admin/audit">Сбросить смещение</a>
@@ -177,7 +177,7 @@
               <th>Пациент / приём</th>
               <th>Результат</th>
               <th>Детали</th>
-              <th class="text-end">Переходы</th>
+              <th class="text-end">Подробнее</th>
             </tr>
           </thead>
           <tbody>
@@ -210,7 +210,7 @@
                   —
                 {% endif %}
                 {% if event.appointment_id %}
-                  <div class="small"><a href="/admin/audit/appointment/{{ event.appointment_id }}">приём №{{ event.appointment_id }}</a></div>
+                  <div class="small">приём №{{ event.appointment_id }}</div>
                 {% endif %}
               </td>
               <td>{{ result_badge(event) }}</td>
@@ -220,14 +220,7 @@
                 {% if event.status_code %}<div class="text-muted small">HTTP {{ event.status_code }}</div>{% endif %}
               </td>
               <td class="text-end">
-                <div class="btn-group btn-group-sm" role="group">
-                  {% if event.has_details %}
-                    <a class="btn btn-outline-primary" href="/admin/audit/{{ event.id }}">Событие</a>
-                  {% endif %}
-                  {% if event.appointment_id %}
-                    <a class="btn btn-outline-secondary" href="/admin/audit/appointment/{{ event.appointment_id }}">Приём</a>
-                  {% endif %}
-                </div>
+                <a class="btn btn-outline-primary btn-sm" href="/admin/audit/{{ event.id }}">Подробнее</a>
               </td>
             </tr>
           {% endfor %}

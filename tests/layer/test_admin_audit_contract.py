@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 from types import SimpleNamespace
 
 os.environ.setdefault("DB_NAME", "test_db")
@@ -281,14 +282,28 @@ def test_08_audit_middleware_logs_patient_card(audit_client, captured_events):
     assert captured_events[-1]["patient_id"] == 15
 
 
-def test_09_audit_middleware_logs_new_patient_form(audit_client, captured_events):
+def test_09_audit_middleware_logs_specific_patient_appointment(
+    audit_client,
+    captured_events,
+):
+    audit_client.get("/set-doctor")
+    audit_client.get("/patient/15?appointment_id=32")
+
+    event = captured_events[-1]
+    assert event["action"] == "open_patient_appointment"
+    assert event["patient_id"] == 15
+    assert event["appointment_id"] == 32
+    assert event["details"] == "открыт конкретный приём в карточке пациента"
+
+
+def test_10_audit_middleware_logs_new_patient_form(audit_client, captured_events):
     audit_client.get("/set-doctor")
     audit_client.get("/new-patient")
 
     assert captured_events[-1]["action"] == "open_new_patient_form"
 
 
-def test_10_audit_middleware_logs_new_appointment_form(audit_client, captured_events):
+def test_11_audit_middleware_logs_new_appointment_form(audit_client, captured_events):
     audit_client.get("/set-doctor")
     audit_client.get("/new-appointment/22")
 
@@ -296,7 +311,7 @@ def test_10_audit_middleware_logs_new_appointment_form(audit_client, captured_ev
     assert captured_events[-1]["patient_id"] == 22
 
 
-def test_11_audit_middleware_logs_word_export(audit_client, captured_events):
+def test_12_audit_middleware_logs_word_export(audit_client, captured_events):
     audit_client.get("/set-doctor")
     audit_client.get("/export/33/docx")
 
@@ -304,21 +319,21 @@ def test_11_audit_middleware_logs_word_export(audit_client, captured_events):
     assert captured_events[-1]["appointment_id"] == 33
 
 
-def test_12_audit_middleware_logs_ckd_registry_open(audit_client, captured_events):
+def test_13_audit_middleware_logs_ckd_registry_open(audit_client, captured_events):
     audit_client.get("/set-admin")
     audit_client.get("/ckd-registry")
 
     assert captured_events[-1]["action"] == "open_ckd_registry"
 
 
-def test_13_audit_middleware_logs_admin_audit_open(audit_client, captured_events):
+def test_14_audit_middleware_logs_admin_audit_open(audit_client, captured_events):
     audit_client.get("/set-admin")
     audit_client.get("/admin/audit")
 
     assert captured_events[-1]["action"] == "open_admin_audit"
 
 
-def test_14_audit_middleware_logs_403_as_access_denied(audit_client, captured_events):
+def test_15_audit_middleware_logs_403_as_access_denied(audit_client, captured_events):
     audit_client.get("/set-doctor")
     audit_client.get("/forbidden")
 
@@ -326,7 +341,7 @@ def test_14_audit_middleware_logs_403_as_access_denied(audit_client, captured_ev
     assert captured_events[-1]["result"] == "denied"
 
 
-def test_15_audit_middleware_logs_server_error(audit_client, captured_events):
+def test_16_audit_middleware_logs_server_error(audit_client, captured_events):
     audit_client.get("/set-doctor")
 
     with pytest.raises(RuntimeError):
@@ -336,7 +351,7 @@ def test_15_audit_middleware_logs_server_error(audit_client, captured_events):
     assert captured_events[-1]["result"] == "error"
 
 
-def test_16_audit_middleware_ignores_static_and_keepalive(audit_client, captured_events):
+def test_17_audit_middleware_ignores_static_and_keepalive(audit_client, captured_events):
     audit_client.get("/set-doctor")
     initial_count = len(captured_events)
 
@@ -346,7 +361,7 @@ def test_16_audit_middleware_ignores_static_and_keepalive(audit_client, captured
     assert len(captured_events) == initial_count
 
 
-def test_17_classify_patients_with_query_marks_filters(admin_session):
+def test_18_classify_patients_with_query_marks_filters(admin_session):
     request = SimpleNamespace(
         url=SimpleNamespace(path="/patients", query="search=Иванов"),
         method="GET",
@@ -358,12 +373,14 @@ def test_17_classify_patients_with_query_marks_filters(admin_session):
     assert event.details == "открыт список с фильтрами"
 
 
-def test_18_action_labels_contain_admin_events():
+def test_19_action_labels_contain_admin_events():
     assert audit_log.ACTION_LABELS["open_admin_audit"] == "Открыл журнал работы МИС"
+    assert audit_log.ACTION_LABELS["open_patient_appointment"] == "Открыл конкретный приём пациента"
+    assert audit_log.ACTION_CATEGORIES["open_patient_appointment"] == "view"
     assert audit_log.ACTION_LABELS["access_denied"] == "Отказано в доступе"
 
 
-def test_19_decorated_event_has_sentence():
+def test_20_decorated_event_has_sentence():
     raw = {
         "action": "open_patient_card",
         "result": "success",
@@ -380,7 +397,7 @@ def test_19_decorated_event_has_sentence():
     assert "Иванов Иван Иванович" in decorated["event_sentence"]
 
 
-def test_20_auth_login_success_writes_audit_event(monkeypatch):
+def test_21_auth_login_success_writes_audit_event(monkeypatch):
     events = []
     fake_user = {
         "id": 1,
@@ -406,7 +423,7 @@ def test_20_auth_login_success_writes_audit_event(monkeypatch):
     assert events[-1][0] == "login_success"
 
 
-def test_21_auth_login_failed_writes_audit_event(monkeypatch):
+def test_22_auth_login_failed_writes_audit_event(monkeypatch):
     events = []
 
     monkeypatch.setattr(auth, "get_user_by_login", lambda login: None)
@@ -424,7 +441,7 @@ def test_21_auth_login_failed_writes_audit_event(monkeypatch):
     assert events[-1][1]["result"] == "error"
 
 
-def test_22_audit_repository_log_event_does_not_raise_when_db_fails(monkeypatch, admin_session):
+def test_23_audit_repository_log_event_does_not_raise_when_db_fails(monkeypatch, admin_session):
     class BrokenConnection:
         def __enter__(self):
             raise RuntimeError("db unavailable")
@@ -442,7 +459,7 @@ def test_22_audit_repository_log_event_does_not_raise_when_db_fails(monkeypatch,
     audit_log.log_audit_event(request, "open_patient_card", patient_id=1)
 
 
-def test_23_middleware_does_not_log_without_session(captured_events):
+def test_24_middleware_does_not_log_without_session(captured_events):
     app = FastAPI()
     app.add_middleware(audit_middleware.AuditMiddleware)
     app.add_middleware(SessionMiddleware, secret_key="test-secret-key", session_cookie=TEST_SESSION_COOKIE)
@@ -455,3 +472,12 @@ def test_23_middleware_does_not_log_without_session(captured_events):
         client.get("/patient/1")
 
     assert captured_events == []
+
+
+def test_25_audit_list_uses_one_details_button():
+    """В ленте журнала у каждого действия должна быть одна кнопка подробностей."""
+    template = Path("app/templates/admin/audit.html").read_text(encoding="utf-8")
+
+    assert 'href="/admin/audit/{{ event.id }}">Подробнее</a>' in template
+    assert '>Событие</a>' not in template
+    assert 'href="/admin/audit/appointment/{{ event.appointment_id }}">Приём</a>' not in template
