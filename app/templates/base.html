@@ -10,6 +10,7 @@
     <link rel="stylesheet" href="{{ url_for('static', path='css/03_select_popups.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/04_kdigo_risk.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/05_admin_audit.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/06_hotkeys.css') }}">
 </head>
 <body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
@@ -19,9 +20,9 @@
                 <a class="nav-link" href="/patients">Пациенты</a>
                 {% if request.session.get('role') == 'admin' %}
                 <!--
-                  Пункт расписания показывается только администратору.
-                  Сам маршрут /schedule также защищён серверной проверкой require_admin,
-                  поэтому скрытие ссылки не используется как механизм безопасности.
+                Пункт расписания показывается только администратору.
+                Сам маршрут /schedule также защищён серверной проверкой require_admin,
+                поэтому скрытие ссылки не используется как механизм безопасности.
                 -->
                 <a class="nav-link" href="/schedule">Расписание</a>
                 <a class="nav-link" href="/ckd-registry">Регистр ХБП</a>
@@ -44,8 +45,136 @@
         {% block content %}{% endblock %}
     </div>
 
+    {% if request.session.get('user_id') %}
+    <button
+        type="button"
+        id="hotkeysHelpButton"
+        class="btn btn-primary hotkeys-help-button"
+        data-bs-toggle="modal"
+        data-bs-target="#hotkeysHelpModal"
+        title="Показать горячие клавиши"
+        aria-label="Показать горячие клавиши"
+    >
+        <span aria-hidden="true">⌨</span>
+        <span class="hotkeys-help-label">Горячие клавиши</span>
+    </button>
+
+    <div
+        class="modal fade"
+        id="hotkeysHelpModal"
+        tabindex="-1"
+        aria-labelledby="hotkeysHelpModalLabel"
+        aria-hidden="true"
+    >
+        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h5 class="modal-title" id="hotkeysHelpModalLabel">Горячие клавиши</h5>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+                </div>
+                <div class="modal-body">
+                    <p class="text-muted mb-4">
+                        Команды работают без перехода на отдельную страницу. Окно справки можно закрыть клавишей Esc.
+                    </p>
+
+                    <div class="hotkeys-grid">
+                        <section class="hotkeys-group" aria-labelledby="hotkeysNavigationTitle">
+                            <h6 id="hotkeysNavigationTitle">Навигация и прокрутка</h6>
+                            <div class="hotkey-row">
+                                <span><kbd>Ctrl</kbd> + <kbd>←</kbd></span>
+                                <span>Предыдущее поле</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Ctrl</kbd> + <kbd>→</kbd></span>
+                                <span>Следующее поле</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Ctrl</kbd> + <kbd>↑</kbd></span>
+                                <span>Плавно прокрутить страницу вверх</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Ctrl</kbd> + <kbd>↓</kbd></span>
+                                <span>Плавно прокрутить страницу вниз</span>
+                            </div>
+                        </section>
+
+                        <section class="hotkeys-group" aria-labelledby="hotkeysTablesTitle">
+                            <h6 id="hotkeysTablesTitle">Таблицы анализов</h6>
+                            <div class="hotkey-row">
+                                <span><kbd>↑</kbd></span>
+                                <span>Поле выше в том же столбце</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>↓</kbd></span>
+                                <span>Поле ниже в том же столбце</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Enter</kbd></span>
+                                <span>Следующий тип анализа</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Shift</kbd> + <kbd>Enter</kbd></span>
+                                <span>Предыдущий тип анализа</span>
+                            </div>
+                        </section>
+
+                        <section class="hotkeys-group" aria-labelledby="hotkeysSaveTitle">
+                            <h6 id="hotkeysSaveTitle">Сохранение и экспорт</h6>
+                            <div class="hotkey-row">
+                                <span><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
+                                <span>Сохранить приём</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd></span>
+                                <span>Сохранить приём и скачать Word</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Alt</kbd> + <kbd>W</kbd></span>
+                                <span>Скачать Word выбранного приёма</span>
+                            </div>
+                        </section>
+
+                        <section class="hotkeys-group" aria-labelledby="hotkeysPagesTitle">
+                            <h6 id="hotkeysPagesTitle">Переходы</h6>
+                            <div class="hotkey-row">
+                                <span><kbd>Alt</kbd> + <kbd>N</kbd></span>
+                                <span>Новый приём текущего пациента</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Alt</kbd> + <kbd>P</kbd></span>
+                                <span>Карточка текущего пациента</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Alt</kbd> + <kbd>M</kbd></span>
+                                <span>Главный список приёмов</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>/</kbd></span>
+                                <span>Поставить курсор в поиск пациента</span>
+                            </div>
+                        </section>
+                    </div>
+                </div>
+                <div class="modal-footer">
+                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div
+        id="hotkeysNotice"
+        class="hotkeys-notice alert alert-secondary"
+        role="status"
+        aria-live="polite"
+        aria-atomic="true"
+        hidden
+    ></div>
+    {% endif %}
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', path='js/simple_form_guard.js') }}"></script>
     <script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}" defer></script>
+    <script src="{{ url_for('static', path='js/hotkeys.js') }}" defer></script>
 </body>
 </html>
