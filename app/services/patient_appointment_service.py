@@ -24,6 +24,10 @@ from app.db.connection import get_db_connection
 from ..repositories.appointments import create_appointment
 from ..repositories.patients import create_patient, get_patient_for_appointment
 from ..repositories.reference_data import doctor_can_work_in_location
+from ..repositories.schedule import (
+    link_schedule_entry_to_appointment,
+    lock_schedule_entry_for_appointment,
+)
 from ..validation import validate_appointment_form
 from .appointment_form_parser import (
     parse_appointment_form,
@@ -166,6 +170,7 @@ def create_appointment_for_existing_patient(
     form: Any,
     *,
     current_doctor_id: int | None,
+    schedule_entry_id: int | None = None,
 ) -> AppointmentSaveResult:
     """
     Создаёт новый приём для уже существующего пациента.
@@ -199,11 +204,21 @@ def create_appointment_for_existing_patient(
                     patient["birth_date"], appointment_datetime.date()
                 )
 
-                _ensure_doctor_location_allowed(
-                    cur,
-                    doctor_id,
-                    appointment_required["location_id"],
+                schedule_entry = None
+                if schedule_entry_id is not None:
+                    schedule_entry = lock_schedule_entry_for_appointment(
+                        cur,
+                        entry_id=schedule_entry_id,
+                        patient_id=patient_id,
+                    )
+
+                selected_location_id = appointment_required["location_id"]
+                scheduled_location_allowed = (
+                    schedule_entry is not None
+                    and int(schedule_entry["location_id"]) == selected_location_id
                 )
+                if not scheduled_location_allowed:
+                    _ensure_doctor_location_allowed(cur, doctor_id, selected_location_id)
 
                 appointment_id = create_appointment(
                     cur=cur,
@@ -221,6 +236,13 @@ def create_appointment_for_existing_patient(
                     patient_birth_date=patient["birth_date"],
                     patient_gender=patient["gender"],
                 )
+                if schedule_entry_id is not None:
+                    link_schedule_entry_to_appointment(
+                        cur,
+                        entry_id=schedule_entry_id,
+                        appointment_id=appointment_id,
+                        actual_doctor_id=doctor_id,
+                    )
                 conn.commit()
         except HTTPException:
             conn.rollback()

@@ -1,129 +1,79 @@
-/*
-  Стили только для страницы расписания.
-  Все селекторы начинаются с .schedule-page, чтобы не менять внешний вид других страниц.
-*/
-.schedule-page {
-  --slot-free: #E8F5E9;
-  --slot-busy: #FFEBEE;
-  --slot-pending: #FFF3E0;
-  --slot-break: #F5F5F5;
-  --timeline-hour: 64px;
+.schedule-app {
   position: relative;
+  left: 50%;
+  width: min(1760px, calc(100vw - 2rem));
+  transform: translateX(-50%);
+  padding-bottom: 4rem;
 }
 
-.schedule-page .schedule-toolbar {
-  display: grid;
-  grid-template-columns: minmax(230px, 1fr) minmax(340px, 1.5fr) minmax(260px, 1fr);
-  gap: 1rem;
-  align-items: end;
-  padding: 1rem;
-  margin-bottom: .75rem;
-  border: 1px solid #dee2e6;
-  border-radius: .75rem;
-  background: #fff;
-}
-.schedule-page .schedule-toolbar__navigation,
-.schedule-page .schedule-toolbar__actions { display: flex; gap: .75rem; align-items: center; flex-wrap: wrap; }
-.schedule-page .schedule-toolbar__navigation { justify-content: center; }
-.schedule-page .schedule-toolbar__actions { justify-content: flex-end; }
-.schedule-page .schedule-period-label { min-width: 180px; text-align: center; }
-.schedule-page .schedule-secondary-actions { display: flex; gap: .5rem; align-items: center; flex-wrap: wrap; margin-bottom: 1rem; }
-.schedule-page .schedule-help { margin-left: auto; color: #6c757d; font-size: .875rem; }
+.schedule-header { display: flex; align-items: end; justify-content: space-between; gap: 2rem; }
+.schedule-filters { display: grid; grid-template-columns: minmax(260px, 1fr) minmax(250px, 1fr); gap: 1rem; width: min(720px, 100%); }
+.schedule-period-bar { display: flex; align-items: center; justify-content: center; gap: 1rem; }
+.schedule-period-bar strong { min-width: 250px; text-align: center; }
+.schedule-week-scroll { overflow-x: auto; padding: 2px 2px 14px; }
+.schedule-week-grid { display: grid; grid-template-columns: repeat(7, minmax(210px, 1fr)); gap: .75rem; min-width: 1510px; }
 
-.schedule-page .schedule-day-layout { display: grid; grid-template-columns: 72px 1fr; min-height: 768px; border: 1px solid #dee2e6; border-radius: .75rem; overflow: hidden; background: #fff; }
-.schedule-page .schedule-time-scale { position: relative; background: #f8f9fa; border-right: 1px solid #dee2e6; }
-.schedule-page .schedule-time-label { position: absolute; right: .65rem; transform: translateY(-50%); color: #6c757d; font-size: .8rem; }
-.schedule-page .schedule-day-slots { position: relative; min-height: 768px; background: repeating-linear-gradient(to bottom, transparent 0, transparent 31px, #edf0f2 32px); }
-.schedule-page .schedule-slot {
-  position: absolute;
-  left: .75rem;
-  right: .75rem;
-  min-height: 40px;
-  padding: .45rem .7rem;
-  border: 1px solid rgba(0,0,0,.12);
-  border-radius: .55rem;
-  cursor: pointer;
-  overflow: hidden;
-  transition: transform .12s ease, box-shadow .12s ease;
-  user-select: none;
-}
-.schedule-page .schedule-slot:hover,
-.schedule-page .schedule-slot:focus-visible { transform: scale(1.02); box-shadow: 0 .35rem .9rem rgba(0,0,0,.12); z-index: 5; outline: none; }
-.schedule-page .schedule-slot.is-selected { outline: 3px solid rgba(13,110,253,.35); }
-.schedule-page .schedule-slot.is-conflict { background: var(--slot-busy) !important; outline: 2px solid #dc3545; }
-.schedule-page .schedule-slot--free { background: var(--slot-free); }
-.schedule-page .schedule-slot--busy { background: var(--slot-busy); }
-.schedule-page .schedule-slot--pending { background: var(--slot-pending); }
-.schedule-page .schedule-slot--break,
-.schedule-page .schedule-slot--day_off { background: var(--slot-break); }
-.schedule-page .schedule-slot__top { display: flex; justify-content: space-between; gap: .75rem; font-weight: 600; }
-.schedule-page .schedule-slot__meta { font-size: .82rem; color: #495057; }
+.schedule-day-card { display: flex; min-height: 440px; flex-direction: column; overflow: visible; border: 1px solid #d9dee5; border-radius: .75rem; background: #fff; }
+.schedule-day-card.is-weekend { background: #fbfbfc; }
+.schedule-day-card.is-today { border-color: var(--bs-primary); box-shadow: 0 0 0 2px rgba(13,110,253,.1); }
+.schedule-day-card__header { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .85rem .9rem; border-bottom: 1px solid #e5e8ec; background: #f7f9fb; border-radius: .75rem .75rem 0 0; }
+.schedule-day-card__weekday { font-weight: 600; }
+.schedule-day-card__date { color: #6c757d; }
+.schedule-day-card__body { flex: 1; padding: .7rem; }
+.schedule-day-entries { display: grid; gap: .55rem; align-content: start; }
+.schedule-empty-day { display: flex; min-height: 120px; align-items: center; justify-content: center; color: #8a929a; text-align: center; }
+.schedule-day-card__footer { padding: .8rem; border-top: 1px solid #e5e8ec; }
 
-.schedule-page .schedule-week-table th { white-space: nowrap; }
-.schedule-page .schedule-week-cell { min-width: 100px; text-align: center; cursor: pointer; border-radius: .45rem; }
-.schedule-page .schedule-week-cell:hover { background: #f8f9fa; }
-.schedule-page .schedule-week-cell__value { font-size: 1.05rem; font-weight: 700; }
-.schedule-page .schedule-week-cell__value.has-free { color: #198754; }
-.schedule-page .schedule-week-cell__value.no-free { color: #dc3545; }
+.schedule-entry { position: relative; padding: .65rem; border: 1px solid #dfe3e8; border-left: 4px solid #6c757d; border-radius: .55rem; background: #fff; }
+.schedule-entry.is-editable { cursor: pointer; transition: border-color .15s ease, box-shadow .15s ease; }
+.schedule-entry.is-editable:hover,
+.schedule-entry.is-editable:focus { border-color: #86b7fe; box-shadow: 0 0 0 .15rem rgba(13,110,253,.12); outline: none; }
+.schedule-entry.status-arrived { border-left-color: #198754; background: #f5fbf7; }
+.schedule-entry.status-no_show { border-left-color: #dc3545; background: #fff7f7; }
+.schedule-entry.status-cancelled { border-left-color: #adb5bd; background: #f6f6f6; opacity: .72; }
+.schedule-entry.is-cancelled .schedule-entry__patient { text-decoration: line-through; }
+.schedule-entry__top { display: flex; align-items: center; justify-content: space-between; gap: .5rem; font-size: .9rem; }
+.schedule-entry__top-actions { display: flex; align-items: center; gap: .3rem; }
+.schedule-status-badge { padding: .12rem .38rem; border-radius: 999px; background: #edf0f3; color: #495057; font-size: .72rem; white-space: nowrap; }
+.schedule-status-badge.status-no_show { background: #f8d7da; color: #842029; }
+.schedule-status-badge.status-cancelled { background: #e9ecef; color: #495057; }
+.schedule-entry-menu { position: relative; z-index: 5; }
+.schedule-entry-menu__toggle { width: 1.9rem; height: 1.9rem; padding: 0; border: 0; font-size: 1.25rem; line-height: 1; }
+.schedule-entry-menu .dropdown-menu { min-width: 190px; }
+.schedule-entry__patient { display: inline-block; margin-top: .35rem; font-weight: 600; line-height: 1.25; text-decoration: none; }
+.schedule-entry__meta { display: flex; flex-wrap: wrap; gap: .3rem .6rem; margin-top: .35rem; color: #6c757d; font-size: .75rem; }
+.schedule-entry__saved { color: #198754; font-weight: 600; }
 
-.schedule-page .schedule-drawer { position: fixed; top: 0; right: 0; bottom: 0; width: min(440px, 100vw); background: #fff; z-index: 1065; transform: translateX(100%); transition: transform .2s ease; box-shadow: -.5rem 0 1.25rem rgba(0,0,0,.15); }
-.schedule-page .schedule-drawer.is-open { transform: translateX(0); }
-.schedule-page .schedule-drawer__header { display: flex; justify-content: space-between; align-items: flex-start; padding: 1rem; border-bottom: 1px solid #dee2e6; }
-.schedule-page .schedule-drawer__body { padding: 1rem; overflow-y: auto; height: calc(100% - 74px); }
-.schedule-page .schedule-backdrop { position: fixed; inset: 0; z-index: 1060; background: rgba(0,0,0,.35); }
+.schedule-patient-hover { position: relative; }
+.schedule-patient-popover { position: absolute; z-index: 30; left: 0; top: calc(100% + .25rem); display: none; width: min(330px, 80vw); padding: .65rem .75rem; border: 1px solid #ccd2d8; border-radius: .5rem; background: #fff; box-shadow: 0 .5rem 1rem rgba(0,0,0,.15); color: #212529; font-size: .82rem; line-height: 1.35; }
+.schedule-patient-hover:hover .schedule-patient-popover,
+.schedule-patient-hover:focus-within .schedule-patient-popover { display: block; }
+
+.schedule-booking-workspace { display: grid; grid-template-columns: minmax(0,1.7fr) minmax(390px,.9fr); gap: 1rem; align-items: start; }
+.schedule-selected-day, .schedule-booking-panel { border: 1px solid #d9dee5; border-radius: .8rem; background: #fff; }
+.schedule-selected-day__navigation { display: grid; grid-template-columns: auto minmax(220px,1fr) auto; align-items: center; gap: 1rem; padding: 1rem; border-bottom: 1px solid #e5e8ec; }
+.schedule-selected-day__content { display: grid; gap: .7rem; align-content: start; min-height: 650px; padding: 1rem; background: repeating-linear-gradient(to bottom,#fff 0,#fff 59px,#eef1f4 60px); }
+.schedule-selected-day__content .schedule-entry { max-width: 760px; }
+.schedule-booking-panel { position: static; overflow: visible; }
+.schedule-booking-panel__header { display: flex; align-items: start; justify-content: space-between; gap: 1rem; padding: 1rem 1.1rem; border-bottom: 1px solid #e5e8ec; }
+.schedule-booking-form { display: grid; gap: 1rem; max-height: none; overflow: visible; padding: 1.1rem; }
+.schedule-booking-actions { display: flex; justify-content: flex-end; gap: .75rem; padding-top: .5rem; }
+.schedule-booking-form .is-invalid { border-color: #dc3545; box-shadow: 0 0 0 .15rem rgba(220,53,69,.12); }
+.schedule-booking-form .invalid-feedback { display: block; }
+
+.schedule-patient-results { display: grid; gap: .4rem; padding: .5rem; border: 1px solid #d9dee5; border-radius: .55rem; background: #f8f9fa; }
+.schedule-patient-result { display: grid; gap: .1rem; width: 100%; padding: .55rem .65rem; border: 1px solid transparent; border-radius: .45rem; background: #fff; text-align: left; }
+.schedule-patient-result:hover, .schedule-patient-result:focus { border-color: var(--bs-primary); outline: none; }
+.schedule-patient-result span, .schedule-patient-result small { color: #6c757d; font-size: .78rem; }
+.schedule-selected-patient { padding: .7rem; border: 1px solid #9ec5fe; border-radius: .55rem; background: #eef6ff; }
 
 @media (max-width: 1100px) {
-  .schedule-page .schedule-toolbar { grid-template-columns: 1fr; }
-  .schedule-page .schedule-toolbar__navigation,
-  .schedule-page .schedule-toolbar__actions { justify-content: flex-start; }
-  .schedule-page .schedule-help { width: 100%; margin-left: 0; }
-}
-@media (max-width: 576px) {
-  .schedule-page .schedule-day-layout { grid-template-columns: 56px 1fr; }
-  .schedule-page .schedule-slot { left: .35rem; right: .35rem; }
-  .schedule-page .schedule-toolbar { padding: .75rem; }
-}
-@media (prefers-reduced-motion: reduce) {
-  .schedule-page .schedule-slot,
-  .schedule-page .schedule-drawer { transition: none; }
-  .schedule-page .schedule-slot:hover { transform: none; }
-}
-@media print {
-  body * { visibility: hidden !important; }
-  .schedule-page, .schedule-page * { visibility: visible !important; }
-  .schedule-page { position: absolute; inset: 0; }
-  .schedule-page .schedule-toolbar__actions,
-  .schedule-page .schedule-secondary-actions,
-  .schedule-page .schedule-drawer,
-  .schedule-page .schedule-backdrop { display: none !important; }
+  .schedule-header { align-items: stretch; flex-direction: column; gap: 1rem; }
+  .schedule-filters { width: 100%; }
+  .schedule-booking-workspace { grid-template-columns: minmax(0,1fr) minmax(350px,.85fr); }
 }
 
-/* Состояния загрузки и пустого дня относятся только к модулю расписания. */
-.schedule-page .schedule-empty {
-  position: absolute;
-  top: 1rem;
-  left: 1rem;
-  right: 1rem;
-  padding: 1rem;
-  border: 1px dashed #adb5bd;
-  border-radius: .5rem;
-  color: #6c757d;
-  background: rgba(255, 255, 255, .92);
-}
-
-/*
-  Локальный backdrop модального окна. Он позволяет открывать формы даже тогда,
-  когда bootstrap.bundle.js с CDN недоступен. Сам Bootstrap CSS по-прежнему
-  используется для внешнего вида формы.
-*/
-.schedule-page .schedule-modal-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 1050;
-  background: rgba(0, 0, 0, .45);
-}
-.schedule-page .modal.show {
-  display: block;
-  z-index: 1055;
-  background: transparent;
+@media (max-width: 820px) {
+  .schedule-filters, .schedule-booking-workspace { grid-template-columns: 1fr; }
+  .schedule-selected-day__content { min-height: 420px; }
 }

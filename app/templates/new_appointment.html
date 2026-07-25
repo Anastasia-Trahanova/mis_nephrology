@@ -52,8 +52,9 @@
 
   <div class="col-lg-9">
     <form method="post" action="/api/patients/{{ patient.id }}/appointments/new">
+      {% if schedule_entry %}<input type="hidden" name="schedule_entry_id" value="{{ schedule_entry.id }}">{% endif %}
       <div class="appointment-passport">
-        <h2 class="appointment-page-title">Консультативный приём (повторный)</h2>
+        <h2 class="appointment-page-title">Консультативный приём ({% if schedule_entry and schedule_entry.appointment_type == 'primary' %}первичный{% else %}повторный{% endif %})</h2>
 
         <div class="row appointment-passport-row">
           <div class="col-md-8">
@@ -110,7 +111,7 @@
               <select name="location_id" id="locationSelect" class="form-select" required>
                 <option value="">Выберите отделение</option>
                 {% for location in doctor_locations %}
-                  <option value="{{ location.id }}">{{ location.name }} ({{ location.branch_name }})</option>
+                  <option value="{{ location.id }}" {% if schedule_entry and schedule_entry.location_id|int == location.id|int %}selected{% endif %}>{{ location.full_name or location.name }}{% if not location.full_name and location.branch_name %} ({{ location.branch_name }}){% endif %}</option>
                 {% endfor %}
               </select>
             </div>

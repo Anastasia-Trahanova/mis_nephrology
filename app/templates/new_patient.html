@@ -1,54 +1,53 @@
-{#
-Назначение файла: страница первичного консультативного приёма нового пациента.
-
-Что выполняет файл:
-- сохраняет существующий каркас и внешний вид страницы;
-- подключает общие partial-шаблоны формы в порядке истории болезни;
-- подключает дополнительный JavaScript исследований без изменения CSS и шрифтов.
-
-Важно: имена полей синхронизированы с parser, validation и repository.
-#}
+{# Первичный приём нового пациента или пациента, созданного через расписание. #}
 {% extends "base.html" %}
 {% block content %}
 {% set appointment_form_mode = 'new_patient' %}
-
+{% set scheduled_primary = schedule_existing_patient and schedule_entry and patient %}
 <style>
     .text-danger { color: #dc3545; }
     .appointment-page-title { text-align: center; margin-bottom: 1.25rem; }
     .appointment-passport { margin-bottom: 1.5rem; }
     .conditional-required-message { color: #dc3545; font-size: 0.875rem; margin-top: 0.25rem; }
+    .schedule-prefilled { background-color: #fff8d6 !important; }
 </style>
 
-<form method="post" action="/api/patients/new">
+<form method="post" action="{% if scheduled_primary %}/api/patients/{{ patient.id }}/appointments/new{% else %}/api/patients/new{% endif %}">
+    {% if scheduled_primary %}
+    <input type="hidden" name="schedule_entry_id" value="{{ schedule_entry.id }}">
+    {% endif %}
+
     <div class="appointment-passport">
         <h2 class="appointment-page-title">Консультативный приём (первичный)</h2>
-
         <div class="row">
             <div class="col-md-4">
                 <label class="form-label">Фамилия <span class="text-danger">*</span></label>
-                <input type="text" name="last_name" class="form-control" required>
+                <input type="text" name="last_name" class="form-control{% if scheduled_primary %} schedule-prefilled{% endif %}"
+                       value="{{ patient.last_name if scheduled_primary else '' }}" required{% if scheduled_primary %} readonly{% endif %}>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Имя <span class="text-danger">*</span></label>
-                <input type="text" name="first_name" class="form-control" required>
+                <input type="text" name="first_name" class="form-control{% if scheduled_primary %} schedule-prefilled{% endif %}"
+                       value="{{ patient.first_name if scheduled_primary else '' }}" required{% if scheduled_primary %} readonly{% endif %}>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Отчество</label>
-                <input type="text" name="patronymic" class="form-control">
+                <input type="text" name="patronymic" class="form-control{% if scheduled_primary %} schedule-prefilled{% endif %}"
+                       value="{{ (patient.patronymic or '') if scheduled_primary else '' }}"{% if scheduled_primary %} readonly{% endif %}>
             </div>
         </div>
-
         <div class="row mt-3">
             <div class="col-md-4">
                 <label class="form-label">Номер телефона</label>
-                <input type="tel" name="phone" class="form-control">
+                <input type="tel" name="phone" class="form-control{% if scheduled_primary %} schedule-prefilled{% endif %}"
+                       value="{{ (patient.phone or '') if scheduled_primary else '' }}"{% if scheduled_primary %} readonly{% endif %}>
             </div>
         </div>
-
         <div class="row mt-3">
             <div class="col-md-4">
                 <label class="form-label">Дата рождения <span class="text-danger">*</span></label>
-                <input type="date" name="birth_date" class="form-control" required>
+                <input type="date" name="birth_date" class="form-control{% if scheduled_primary %} schedule-prefilled{% endif %}"
+                       value="{{ patient.birth_date.strftime('%Y-%m-%d') if scheduled_primary and patient.birth_date else '' }}"
+                       required{% if scheduled_primary %} readonly{% endif %}>
             </div>
             <div class="col-md-4">
                 <label class="form-label">Возраст</label>
@@ -56,10 +55,15 @@
             </div>
             <div class="col-md-4">
                 <label class="form-label">Пол</label>
+                {% if scheduled_primary %}
+                <input type="text" class="form-control schedule-prefilled" value="{{ patient.gender_str or ('Мужской' if patient.gender else 'Женский') }}" readonly>
+                <input type="hidden" name="gender" value="{{ 'true' if patient.gender else 'false' }}">
+                {% else %}
                 <select name="gender" class="form-select">
                     <option value="true">Мужской</option>
                     <option value="false">Женский</option>
                 </select>
+                {% endif %}
             </div>
         </div>
     </div>
@@ -80,7 +84,9 @@
                     <select name="location_id" id="locationSelect" class="form-select" required>
                         <option value="">Выберите отделение</option>
                         {% for location in doctor_locations %}
-                        <option value="{{ location.id }}">{{ location.name }} ({{ location.branch_name }})</option>
+                        <option value="{{ location.id }}"{% if scheduled_primary and schedule_entry.location_id|int == location.id|int %} selected{% endif %}>
+                            {{ location.full_name or location.name }}{% if not location.full_name and location.branch_name %} ({{ location.branch_name }}){% endif %}
+                        </option>
                         {% endfor %}
                     </select>
                 </div>
@@ -88,17 +94,15 @@
             <div class="row mt-3">
                 <div class="col-md-4">
                     <label class="form-label">Дата приёма</label>
-                    <input type="date" name="appointment_date" class="form-control" value="{{ now_date }}" required>
+                    <input type="date" name="appointment_date" class="form-control{% if scheduled_primary %} schedule-prefilled{% endif %}" value="{{ now_date }}" required>
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Время приёма</label>
-                    <input type="time" name="appointment_time" class="form-control" value="{{ now_time }}" required>
+                    <input type="time" name="appointment_time" class="form-control{% if scheduled_primary %} schedule-prefilled{% endif %}" value="{{ now_time }}" required>
                 </div>
             </div>
-
             {% include "appointment_form/_survey.html" %}
             {% include "appointment_form/_examination.html" %}
-
             <hr>
             <h4 class="mt-3 mb-3">Результаты проведённых ранее исследований</h4>
             {% include "appointment_form/_cbc.html" %}
@@ -109,7 +113,6 @@
             {% include "appointment_form/_other_laboratory_studies.html" %}
             {% include "appointment_form/_ultrasound.html" %}
             {% include "appointment_form/_other_instrumental_studies.html" %}
-
             {% include "appointment_form/_conclusion.html" %}
         </div>
     </div>
@@ -122,42 +125,27 @@
 
 <script>
 (function () {
-    const form = document.querySelector('form[action="/api/patients/new"]');
+    const form = document.querySelector('form[action="/api/patients/new"], form[action^="/api/patients/"][action$="/appointments/new"]');
     if (!form) return;
-
     const birthDateInput = form.querySelector('[name="birth_date"]');
     const appointmentDateInput = form.querySelector('[name="appointment_date"]');
     const agePreview = document.getElementById('patientAgePreview');
     if (!birthDateInput || !agePreview) return;
-
     function parseIsoDate(value) {
         const match = String(value || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
         if (!match) return null;
-        const date = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
-        if (
-            date.getFullYear() !== Number(match[1]) ||
-            date.getMonth() !== Number(match[2]) - 1 ||
-            date.getDate() !== Number(match[3])
-        ) return null;
-        return date;
+        const parsed = new Date(Number(match[1]), Number(match[2]) - 1, Number(match[3]));
+        if (parsed.getFullYear() !== Number(match[1]) || parsed.getMonth() !== Number(match[2]) - 1 || parsed.getDate() !== Number(match[3])) return null;
+        return parsed;
     }
-
     function updateAge() {
-        const birthDate = parseIsoDate(birthDateInput.value);
-        const appointmentDate = parseIsoDate(appointmentDateInput ? appointmentDateInput.value : '') || new Date();
-        if (!birthDate || appointmentDate < birthDate) {
-            agePreview.value = '—';
-            return;
-        }
-
-        let age = appointmentDate.getFullYear() - birthDate.getFullYear();
-        const beforeBirthday =
-            appointmentDate.getMonth() < birthDate.getMonth() ||
-            (appointmentDate.getMonth() === birthDate.getMonth() && appointmentDate.getDate() < birthDate.getDate());
-        if (beforeBirthday) age -= 1;
+        const born = parseIsoDate(birthDateInput.value);
+        const onDate = parseIsoDate(appointmentDateInput ? appointmentDateInput.value : '') || new Date();
+        if (!born || onDate < born) { agePreview.value = '—'; return; }
+        let age = onDate.getFullYear() - born.getFullYear();
+        if (onDate.getMonth() < born.getMonth() || (onDate.getMonth() === born.getMonth() && onDate.getDate() < born.getDate())) age -= 1;
         agePreview.value = `${age} лет`;
     }
-
     birthDateInput.addEventListener('input', updateAge);
     birthDateInput.addEventListener('change', updateAge);
     if (appointmentDateInput) appointmentDateInput.addEventListener('change', updateAge);

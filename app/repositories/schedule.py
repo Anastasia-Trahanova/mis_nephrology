@@ -1,484 +1,736 @@
-"""
-Repository модуля расписания.
-
-Этот файл содержит только SQL для расписания:
-- получение врачей и отделений для фильтров;
-- создание слотов расписания;
-- чтение сетки расписания;
-- запись пациента на свободный слот;
-- отмена записи;
-- отметка "пришёл" / "не пришёл".
-
-Не хранит HTML-логику и не создаёт медицинский приём в appointments.
-"""
+"""SQL и транзакционная логика нового расписания."""
 from __future__ import annotations
 
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime
 from typing import Any
 
 from fastapi import HTTPException
 
 from app.db.connection import get_db_connection
 
-
-SLOT_KIND_LABELS = {
-    "primary": "Первичный",
-    "repeat": "Повторный",
-}
-
-SLOT_STATUS_LABELS = {
-    "free": "Свободно",
-    "booked": "Записан",
-    "blocked": "Недоступно",
-    "cancelled": "Отменено",
-    "completed": "Пришёл",
+APPOINTMENT_TYPE_LABELS = {"primary": "Первичный", "repeat": "Повторный"}
+STATUS_LABELS = {
+    "booked": "Ожидается",
+    "arrived": "Пришёл",
     "no_show": "Не пришёл",
+    "cancelled": "Отменён",
 }
 
 
-# ---------------------------------------------------------------------------
-# Справочники для страницы расписания
-# ---------------------------------------------------------------------------
+def _clean(value: Any) -> str:
+    return " ".join(str(value or "").split()).strip(" ,")
+
+
+def format_schedule_location(row: dict[str, Any]) -> str:
+    parts: list[str] = []
+    seen: set[str] = set()
+    for value in (
+        row.get("company_name"),
+        row.get("branch_name"),
+        row.get("location_name"),
+        row.get("factual_address"),
+    ):
+        part = _clean(value)
+        key = part.casefold()
+        if part and key not in seen:
+            parts.append(part)
+            seen.add(key)
+    return ", ".join(parts)
 
 
 def get_schedule_doctors() -> list[dict[str, Any]]:
-    """Возвращает всех врачей для фильтра расписания."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id, last_name, first_name, patronymic,
+                       trim(concat_ws(' ', last_name, first_name, patronymic)) AS fio
+                FROM doctors
+                ORDER BY last_name, first_name, patronymic NULLS LAST, id
+                """
+            )
+            return [dict(row) for row in cur.fetchall()]
+
+
+def _location_select_sql() -> str:
+    return """
+        SELECT DISTINCT
+            l.id,
+            l.name AS location_name,
+            l.factual_address,
+            b.name AS branch_name,
+            c.name AS company_name
+        FROM locations l
+        LEFT JOIN branches b ON b.id = l.branch_id
+        LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
+    """
+
+
+def _decorate_locations(rows: list[Any]) -> list[dict[str, Any]]:
+    result: list[dict[str, Any]] = []
+    for source in rows:
+        item = dict(source)
+        item["name"] = item.get("location_name")
+        item["full_name"] = format_schedule_location(item)
+        result.append(item)
+    return result
+
+
+def get_schedule_locations_for_doctor(doctor_id: int) -> list[dict[str, Any]]:
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                _location_select_sql()
+                + """
+                JOIN doctor_locations dl ON dl.location_id = l.id
+                WHERE dl.doctor_id = %s
+                ORDER BY c.name NULLS LAST, b.name NULLS LAST,
+                         l.name, l.factual_address NULLS LAST, l.id
+                """,
+                (doctor_id,),
+            )
+            return _decorate_locations(list(cur.fetchall()))
+
+
+def get_schedule_location_by_id(location_id: int) -> dict[str, Any] | None:
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(_location_select_sql() + " WHERE l.id = %s", (location_id,))
+            row = cur.fetchone()
+    return _decorate_locations([row])[0] if row else None
+
+
+def _serialize_entry(row: Any) -> dict[str, Any]:
+    item = dict(row)
+    starts_at: datetime = item["starts_at"]
+    ends_at: datetime = item["ends_at"]
+    item.update(
+        {
+            "starts_at": starts_at.isoformat(timespec="minutes"),
+            "ends_at": ends_at.isoformat(timespec="minutes"),
+            "date_iso": starts_at.date().isoformat(),
+            "start_time": starts_at.strftime("%H:%M"),
+            "end_time": ends_at.strftime("%H:%M"),
+            "time_label": f"{starts_at:%H:%M}–{ends_at:%H:%M}",
+            "appointment_type_label": APPOINTMENT_TYPE_LABELS.get(
+                item.get("appointment_type"), item.get("appointment_type")
+            ),
+            "status_label": STATUS_LABELS.get(item.get("status"), item.get("status")),
+            "location_full_name": format_schedule_location(item),
+            "birth_date": item["birth_date"].isoformat() if item.get("birth_date") else None,
+            "gender_value": "male" if item.get("gender") else "female",
+        }
+    )
+    return item
+
+
+def get_schedule_entries(*, doctor_id: int, date_from: date, date_to: date) -> list[dict[str, Any]]:
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
                 SELECT
-                    id,
-                    last_name,
-                    first_name,
-                    patronymic,
-                    last_name || ' ' || first_name || ' ' || COALESCE(patronymic, '') AS fio
-                FROM doctors
-                ORDER BY last_name, first_name, patronymic NULLS LAST
-                """
+                    e.id, e.scheduled_doctor_id, e.location_id, e.patient_id,
+                    e.starts_at, e.ends_at, e.appointment_type, e.status,
+                    e.actual_doctor_id, e.appointment_id, e.note,
+                    p.last_name, p.first_name, p.patronymic, p.birth_date,
+                    p.phone, p.gender,
+                    trim(concat_ws(' ', p.last_name, p.first_name, p.patronymic)) AS patient_fio,
+                    trim(concat_ws(' ', d.last_name, d.first_name, d.patronymic)) AS scheduled_doctor_fio,
+                    trim(concat_ws(' ', ad.last_name, ad.first_name, ad.patronymic)) AS actual_doctor_fio,
+                    l.name AS location_name, l.factual_address,
+                    b.name AS branch_name, c.name AS company_name
+                FROM schedule_entries e
+                JOIN patients p ON p.id = e.patient_id
+                JOIN doctors d ON d.id = e.scheduled_doctor_id
+                LEFT JOIN doctors ad ON ad.id = e.actual_doctor_id
+                JOIN locations l ON l.id = e.location_id
+                LEFT JOIN branches b ON b.id = l.branch_id
+                LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
+                WHERE e.scheduled_doctor_id = %s
+                  AND e.starts_at >= %s::date
+                  AND e.starts_at < (%s::date + INTERVAL '1 day')
+                ORDER BY e.starts_at, e.ends_at, e.id
+                """,
+                (doctor_id, date_from, date_to),
             )
-            return cur.fetchall()
+            return [_serialize_entry(row) for row in cur.fetchall()]
 
 
-def get_schedule_locations_for_doctor(doctor_id: int | None = None) -> list[dict[str, Any]]:
-    """Возвращает отделения: все или только привязанные к врачу."""
-    query = """
-        SELECT DISTINCT
-            l.id,
-            l.name,
-            b.name AS branch_name,
-            l.name || ' — ' || b.name AS full_name
-        FROM locations l
-        JOIN branches b ON b.id = l.branch_id
-    """
-    params: list[Any] = []
-
-    if doctor_id:
-        query += " JOIN doctor_locations dl ON dl.location_id = l.id WHERE dl.doctor_id = %s"
-        params.append(doctor_id)
-
-    query += " ORDER BY b.name, l.name"
-
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(query, params)
-            return cur.fetchall()
-
-
-# ---------------------------------------------------------------------------
-# Слоты расписания
-# ---------------------------------------------------------------------------
-
-
-def generate_schedule_slots(
-    *,
-    doctor_id: int,
-    location_id: int,
-    date_from: date,
-    date_to: date,
-    weekdays: set[int],
-    time_from: time,
-    time_to: time,
-    slot_minutes: int,
-    slot_kind: str,
-    note: str | None,
-    created_by_user_id: int | None,
-) -> int:
-    """
-    Создаёт слоты расписания по диапазону дат и времени.
-
-    weekdays использует формат Python date.weekday():
-    0 = понедельник, 6 = воскресенье.
-    Уже существующие слоты не дублируются.
-    """
-    if date_to < date_from:
-        raise HTTPException(status_code=400, detail="Дата окончания раньше даты начала")
-
-    if slot_minutes <= 0 or slot_minutes > 240:
-        raise HTTPException(status_code=400, detail="Некорректная длительность слота")
-
-    if slot_kind not in SLOT_KIND_LABELS:
-        raise HTTPException(status_code=400, detail="Некорректный тип приёма")
-
-    if not weekdays:
-        raise HTTPException(status_code=400, detail="Выберите хотя бы один день недели")
-
-    inserted = 0
-    step = timedelta(minutes=slot_minutes)
-
-    with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            day = date_from
-            while day <= date_to:
-                if day.weekday() in weekdays:
-                    start_dt = datetime.combine(day, time_from)
-                    end_limit = datetime.combine(day, time_to)
-
-                    while start_dt + step <= end_limit:
-                        end_dt = start_dt + step
-                        cur.execute(
-                            """
-                            INSERT INTO schedule_slots (
-                                doctor_id,
-                                location_id,
-                                starts_at,
-                                ends_at,
-                                slot_kind,
-                                status,
-                                note,
-                                created_by_user_id
-                            )
-                            VALUES (%s, %s, %s, %s, %s, 'free', %s, %s)
-                            ON CONFLICT (doctor_id, starts_at, ends_at) DO NOTHING
-                            RETURNING id
-                            """,
-                            (
-                                doctor_id,
-                                location_id,
-                                start_dt,
-                                end_dt,
-                                slot_kind,
-                                note,
-                                created_by_user_id,
-                            ),
-                        )
-                        if cur.fetchone():
-                            inserted += 1
-                        start_dt = end_dt
-                day += timedelta(days=1)
-
-    return inserted
-
-
-def get_schedule_slots(
-    *,
-    doctor_id: int,
-    date_from: date,
-    date_to: date,
-    location_id: int | None = None,
+def search_schedule_patients(
+    *, last_name: str = "", first_name: str = "", patronymic: str = "", limit: int = 12
 ) -> list[dict[str, Any]]:
-    """Возвращает слоты врача за период вместе с активной записью пациента."""
-    query = """
-        SELECT
-            s.id,
-            s.doctor_id,
-            s.location_id,
-            s.starts_at,
-            s.ends_at,
-            s.slot_kind,
-            s.status AS slot_status,
-            s.note AS slot_note,
-            d.last_name || ' ' || d.first_name || ' ' || COALESCE(d.patronymic, '') AS doctor_fio,
-            l.name AS location_name,
-            b.name AS branch_name,
-            sb.id AS booking_id,
-            sb.status AS booking_status,
-            sb.reason AS booking_reason,
-            sb.comment AS booking_comment,
-            p.id AS patient_id,
-            p.last_name,
-            p.first_name,
-            p.patronymic,
-            p.birth_date,
-            p.gender,
-            p.last_name || ' ' || p.first_name || ' ' || COALESCE(p.patronymic, '') AS patient_fio
-        FROM schedule_slots s
-        JOIN doctors d ON d.id = s.doctor_id
-        JOIN locations l ON l.id = s.location_id
-        JOIN branches b ON b.id = l.branch_id
-        LEFT JOIN LATERAL (
-            SELECT *
-            FROM schedule_bookings sb0
-            WHERE sb0.slot_id = s.id
-              AND sb0.status IN ('booked', 'completed', 'no_show')
-            ORDER BY sb0.id DESC
-            LIMIT 1
-        ) sb ON TRUE
-        LEFT JOIN patients p ON p.id = sb.patient_id
-        WHERE s.doctor_id = %s
-          AND s.starts_at >= %s::date
-          AND s.starts_at < (%s::date + INTERVAL '1 day')
-    """
-    params: list[Any] = [doctor_id, date_from, date_to]
+    last_name = _clean(last_name)
+    first_name = _clean(first_name)
+    patronymic = _clean(patronymic)
+    if max(len(last_name), len(first_name), len(patronymic)) < 2:
+        return []
 
-    if location_id:
-        query += " AND s.location_id = %s"
-        params.append(location_id)
-
-    query += " ORDER BY s.starts_at, s.ends_at"
+    clauses: list[str] = []
+    params: list[Any] = []
+    for column, value in (
+        ("p.last_name", last_name),
+        ("p.first_name", first_name),
+        ("COALESCE(p.patronymic, '')", patronymic),
+    ):
+        if value:
+            clauses.append(f"{column} ILIKE %s")
+            params.append(f"{value}%")
+    params.append(max(1, min(limit, 30)))
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(query, params)
-            rows = cur.fetchall()
+            cur.execute(
+                f"""
+                SELECT
+                    p.id, p.last_name, p.first_name, p.patronymic,
+                    p.birth_date, p.phone, p.gender,
+                    trim(concat_ws(' ', p.last_name, p.first_name, p.patronymic)) AS fio,
+                    EXISTS(SELECT 1 FROM appointments a WHERE a.patient_id = p.id) AS has_appointments
+                FROM patients p
+                WHERE {' AND '.join(clauses)}
+                ORDER BY p.last_name, p.first_name, p.patronymic NULLS LAST, p.birth_date
+                LIMIT %s
+                """,
+                params,
+            )
+            rows = []
+            for row in cur.fetchall():
+                item = dict(row)
+                item["birth_date"] = item["birth_date"].isoformat() if item.get("birth_date") else None
+                item["gender_value"] = "male" if item.get("gender") else "female"
+                item["appointment_type"] = "repeat" if item.get("has_appointments") else "primary"
+                item["appointment_type_label"] = APPOINTMENT_TYPE_LABELS[item["appointment_type"]]
+                rows.append(item)
+            return rows
 
-    for row in rows:
-        status = row.get("booking_status") or row.get("slot_status")
-        row["status"] = status
-        row["status_label"] = SLOT_STATUS_LABELS.get(status, status)
-        row["slot_kind_label"] = SLOT_KIND_LABELS.get(row.get("slot_kind"), row.get("slot_kind"))
-        row["date_iso"] = row["starts_at"].date().isoformat()
-        row["time_label"] = f"{row['starts_at']:%H:%M}–{row['ends_at']:%H:%M}"
-    return rows
 
-
-# ---------------------------------------------------------------------------
-# Запись пациента
-# ---------------------------------------------------------------------------
-
-
-def _find_patient_by_identity(
-    cur: Any,
-    *,
-    last_name: str,
-    first_name: str,
-    patronymic: str | None,
-    birth_date: date,
-    gender: bool,
-) -> int | None:
-    """Ищет пациента по точному совпадению ФИО, даты рождения и пола."""
+def _doctor_location_allowed(cur: Any, doctor_id: int, location_id: int) -> bool:
     cur.execute(
         """
-        SELECT id
-        FROM patients
-        WHERE lower(last_name) = lower(%s)
-          AND lower(first_name) = lower(%s)
-          AND COALESCE(lower(patronymic), '') = COALESCE(lower(%s), '')
-          AND birth_date = %s
-          AND gender = %s
-        ORDER BY id
+        SELECT 1 FROM doctor_locations
+        WHERE doctor_id = %s AND location_id = %s
         LIMIT 1
         """,
-        (last_name, first_name, patronymic, birth_date, gender),
+        (doctor_id, location_id),
     )
+    return cur.fetchone() is not None
+
+
+def _lock_doctor_day(cur: Any, doctor_id: int, day: date) -> None:
+    cur.execute("SELECT pg_advisory_xact_lock(%s, %s)", (doctor_id, day.toordinal()))
+
+
+def _find_overlap(
+    cur: Any,
+    *,
+    doctor_id: int,
+    starts_at: datetime,
+    ends_at: datetime,
+    exclude_entry_id: int | None = None,
+) -> dict[str, Any] | None:
+    query = """
+        SELECT id, starts_at, ends_at
+        FROM schedule_entries
+        WHERE scheduled_doctor_id = %s
+          AND status <> 'cancelled'
+          AND starts_at < %s
+          AND ends_at > %s
+    """
+    params: list[Any] = [doctor_id, ends_at, starts_at]
+    if exclude_entry_id is not None:
+        query += " AND id <> %s"
+        params.append(exclude_entry_id)
+    query += " ORDER BY starts_at LIMIT 1 FOR UPDATE"
+    cur.execute(query, params)
     row = cur.fetchone()
-    return row["id"] if row else None
+    return dict(row) if row else None
 
 
-def _create_patient_for_booking(
+def _overlap_error(row: dict[str, Any]) -> HTTPException:
+    return HTTPException(
+        status_code=409,
+        detail=f"У врача уже есть запись с {row['starts_at']:%H:%M} до {row['ends_at']:%H:%M}",
+    )
+
+
+def _exact_patient(
     cur: Any,
     *,
     last_name: str,
     first_name: str,
     patronymic: str | None,
     birth_date: date,
-    gender: bool,
-) -> int:
-    """Создаёт пациента для записи в расписании."""
+    exclude_patient_id: int | None = None,
+):
+    query = """
+        SELECT id, last_name, first_name, patronymic, birth_date, phone
+        FROM patients
+        WHERE lower(trim(last_name)) = lower(trim(%s))
+          AND lower(trim(first_name)) = lower(trim(%s))
+          AND lower(trim(COALESCE(patronymic, ''))) = lower(trim(COALESCE(%s, '')))
+          AND birth_date = %s
+    """
+    params: list[Any] = [last_name, first_name, patronymic, birth_date]
+    if exclude_patient_id is not None:
+        query += " AND id <> %s"
+        params.append(exclude_patient_id)
+    query += " ORDER BY id LIMIT 1"
+    cur.execute(query, params)
+    return cur.fetchone()
+
+
+def _validated_patient_data(
+    *,
+    last_name: str | None,
+    first_name: str | None,
+    patronymic: str | None,
+    birth_date: date | None,
+    phone: str | None,
+    gender: bool | None,
+) -> dict[str, Any]:
+    data = {
+        "last_name": _clean(last_name),
+        "first_name": _clean(first_name),
+        "patronymic": _clean(patronymic) or None,
+        "birth_date": birth_date,
+        "phone": _clean(phone),
+        "gender": gender,
+    }
+    if (
+        not data["last_name"]
+        or not data["first_name"]
+        or not data["birth_date"]
+        or data["gender"] is None
+        or not data["phone"]
+    ):
+        raise HTTPException(
+            status_code=400,
+            detail="Для нового пациента заполните ФИО, дату рождения, пол и телефон",
+        )
+    if data["birth_date"] > date.today():
+        raise HTTPException(status_code=400, detail="Дата рождения не может быть в будущем")
+    return data
+
+
+def _patient_has_appointments(cur: Any, patient_id: int) -> bool:
+    cur.execute(
+        "SELECT EXISTS(SELECT 1 FROM appointments WHERE patient_id = %s) AS value",
+        (patient_id,),
+    )
+    return bool(cur.fetchone()["value"])
+
+
+def _create_patient_from_schedule(cur: Any, data: dict[str, Any]) -> int:
+    duplicate = _exact_patient(
+        cur,
+        last_name=data["last_name"],
+        first_name=data["first_name"],
+        patronymic=data["patronymic"],
+        birth_date=data["birth_date"],
+    )
+    if duplicate:
+        raise HTTPException(
+            status_code=409,
+            detail="Такой пациент уже есть в базе. Выберите его из подсказки поиска.",
+        )
     cur.execute(
         """
-        INSERT INTO patients (last_name, first_name, patronymic, birth_date, gender)
-        VALUES (%s, %s, %s, %s, %s)
+        INSERT INTO patients(last_name, first_name, patronymic, birth_date, gender, phone)
+        VALUES (%s, %s, %s, %s, %s, %s)
         RETURNING id
         """,
-        (last_name, first_name, patronymic, birth_date, gender),
+        (
+            data["last_name"],
+            data["first_name"],
+            data["patronymic"],
+            data["birth_date"],
+            data["gender"],
+            data["phone"],
+        ),
     )
-    return cur.fetchone()["id"]
+    return int(cur.fetchone()["id"])
 
 
-def book_schedule_slot(
+def create_schedule_entry(
     *,
-    slot_id: int,
-    last_name: str,
-    first_name: str,
+    scheduled_doctor_id: int,
+    location_id: int,
+    starts_at: datetime,
+    ends_at: datetime,
+    patient_id: int | None,
+    last_name: str | None,
+    first_name: str | None,
     patronymic: str | None,
-    birth_date: date,
-    gender: bool,
-    reason: str | None,
-    comment: str | None,
-    booked_by_user_id: int | None,
-) -> int:
-    """Записывает пациента на свободный слот и возвращает booking_id."""
-    last_name = last_name.strip()
-    first_name = first_name.strip()
-    patronymic = patronymic.strip() if patronymic else None
-
-    if not last_name or not first_name:
-        raise HTTPException(status_code=400, detail="Заполните фамилию и имя пациента")
+    birth_date: date | None,
+    phone: str | None,
+    gender: bool | None,
+    created_by_user_id: int | None,
+) -> dict[str, Any]:
+    if ends_at <= starts_at or starts_at.date() != ends_at.date():
+        raise HTTPException(status_code=400, detail="Время окончания должно быть позже времени начала в тот же день")
+    if starts_at.date() < date.today():
+        raise HTTPException(status_code=400, detail="Нельзя создать запись на прошедшую дату")
 
     with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, status
-                FROM schedule_slots
-                WHERE id = %s
-                FOR UPDATE
-                """,
-                (slot_id,),
-            )
-            slot = cur.fetchone()
-            if not slot:
-                raise HTTPException(status_code=404, detail="Слот расписания не найден")
-            if slot["status"] != "free":
-                raise HTTPException(status_code=400, detail="Этот слот уже недоступен для записи")
+        try:
+            with conn.cursor() as cur:
+                if not _doctor_location_allowed(cur, scheduled_doctor_id, location_id):
+                    raise HTTPException(status_code=400, detail="Выбранное место не привязано к врачу")
 
-            cur.execute(
-                """
-                SELECT id
-                FROM schedule_bookings
-                WHERE slot_id = %s
-                  AND status IN ('booked', 'completed', 'no_show')
-                LIMIT 1
-                """,
-                (slot_id,),
-            )
-            if cur.fetchone():
-                raise HTTPException(status_code=400, detail="На этот слот уже есть активная запись")
+                if patient_id:
+                    cur.execute(
+                        "SELECT id FROM patients WHERE id = %s FOR SHARE",
+                        (patient_id,),
+                    )
+                    if not cur.fetchone():
+                        raise HTTPException(status_code=404, detail="Пациент не найден")
+                else:
+                    patient_data = _validated_patient_data(
+                        last_name=last_name,
+                        first_name=first_name,
+                        patronymic=patronymic,
+                        birth_date=birth_date,
+                        phone=phone,
+                        gender=gender,
+                    )
+                    patient_id = _create_patient_from_schedule(cur, patient_data)
 
-            patient_id = _find_patient_by_identity(
-                cur,
-                last_name=last_name,
-                first_name=first_name,
-                patronymic=patronymic,
-                birth_date=birth_date,
-                gender=gender,
-            )
-            if patient_id is None:
-                patient_id = _create_patient_for_booking(
+                appointment_type = "repeat" if _patient_has_appointments(cur, patient_id) else "primary"
+
+                _lock_doctor_day(cur, scheduled_doctor_id, starts_at.date())
+                overlap = _find_overlap(
                     cur,
-                    last_name=last_name,
-                    first_name=first_name,
-                    patronymic=patronymic,
-                    birth_date=birth_date,
-                    gender=gender,
+                    doctor_id=scheduled_doctor_id,
+                    starts_at=starts_at,
+                    ends_at=ends_at,
                 )
+                if overlap:
+                    raise _overlap_error(overlap)
 
-            cur.execute(
-                """
-                INSERT INTO schedule_bookings (
-                    slot_id,
-                    patient_id,
-                    status,
-                    reason,
-                    comment,
-                    booked_by_user_id
+                cur.execute(
+                    """
+                    INSERT INTO schedule_entries(
+                        scheduled_doctor_id, location_id, patient_id,
+                        starts_at, ends_at, appointment_type, status,
+                        created_by_user_id
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, 'booked', %s)
+                    RETURNING id
+                    """,
+                    (
+                        scheduled_doctor_id,
+                        location_id,
+                        patient_id,
+                        starts_at,
+                        ends_at,
+                        appointment_type,
+                        created_by_user_id,
+                    ),
                 )
-                VALUES (%s, %s, 'booked', %s, %s, %s)
-                RETURNING id
-                """,
-                (slot_id, patient_id, reason, comment, booked_by_user_id),
-            )
-            booking_id = cur.fetchone()["id"]
+                entry_id = int(cur.fetchone()["id"])
+            conn.commit()
+        except HTTPException:
+            conn.rollback()
+            raise
+        except Exception as exc:
+            conn.rollback()
+            raise HTTPException(status_code=500, detail=f"Не удалось сохранить запись: {exc}") from exc
 
-            cur.execute(
-                """
-                UPDATE schedule_slots
-                SET status = 'booked', updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-                """,
-                (slot_id,),
-            )
-
-    return booking_id
+    return get_schedule_entry(entry_id)
 
 
-def cancel_schedule_booking(
-    *,
-    booking_id: int,
-    cancelled_by_user_id: int | None,
-    cancel_reason: str | None = None,
-) -> None:
-    """Отменяет запись и снова освобождает слот."""
+def get_schedule_entry(entry_id: int) -> dict[str, Any]:
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
                 """
-                SELECT id, slot_id, status
-                FROM schedule_bookings
-                WHERE id = %s
-                FOR UPDATE
+                SELECT
+                    e.id, e.scheduled_doctor_id, e.location_id, e.patient_id,
+                    e.starts_at, e.ends_at, e.appointment_type, e.status,
+                    e.actual_doctor_id, e.appointment_id, e.note,
+                    p.last_name, p.first_name, p.patronymic, p.birth_date,
+                    p.phone, p.gender,
+                    trim(concat_ws(' ', p.last_name, p.first_name, p.patronymic)) AS patient_fio,
+                    trim(concat_ws(' ', d.last_name, d.first_name, d.patronymic)) AS scheduled_doctor_fio,
+                    trim(concat_ws(' ', ad.last_name, ad.first_name, ad.patronymic)) AS actual_doctor_fio,
+                    l.name AS location_name, l.factual_address,
+                    b.name AS branch_name, c.name AS company_name
+                FROM schedule_entries e
+                JOIN patients p ON p.id = e.patient_id
+                JOIN doctors d ON d.id = e.scheduled_doctor_id
+                LEFT JOIN doctors ad ON ad.id = e.actual_doctor_id
+                JOIN locations l ON l.id = e.location_id
+                LEFT JOIN branches b ON b.id = l.branch_id
+                LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
+                WHERE e.id = %s
                 """,
-                (booking_id,),
+                (entry_id,),
             )
-            booking = cur.fetchone()
-            if not booking:
-                raise HTTPException(status_code=404, detail="Запись не найдена")
-            if booking["status"] == "cancelled":
-                return
-
-            cur.execute(
-                """
-                UPDATE schedule_bookings
-                SET
-                    status = 'cancelled',
-                    cancelled_by_user_id = %s,
-                    cancelled_at = CURRENT_TIMESTAMP,
-                    cancel_reason = %s,
-                    updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-                """,
-                (cancelled_by_user_id, cancel_reason, booking_id),
-            )
-
-            cur.execute(
-                """
-                UPDATE schedule_slots
-                SET status = 'free', updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-                """,
-                (booking["slot_id"],),
-            )
+            row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Запись расписания не найдена")
+    return _serialize_entry(row)
 
 
-def set_schedule_booking_status(
+def update_schedule_entry(
     *,
-    booking_id: int,
-    status: str,
-) -> None:
-    """Ставит отметку по прошедшей записи: пришёл / не пришёл."""
-    if status not in {"completed", "no_show"}:
-        raise HTTPException(status_code=400, detail="Некорректный статус записи")
+    entry_id: int,
+    scheduled_doctor_id: int,
+    location_id: int,
+    starts_at: datetime,
+    ends_at: datetime,
+    patient_id: int | None,
+    patient_mode: str,
+    last_name: str | None,
+    first_name: str | None,
+    patronymic: str | None,
+    birth_date: date | None,
+    phone: str | None,
+    gender: bool | None,
+) -> dict[str, Any]:
+    if ends_at <= starts_at or starts_at.date() != ends_at.date():
+        raise HTTPException(
+            status_code=400,
+            detail="Время окончания должно быть позже времени начала в тот же день",
+        )
+    if starts_at.date() < date.today():
+        raise HTTPException(status_code=400, detail="Нельзя перенести запись на прошедшую дату")
+    if patient_mode not in {"selected", "edit_current", "new"}:
+        raise HTTPException(status_code=400, detail="Некорректный режим выбора пациента")
 
     with get_db_connection() as conn:
-        with conn.cursor() as cur:
-            cur.execute(
-                """
-                SELECT id, slot_id
-                FROM schedule_bookings
-                WHERE id = %s
-                  AND status IN ('booked', 'completed', 'no_show')
-                FOR UPDATE
-                """,
-                (booking_id,),
-            )
-            booking = cur.fetchone()
-            if not booking:
-                raise HTTPException(status_code=404, detail="Активная запись не найдена")
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    """
+                    SELECT id, patient_id, appointment_id, status
+                    FROM schedule_entries
+                    WHERE id = %s
+                    FOR UPDATE
+                    """,
+                    (entry_id,),
+                )
+                current = cur.fetchone()
+                if not current:
+                    raise HTTPException(status_code=404, detail="Запись не найдена")
+                if current["appointment_id"]:
+                    raise HTTPException(
+                        status_code=409,
+                        detail="Нельзя изменять запись после сохранения медицинского приёма",
+                    )
+                if current["status"] == "cancelled":
+                    raise HTTPException(status_code=409, detail="Отменённую запись нельзя редактировать")
+                if not _doctor_location_allowed(cur, scheduled_doctor_id, location_id):
+                    raise HTTPException(status_code=400, detail="Выбранное место не привязано к врачу")
 
-            cur.execute(
-                """
-                UPDATE schedule_bookings
-                SET status = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-                """,
-                (status, booking_id),
-            )
-            cur.execute(
-                """
-                UPDATE schedule_slots
-                SET status = %s, updated_at = CURRENT_TIMESTAMP
-                WHERE id = %s
-                """,
-                (status, booking["slot_id"]),
-            )
+                current_patient_id = int(current["patient_id"])
+                target_patient_id: int
+                if patient_mode == "selected":
+                    if not patient_id:
+                        raise HTTPException(status_code=400, detail="Выберите пациента из результатов поиска")
+                    cur.execute("SELECT id FROM patients WHERE id = %s FOR SHARE", (patient_id,))
+                    if not cur.fetchone():
+                        raise HTTPException(status_code=404, detail="Пациент не найден")
+                    target_patient_id = int(patient_id)
+                elif patient_mode == "edit_current":
+                    if not patient_id or int(patient_id) != current_patient_id:
+                        raise HTTPException(status_code=400, detail="Нельзя изменить другого пациента")
+                    if _patient_has_appointments(cur, current_patient_id):
+                        raise HTTPException(
+                            status_code=409,
+                            detail="Данные пациента с сохранёнными приёмами изменяются только в карточке пациента",
+                        )
+                    patient_data = _validated_patient_data(
+                        last_name=last_name,
+                        first_name=first_name,
+                        patronymic=patronymic,
+                        birth_date=birth_date,
+                        phone=phone,
+                        gender=gender,
+                    )
+                    duplicate = _exact_patient(
+                        cur,
+                        last_name=patient_data["last_name"],
+                        first_name=patient_data["first_name"],
+                        patronymic=patient_data["patronymic"],
+                        birth_date=patient_data["birth_date"],
+                        exclude_patient_id=current_patient_id,
+                    )
+                    if duplicate:
+                        raise HTTPException(
+                            status_code=409,
+                            detail="Такой пациент уже есть в базе. Выберите его из подсказки поиска.",
+                        )
+                    cur.execute(
+                        """
+                        UPDATE patients
+                        SET last_name = %s, first_name = %s, patronymic = %s,
+                            birth_date = %s, gender = %s, phone = %s
+                        WHERE id = %s
+                        """,
+                        (
+                            patient_data["last_name"],
+                            patient_data["first_name"],
+                            patient_data["patronymic"],
+                            patient_data["birth_date"],
+                            patient_data["gender"],
+                            patient_data["phone"],
+                            current_patient_id,
+                        ),
+                    )
+                    target_patient_id = current_patient_id
+                else:
+                    patient_data = _validated_patient_data(
+                        last_name=last_name,
+                        first_name=first_name,
+                        patronymic=patronymic,
+                        birth_date=birth_date,
+                        phone=phone,
+                        gender=gender,
+                    )
+                    target_patient_id = _create_patient_from_schedule(cur, patient_data)
+
+                appointment_type = (
+                    "repeat" if _patient_has_appointments(cur, target_patient_id) else "primary"
+                )
+                _lock_doctor_day(cur, scheduled_doctor_id, starts_at.date())
+                overlap = _find_overlap(
+                    cur,
+                    doctor_id=scheduled_doctor_id,
+                    starts_at=starts_at,
+                    ends_at=ends_at,
+                    exclude_entry_id=entry_id,
+                )
+                if overlap:
+                    raise _overlap_error(overlap)
+                cur.execute(
+                    """
+                    UPDATE schedule_entries
+                    SET scheduled_doctor_id = %s,
+                        location_id = %s,
+                        patient_id = %s,
+                        appointment_type = %s,
+                        starts_at = %s,
+                        ends_at = %s,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (
+                        scheduled_doctor_id,
+                        location_id,
+                        target_patient_id,
+                        appointment_type,
+                        starts_at,
+                        ends_at,
+                        entry_id,
+                    ),
+                )
+            conn.commit()
+        except HTTPException:
+            conn.rollback()
+            raise
+        except Exception as exc:
+            conn.rollback()
+            raise HTTPException(status_code=500, detail=f"Не удалось изменить запись: {exc}") from exc
+    return get_schedule_entry(entry_id)
+
+
+def set_schedule_entry_status(
+    *, entry_id: int, status: str, user_id: int | None, cancel_reason: str | None = None
+) -> dict[str, Any]:
+    if status not in {"no_show", "cancelled"}:
+        raise HTTPException(
+            status_code=400,
+            detail="Статус «Пришёл» устанавливается автоматически после сохранения приёма",
+        )
+    with get_db_connection() as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id, appointment_id FROM schedule_entries WHERE id = %s FOR UPDATE",
+                    (entry_id,),
+                )
+                row = cur.fetchone()
+                if not row:
+                    raise HTTPException(status_code=404, detail="Запись не найдена")
+                if status == "cancelled" and row["appointment_id"]:
+                    raise HTTPException(status_code=409, detail="Нельзя отменить запись после сохранения медицинского приёма")
+                cur.execute(
+                    """
+                    UPDATE schedule_entries
+                    SET status = %s,
+                        cancelled_at = CASE WHEN %s = 'cancelled' THEN CURRENT_TIMESTAMP ELSE NULL END,
+                        cancelled_by_user_id = CASE WHEN %s = 'cancelled' THEN %s ELSE NULL END,
+                        cancel_reason = CASE WHEN %s = 'cancelled' THEN %s ELSE NULL END,
+                        updated_at = CURRENT_TIMESTAMP
+                    WHERE id = %s
+                    """,
+                    (status, status, status, user_id, status, _clean(cancel_reason) or None, entry_id),
+                )
+            conn.commit()
+        except HTTPException:
+            conn.rollback()
+            raise
+        except Exception as exc:
+            conn.rollback()
+            raise HTTPException(status_code=500, detail=f"Не удалось изменить статус: {exc}") from exc
+    return get_schedule_entry(entry_id)
+
+
+def get_schedule_entry_for_appointment_form(
+    entry_id: int,
+    patient_id: int | None = None,
+) -> dict[str, Any]:
+    item = get_schedule_entry(entry_id)
+    if patient_id is not None and int(item["patient_id"]) != patient_id:
+        raise HTTPException(status_code=403, detail="Запись принадлежит другому пациенту")
+    if item["status"] == "cancelled":
+        raise HTTPException(status_code=409, detail="Запись отменена")
+    if item.get("appointment_id"):
+        raise HTTPException(status_code=409, detail="Медицинский приём по этой записи уже сохранён")
+    return item
+
+
+def lock_schedule_entry_for_appointment(
+    cur: Any, *, entry_id: int, patient_id: int
+) -> dict[str, Any]:
+    cur.execute(
+        """
+        SELECT id, patient_id, location_id, status, appointment_id
+        FROM schedule_entries
+        WHERE id = %s
+        FOR UPDATE
+        """,
+        (entry_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Запись расписания не найдена")
+    if int(row["patient_id"]) != patient_id:
+        raise HTTPException(status_code=403, detail="Запись принадлежит другому пациенту")
+    if row["status"] == "cancelled":
+        raise HTTPException(status_code=409, detail="Запись отменена")
+    if row["appointment_id"]:
+        raise HTTPException(status_code=409, detail="Медицинский приём по этой записи уже создан")
+    return dict(row)
+
+
+def link_schedule_entry_to_appointment(
+    cur: Any,
+    *,
+    entry_id: int,
+    appointment_id: int,
+    actual_doctor_id: int,
+) -> None:
+    cur.execute(
+        """
+        UPDATE schedule_entries
+        SET appointment_id = %s,
+            actual_doctor_id = %s,
+            status = 'arrived',
+            updated_at = CURRENT_TIMESTAMP
+        WHERE id = %s
+        """,
+        (appointment_id, actual_doctor_id, entry_id),
+    )

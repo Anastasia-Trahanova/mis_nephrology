@@ -47,6 +47,11 @@ async def create_new_appointment_for_existing_patient(patient_id: int, request: 
     """Создаёт новый приём для уже существующего пациента."""
     current_doctor_id = require_doctor_with_id(request)
     form = await request.form()
+    schedule_entry_id_raw = str(form.get("schedule_entry_id") or "").strip()
+    try:
+        schedule_entry_id = int(schedule_entry_id_raw) if schedule_entry_id_raw else None
+    except ValueError:
+        schedule_entry_id = None
 
     previous_appointment = get_last_appointment_data(patient_id)
     previous_medications = []
@@ -62,6 +67,7 @@ async def create_new_appointment_for_existing_patient(patient_id: int, request: 
             patient_id,
             form,
             current_doctor_id=current_doctor_id,
+            schedule_entry_id=schedule_entry_id,
         )
     except Exception as exc:
         log_audit_event(

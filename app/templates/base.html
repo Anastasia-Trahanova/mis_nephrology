@@ -18,13 +18,10 @@
             <a class="navbar-brand" href="/">МИС Нефролога</a>
             <div class="navbar-nav me-auto">
                 <a class="nav-link" href="/patients">Пациенты</a>
-                {% if request.session.get('role') == 'admin' %}
-                <!--
-                Пункт расписания показывается только администратору.
-                Сам маршрут /schedule также защищён серверной проверкой require_admin,
-                поэтому скрытие ссылки не используется как механизм безопасности.
-                -->
+                {% if request.session.get('role') in ('admin', 'doctor') %}
                 <a class="nav-link" href="/schedule">Расписание</a>
+                {% endif %}
+                {% if request.session.get('role') == 'admin' %}
                 <a class="nav-link" href="/ckd-registry">Регистр ХБП</a>
                 <a class="nav-link" href="/admin/audit">Журнал аудита</a>
                 {% endif %}
@@ -79,7 +76,7 @@
 
                     <div class="hotkeys-grid">
                         <section class="hotkeys-group" aria-labelledby="hotkeysNavigationTitle">
-                            <h6 id="hotkeysNavigationTitle">Навигация и прокрутка</h6>
+                            <h6 id="hotkeysNavigationTitle">Навигация по форме приёма</h6>
                             <div class="hotkey-row">
                                 <span><kbd>Ctrl</kbd> + <kbd>←</kbd></span>
                                 <span>Предыдущее поле</span>
@@ -90,11 +87,11 @@
                             </div>
                             <div class="hotkey-row">
                                 <span><kbd>Ctrl</kbd> + <kbd>↑</kbd></span>
-                                <span>Плавно прокрутить страницу вверх</span>
+                                <span>Предыдущий раздел формы</span>
                             </div>
                             <div class="hotkey-row">
                                 <span><kbd>Ctrl</kbd> + <kbd>↓</kbd></span>
-                                <span>Плавно прокрутить страницу вниз</span>
+                                <span>Прокрутить страницу вниз</span>
                             </div>
                         </section>
 
