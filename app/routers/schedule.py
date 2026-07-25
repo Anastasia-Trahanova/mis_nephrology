@@ -120,7 +120,15 @@ def schedule_page(request: Request, doctor_id: int | None = None, week: str | No
     _require_schedule_access(request)
     selected_week = _monday(_parse_iso_date(week, date.today()))
     doctors = get_schedule_doctors()
-    selected_doctor_id = _validated_doctor_id(doctor_id, doctors)
+
+    requested_doctor_id = doctor_id
+    if requested_doctor_id is None and request.session.get("role") == ROLE_DOCTOR:
+        try:
+            requested_doctor_id = int(request.session.get("doctor_id"))
+        except (TypeError, ValueError):
+            requested_doctor_id = None
+
+    selected_doctor_id = _validated_doctor_id(requested_doctor_id, doctors)
     locations = get_schedule_locations_for_doctor(selected_doctor_id) if selected_doctor_id else []
 
     return templates.TemplateResponse(
