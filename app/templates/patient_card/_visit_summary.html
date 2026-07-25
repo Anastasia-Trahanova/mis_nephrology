@@ -6,7 +6,9 @@
   </p>
   <p class="mb-2">
     <strong>Место приёма:</strong>
-    {% if selected_appointment.location_name %}
+    {% if selected_appointment.location_full_name %}
+      {{ selected_appointment.location_full_name }}
+    {% elif selected_appointment.location_name %}
       {{ selected_appointment.location_name }}{% if selected_appointment.branch_name %} ({{ selected_appointment.branch_name }}){% endif %}
     {% else %}
       —

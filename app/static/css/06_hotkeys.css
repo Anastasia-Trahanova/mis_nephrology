@@ -1,8 +1,4 @@
-/*
-Глобальные стили кнопки и модального окна со справкой по горячим клавишам.
-Файл подключается в base.html и поэтому действует на всех страницах программы.
-*/
-
+/* Глобальная кнопка и компактная контекстная справка по горячим клавишам. */
 .hotkeys-help-button {
     position: fixed;
     right: 1.25rem;
@@ -20,45 +16,83 @@
     outline-offset: 3px;
 }
 
-.hotkeys-grid {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-    gap: 1rem;
+.hotkeys-modal .modal-content {
+    overflow: hidden;
+    border: 0;
+    border-radius: 1rem;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.2);
 }
 
-.hotkeys-group {
-    border: 1px solid #dee2e6;
-    border-radius: 0.75rem;
-    padding: 1rem;
-    background: #fff;
+.hotkeys-modal .modal-header {
+    align-items: flex-start;
+    background: var(--bs-primary);
+    color: #fff;
 }
 
-.hotkeys-group h6 {
-    margin-bottom: 0.85rem;
-    color: #1e3a8a;
+.hotkeys-modal .modal-header .btn-close {
+    filter: invert(1) grayscale(100%) brightness(200%);
+}
+
+.hotkeys-context {
+    margin-top: 0.2rem;
+    font-size: 0.82rem;
+    color: rgba(255, 255, 255, 0.78);
+}
+
+.hotkeys-section-title {
+    margin: 0 0 0.45rem;
+    font-size: 0.78rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    color: var(--bs-secondary-color);
+    text-transform: uppercase;
+}
+
+.hotkeys-common {
+    margin-top: 1.25rem;
+}
+
+.hotkeys-list {
+    border-top: 1px solid var(--bs-border-color);
 }
 
 .hotkey-row {
     display: grid;
-    grid-template-columns: minmax(10rem, 0.9fr) minmax(0, 1.4fr);
-    gap: 0.75rem;
+    grid-template-columns: minmax(10.5rem, 0.85fr) minmax(0, 1.35fr);
+    gap: 1rem;
     align-items: center;
-    padding: 0.55rem 0;
-    border-bottom: 1px solid #eef0f2;
+    padding: 0.72rem 0;
+    border-bottom: 1px solid var(--bs-border-color);
 }
 
-.hotkey-row:last-child {
-    border-bottom: 0;
+.hotkey-keys {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.28rem;
+    white-space: nowrap;
 }
 
-.hotkey-row kbd {
-    min-width: 2rem;
+.hotkey-keys kbd,
+.hotkeys-modal .modal-footer kbd {
+    min-width: 1.9rem;
+    padding: 0.22rem 0.42rem;
     text-align: center;
     color: #fff;
     background: #343a40;
     border: 1px solid #212529;
     border-radius: 0.35rem;
-    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.18);
+    box-shadow: inset 0 -1px 0 rgba(255, 255, 255, 0.2);
+}
+
+.hotkey-action {
+    line-height: 1.25;
+}
+
+.hotkeys-empty {
+    padding: 0.8rem 0;
+    color: var(--bs-secondary-color);
+    border-bottom: 1px solid var(--bs-border-color);
 }
 
 .hotkeys-notice {
@@ -76,22 +110,8 @@
 }
 
 @keyframes hotkeys-focus-flash {
-    0% {
-        box-shadow: 0 0 0 0.3rem rgba(13, 110, 253, 0.28);
-    }
-    100% {
-        box-shadow: none;
-    }
-}
-
-@media (max-width: 767.98px) {
-    .hotkeys-grid {
-        grid-template-columns: 1fr;
-    }
-
-    .hotkey-row {
-        grid-template-columns: 1fr;
-    }
+    0% { box-shadow: 0 0 0 0.3rem rgba(13, 110, 253, 0.28); }
+    100% { box-shadow: none; }
 }
 
 @media (max-width: 575.98px) {
@@ -104,8 +124,11 @@
         padding: 0;
     }
 
-    .hotkeys-help-label {
-        display: none;
+    .hotkeys-help-label { display: none; }
+
+    .hotkey-row {
+        grid-template-columns: 1fr;
+        gap: 0.35rem;
     }
 
     .hotkeys-notice {

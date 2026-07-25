@@ -56,132 +56,79 @@
         <span class="hotkeys-help-label">Горячие клавиши</span>
     </button>
 
+    {% set current_path = request.url.path %}
+    {% set is_schedule_page = current_path.startswith('/schedule') %}
+    {% set is_patient_card = current_path.startswith('/patient/') %}
+    {% set is_new_appointment = current_path.startswith('/new-appointment/') %}
+    {% set is_new_patient = current_path == '/new-patient' %}
+    {% set is_appointment_form = is_new_appointment or is_new_patient %}
+    {% set is_main_page = current_path == '/' %}
+
     <div
-        class="modal fade"
+        class="modal fade hotkeys-modal"
         id="hotkeysHelpModal"
         tabindex="-1"
         aria-labelledby="hotkeysHelpModalLabel"
         aria-hidden="true"
     >
-        <div class="modal-dialog modal-lg modal-dialog-centered modal-dialog-scrollable">
+        <div class="modal-dialog modal-md modal-dialog-centered">
             <div class="modal-content">
                 <div class="modal-header">
-                    <h5 class="modal-title" id="hotkeysHelpModalLabel">Горячие клавиши</h5>
+                    <div>
+                        <h5 class="modal-title" id="hotkeysHelpModalLabel">Горячие клавиши</h5>
+                        <div class="hotkeys-context">
+                            {% if is_schedule_page %}Расписание
+                            {% elif is_appointment_form %}Форма приёма
+                            {% elif is_patient_card %}Карточка пациента
+                            {% elif is_main_page %}Список приёмов
+                            {% else %}Текущая страница{% endif %}
+                        </div>
+                    </div>
                     <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
                 </div>
                 <div class="modal-body">
-                    <p class="text-muted mb-4">
-                        Команды работают без перехода на отдельную страницу. Окно справки можно закрыть клавишей Esc.
-                    </p>
+                    <section aria-labelledby="pageHotkeysTitle">
+                        <h6 class="hotkeys-section-title" id="pageHotkeysTitle">На этой странице</h6>
+                        <div class="hotkeys-list">
+                            {% if is_schedule_page %}
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>←</kbd>/<kbd>→</kbd></span><span class="hotkey-action">Вне полей: неделя назад/вперёд; при открытой форме — день</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>↑</kbd>/<kbd>↓</kbd></span><span class="hotkey-action">Вне полей: предыдущая/следующая запись</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Enter</kbd></span><span class="hotkey-action">Открыть выбранную запись</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>Enter</kbd></span><span class="hotkey-action">Сохранить открытую форму записи</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>/</kbd></span><span class="hotkey-action">Вне полей: перейти к выбору врача</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Esc</kbd></span><span class="hotkey-action">Закрыть форму записи</span></div>
+                            {% elif is_appointment_form %}
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>←</kbd>/<kbd>→</kbd></span><span class="hotkey-action">Предыдущее/следующее обычное поле</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>↑</kbd>/<kbd>↓</kbd></span><span class="hotkey-action">Поле выше/ниже в таблице анализов</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Enter</kbd></span><span class="hotkey-action">Следующий тип анализа</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Shift</kbd><span>+</span><kbd>Enter</kbd></span><span class="hotkey-action">Предыдущий тип анализа</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>Enter</kbd></span><span class="hotkey-action">Сохранить приём</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>Shift</kbd><span>+</span><kbd>Enter</kbd></span><span class="hotkey-action">Сохранить и скачать Word</span></div>
+                                {% if is_new_appointment %}
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>P</kbd></span><span class="hotkey-action">Открыть карточку пациента</span></div>
+                                {% endif %}
+                            {% elif is_patient_card %}
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>W</kbd></span><span class="hotkey-action">Скачать Word выбранного приёма</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>N</kbd></span><span class="hotkey-action">Добавить приём текущему пациенту</span></div>
+                            {% elif is_main_page %}
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>/</kbd></span><span class="hotkey-action">Перейти в поиск пациента</span></div>
+                            {% else %}
+                                <div class="hotkeys-empty">Для этой страницы специальных сочетаний нет.</div>
+                            {% endif %}
+                        </div>
+                    </section>
 
-                    <div class="hotkeys-grid">
-                        <section class="hotkeys-group" aria-labelledby="hotkeysNavigationTitle">
-                            <h6 id="hotkeysNavigationTitle">Навигация по форме приёма</h6>
-                            <div class="hotkey-row">
-                                <span><kbd>Ctrl</kbd> + <kbd>←</kbd></span>
-                                <span>Предыдущее поле</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Ctrl</kbd> + <kbd>→</kbd></span>
-                                <span>Следующее поле</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Ctrl</kbd> + <kbd>↑</kbd></span>
-                                <span>Плавно прокрутить страницу вверх</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Ctrl</kbd> + <kbd>↓</kbd></span>
-                                <span>Плавно прокрутить страницу вниз</span>
-                            </div>
-                        </section>
-
-                        <section class="hotkeys-group" aria-labelledby="hotkeysTablesTitle">
-                            <h6 id="hotkeysTablesTitle">Таблицы анализов</h6>
-                            <div class="hotkey-row">
-                                <span><kbd>↑</kbd></span>
-                                <span>Поле выше в том же столбце</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>↓</kbd></span>
-                                <span>Поле ниже в том же столбце</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Enter</kbd></span>
-                                <span>Следующий тип анализа</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Shift</kbd> + <kbd>Enter</kbd></span>
-                                <span>Предыдущий тип анализа</span>
-                            </div>
-                        </section>
-
-                        <section class="hotkeys-group" aria-labelledby="hotkeysScheduleTitle">
-                            <h6 id="hotkeysScheduleTitle">Расписание</h6>
-                            <div class="hotkey-row">
-                                <span><kbd>Ctrl</kbd> + <kbd>←</kbd> / <kbd>→</kbd></span>
-                                <span>Предыдущая/следующая неделя; в форме записи — день</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>↑</kbd> / <kbd>↓</kbd></span>
-                                <span>Предыдущая/следующая запись</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Enter</kbd></span>
-                                <span>Открыть выбранную запись</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
-                                <span>Сохранить открытую форму записи</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>/</kbd></span>
-                                <span>Поставить курсор в выбор врача</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Esc</kbd></span>
-                                <span>Закрыть форму записи</span>
-                            </div>
-                        </section>
-
-                        <section class="hotkeys-group" aria-labelledby="hotkeysSaveTitle">
-                            <h6 id="hotkeysSaveTitle">Сохранение и экспорт</h6>
-                            <div class="hotkey-row">
-                                <span><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
-                                <span>Сохранить приём</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Ctrl</kbd> + <kbd>Shift</kbd> + <kbd>Enter</kbd></span>
-                                <span>Сохранить приём и скачать Word</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Alt</kbd> + <kbd>W</kbd></span>
-                                <span>Скачать Word выбранного приёма</span>
-                            </div>
-                        </section>
-
-                        <section class="hotkeys-group" aria-labelledby="hotkeysPagesTitle">
-                            <h6 id="hotkeysPagesTitle">Переходы</h6>
-                            <div class="hotkey-row">
-                                <span><kbd>Alt</kbd> + <kbd>N</kbd></span>
-                                <span>Новый приём текущего пациента</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Alt</kbd> + <kbd>P</kbd></span>
-                                <span>Карточка текущего пациента</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>Alt</kbd> + <kbd>M</kbd></span>
-                                <span>Главный список приёмов</span>
-                            </div>
-                            <div class="hotkey-row">
-                                <span><kbd>/</kbd></span>
-                                <span>Поставить курсор в поиск пациента</span>
-                            </div>
-                        </section>
-                    </div>
+                    <section class="hotkeys-common" aria-labelledby="commonHotkeysTitle">
+                        <h6 class="hotkeys-section-title" id="commonHotkeysTitle">Везде в программе</h6>
+                        <div class="hotkeys-list">
+                            <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>↑</kbd>/<kbd>↓</kbd></span><span class="hotkey-action">Плавная прокрутка страницы</span></div>
+                            <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>M</kbd></span><span class="hotkey-action">Вернуться к списку приёмов</span></div>
+                        </div>
+                    </section>
                 </div>
                 <div class="modal-footer">
-                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Закрыть</button>
+                    <small class="text-muted me-auto">Закрыть окно: <kbd>Esc</kbd></small>
+                    <button type="button" class="btn btn-primary" data-bs-dismiss="modal">Понятно</button>
                 </div>
             </div>
         </div>

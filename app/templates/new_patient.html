@@ -80,9 +80,9 @@
                     <input type="hidden" name="doctor_id" value="{{ current_doctor.id }}">
                 </div>
                 <div class="col-md-6">
-                    <label class="form-label">Отделение <span class="text-danger">*</span></label>
+                    <label class="form-label">Место приёма <span class="text-danger">*</span></label>
                     <select name="location_id" id="locationSelect" class="form-select" required>
-                        <option value="">Выберите отделение</option>
+                        <option value="">Выберите место приёма</option>
                         {% for location in doctor_locations %}
                         <option value="{{ location.id }}"{% if scheduled_primary and schedule_entry.location_id|int == location.id|int %} selected{% endif %}>
                             {{ location.full_name or location.name }}{% if not location.full_name and location.branch_name %} ({{ location.branch_name }}){% endif %}

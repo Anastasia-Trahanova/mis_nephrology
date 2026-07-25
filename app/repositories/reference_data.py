@@ -17,6 +17,7 @@ from __future__ import annotations
 from typing import Any
 
 from app.db.connection import get_db_connection
+from app.location_display import build_location_full_name
 
 
 def _fetch_branches(cur: Any):
@@ -139,19 +140,33 @@ def get_locations_for_filter(branch_id: int | None = None, doctor_id: int | None
 
 
 def _fetch_doctor_locations(cur: Any, doctor_id: int):
-    """Возвращает отделения текущего врача через уже открытый cursor."""
+    """Возвращает полные названия мест приёма выбранного врача."""
     cur.execute(
         """
-        SELECT l.id, l.name, l.branch_id, b.name AS branch_name
+        SELECT
+            l.id,
+            l.name,
+            l.name AS location_name,
+            l.branch_id,
+            l.factual_address,
+            b.name AS branch_name,
+            c.name AS company_name
         FROM doctor_locations dl
         JOIN locations l ON dl.location_id = l.id
-        JOIN branches b ON l.branch_id = b.id
+        LEFT JOIN branches b ON l.branch_id = b.id
+        LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
         WHERE dl.doctor_id = %s
-        ORDER BY b.name, l.name
+        ORDER BY c.name NULLS LAST, b.name NULLS LAST,
+                 l.name, l.factual_address NULLS LAST, l.id
         """,
         (doctor_id,),
     )
-    return cur.fetchall()
+    result = []
+    for row in cur.fetchall():
+        item = dict(row)
+        item["full_name"] = build_location_full_name(item)
+        result.append(item)
+    return result
 
 
 def get_doctor_locations(doctor_id: int):
@@ -198,12 +213,18 @@ def get_location_info(location_id: int):
                     c.email AS company_email
                 FROM locations l
                 LEFT JOIN branches b ON l.branch_id = b.id
-                LEFT JOIN companies c ON b.company_id = c.id
+                LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
                 WHERE l.id = %s
                 """,
                 (location_id,),
             )
-            return cur.fetchone()
+            row = cur.fetchone()
+            if not row:
+                return None
+            item = dict(row)
+            item["full_name"] = build_location_full_name(item)
+            item["location_full_name"] = item["full_name"]
+            return item
 
 
 def _fetch_icd10_diagnoses(cur: Any):

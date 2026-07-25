@@ -18,6 +18,16 @@ from __future__ import annotations
 from typing import Any
 
 from app.db.connection import get_db_connection
+from app.location_display import build_location_full_name
+
+
+def _with_location_full_name(row: Any):
+    """Добавляет к результату единое полное название места приёма."""
+    if not row:
+        return row
+    item = dict(row)
+    item["location_full_name"] = build_location_full_name(item)
+    return item
 
 
 def create_appointment(
@@ -64,12 +74,15 @@ def get_all_appointments(filters: dict | None = None):
             a.age_at_appointment AS age,
             d.last_name || ' ' || d.first_name || ' ' || COALESCE(d.patronymic, '') AS doctor_fio,
             l.name AS location_name,
-            b.name AS branch_name
+            l.factual_address,
+            b.name AS branch_name,
+            c.name AS company_name
         FROM appointments a
         JOIN patients p ON a.patient_id = p.id
         JOIN doctors d ON a.doctor_id = d.id
         JOIN locations l ON a.location_id = l.id
-        JOIN branches b ON l.branch_id = b.id
+        LEFT JOIN branches b ON l.branch_id = b.id
+        LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
         WHERE 1=1
     """
     params: list[Any] = []
@@ -119,7 +132,7 @@ def get_all_appointments(filters: dict | None = None):
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(query, params)
-            return cur.fetchall()
+            return [_with_location_full_name(row) for row in cur.fetchall()]
 
 
 def _fetch_patient_appointments(cur: Any, patient_id: int):
@@ -131,17 +144,20 @@ def _fetch_patient_appointments(cur: Any, patient_id: int):
             a.appointment_date,
             d.last_name || ' ' || d.first_name || ' ' || COALESCE(d.patronymic, '') AS doctor_name,
             l.name AS location_name,
-            b.name AS branch_name
+            l.factual_address,
+            b.name AS branch_name,
+            c.name AS company_name
         FROM appointments a
         JOIN doctors d ON a.doctor_id = d.id
         JOIN locations l ON a.location_id = l.id
-        JOIN branches b ON l.branch_id = b.id
+        LEFT JOIN branches b ON l.branch_id = b.id
+        LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
         WHERE a.patient_id = %s
         ORDER BY a.appointment_date DESC
         """,
         (patient_id,),
     )
-    return cur.fetchall()
+    return [_with_location_full_name(row) for row in cur.fetchall()]
 
 
 def get_patient_appointments(patient_id: int):
@@ -166,7 +182,9 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
             p.phone,
             d.last_name || ' ' || d.first_name || ' ' || COALESCE(d.patronymic, '') AS doctor_name,
             l.name AS location_name,
+            l.factual_address,
             b.name AS branch_name,
+            c.name AS company_name,
 
             s.complaints,
             s.education_and_professional_history,
@@ -237,7 +255,8 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
         JOIN patients p ON a.patient_id = p.id
         JOIN doctors d ON a.doctor_id = d.id
         JOIN locations l ON a.location_id = l.id
-        JOIN branches b ON l.branch_id = b.id
+        LEFT JOIN branches b ON l.branch_id = b.id
+        LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
         LEFT JOIN surveys s ON a.id = s.appointment_id
         LEFT JOIN examinations e ON a.id = e.appointment_id
         LEFT JOIN appointment_diets ad ON a.id = ad.appointment_id
@@ -246,7 +265,7 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
         """,
         (appointment_id,),
     )
-    return cur.fetchone()
+    return _with_location_full_name(cur.fetchone())
 
 
 def get_appointment_full_data(appointment_id: int):
