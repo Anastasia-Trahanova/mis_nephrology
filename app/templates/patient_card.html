@@ -3,8 +3,8 @@
 Каркас карточки пациента с сохранением существующей компоновки страницы.
 
 Что выполняет файл:
-- оставляет шапку пациента, список приёмов, кнопки и верхнюю часть карточки без
-  изменения стиля;
+- оставляет шапку пациента, список приёмов, кнопки и верхнюю часть карточки без изменения стиля;
+- закрепляет список приёмов слева при прокрутке карточки;
 - отделяет «Результаты проведённых ранее исследований» от «Заключения»;
 - выводит исследования в порядке утверждённой схемы истории болезни;
 - подключает новые свободные поля дополнительных исследований;
@@ -17,75 +17,75 @@
 {% extends "base.html" %}
 
 {% block content %}
+
 <style>
-    .text-danger { color: #dc3545; }
+.text-danger { color: #dc3545; }
 </style>
 
 {% include "patient_card/_header.html" %}
 
-<div class="row">
-    <div class="col-md-3">
-        {% include "patient_card/_appointments_sidebar.html" %}
-    </div>
+<div class="row g-4 align-items-start">
+  <div class="col-md-3 patient-card-sidebar align-self-start">
+    {% include "patient_card/_appointments_sidebar.html" %}
+  </div>
 
-    <div class="col-md-9">
-        {% if selected_appointment %}
-        <div class="card">
-            {% include "patient_card/_visit_card_header.html" %}
+  <div class="col-md-9">
+    {% if selected_appointment %}
+      <div class="card">
+        {% include "patient_card/_visit_card_header.html" %}
 
-            <div class="card-body" id="printContent">
-                {% include "patient_card/_visit_summary.html" %}
+        <div class="card-body" id="printContent">
+          {% include "patient_card/_visit_summary.html" %}
 
-                <hr>
-                {% include "patient_card/_patient_brief.html" %}
+          <hr>
+          {% include "patient_card/_patient_brief.html" %}
 
-                <hr>
-                {% include "patient_card/_survey.html" %}
+          <hr>
+          {% include "patient_card/_survey.html" %}
 
-                <hr>
-                {% include "patient_card/_examination.html" %}
+          <hr>
+          {% include "patient_card/_examination.html" %}
 
-                <hr>
-                <h4 class="mt-3 mb-3">Результаты проведённых ранее исследований</h4>
+          <hr>
+          <h4 class="mt-3 mb-3">Результаты проведённых ранее исследований</h4>
 
-                {% include "patient_card/_cbc_history.html" %}
+          {% include "patient_card/_cbc_history.html" %}
 
-                <hr>
-                {% include "patient_card/_urinalysis_history.html" %}
+          <hr>
+          {% include "patient_card/_urinalysis_history.html" %}
 
-                <hr>
-                {% include "patient_card/_biochemistry_history.html" %}
+          <hr>
+          {% include "patient_card/_biochemistry_history.html" %}
 
-                <hr>
-                {% include "patient_card/_metrics_history.html" %}
+          <hr>
+          {% include "patient_card/_metrics_history.html" %}
 
-                <hr>
-                {% include "patient_card/_albuminuria_history.html" %}
+          <hr>
+          {% include "patient_card/_albuminuria_history.html" %}
+          {% include "patient_card/_other_laboratory_studies.html" %}
 
-                {% include "patient_card/_other_laboratory_studies.html" %}
+          <hr>
+          {% include "patient_card/_ultrasound_history.html" %}
+          {% include "patient_card/_other_instrumental_studies.html" %}
 
-                <hr>
-                {% include "patient_card/_ultrasound_history.html" %}
+          <hr>
+          <h4 class="mt-3 mb-3">Заключение</h4>
 
-                {% include "patient_card/_other_instrumental_studies.html" %}
+          {% include "patient_card/_ckd_prognosis.html" %}
 
-                <hr>
-                <h4 class="mt-3 mb-3">Заключение</h4>
+          <hr>
+          {% include "patient_card/_diagnoses.html" %}
 
-                {% include "patient_card/_ckd_prognosis.html" %}
-
-                <hr>
-                {% include "patient_card/_diagnoses.html" %}
-
-                <hr>
-                {% include "patient_card/_prescriptions.html" %}
-            </div>
-
-            {% include "patient_card/_export_buttons.html" %}
+          <hr>
+          {% include "patient_card/_prescriptions.html" %}
         </div>
-        {% else %}
-        <div class="alert alert-info">Выберите приём из списка слева</div>
-        {% endif %}
-    </div>
+
+        {% include "patient_card/_export_buttons.html" %}
+      </div>
+    {% else %}
+      <div class="alert alert-info">Выберите приём из списка слева</div>
+    {% endif %}
+  </div>
 </div>
+
 {% endblock %}

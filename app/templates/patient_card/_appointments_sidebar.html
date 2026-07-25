@@ -5,30 +5,80 @@
 Что делает:
 - показывает список приёмов пациента;
 - подсвечивает выбранный приём;
-- оставляет кнопку «➕ Добавить приём» в card-footer левой панели.
+- остаётся видимой слева при прокрутке страницы на экранах ноутбука и компьютера;
+- по умолчанию показывает кнопку «➕ Добавить приём»;
+- в форме повторного приёма открывает старые приёмы в новой вкладке
+  и скрывает кнопку добавления нового приёма.
 
-Важно:
-Это исходное место кнопки добавления приёма. Не переносить кнопку в шапку или правую карточку.
+Параметры шаблона:
+- appointments_sidebar_open_in_new_tab — открывать приёмы в новой вкладке;
+- appointments_sidebar_hide_add_button — скрывать кнопку добавления приёма.
 #}
-<!-- ЛЕВАЯ ПАНЕЛЬ: СПИСОК ПРИЁМОВ (без изменений) -->
-<div class="card">
-  <div class="card-header bg-primary text-white">
-    <h5 class="mb-0"> История приёмов</h5>
-  </div>
+{% set open_in_new_tab = appointments_sidebar_open_in_new_tab | default(false) %}
+{% set hide_add_button = appointments_sidebar_hide_add_button | default(false) %}
 
-  <div class="list-group list-group-flush" id="appointmentsList">
-    {% for app in appointments %}
-      <a href="/patient/{{ patient.id }}?appointment_id={{ app.appointment_id }}"
-         class="list-group-item list-group-item-action {% if selected_appointment and selected_appointment.id == app.appointment_id %}active{% endif %}">
-        <strong>{{ app.appointment_date.strftime('%d.%m.%Y') if app.appointment_date else '—' }}</strong><br>
-        <small>{{ app.doctor_name }}</small>
-      </a>
-    {% else %}
-      <div class="list-group-item text-muted">Нет приёмов</div>
-    {% endfor %}
-  </div>
+<style>
+  .appointments-sidebar-sticky {
+    width: 100%;
+  }
 
-  <div class="card-footer">
-    <a href="/new-appointment/{{ patient.id }}" class="btn btn-success w-100">➕ Добавить приём</a>
+  .appointments-sidebar-scroll {
+    max-height: calc(100vh - 9rem);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scrollbar-gutter: stable;
+  }
+
+  @media (min-width: 768px) {
+    .patient-card-sidebar .appointments-sidebar-sticky {
+      position: sticky;
+      top: 1rem;
+      z-index: 20;
+    }
+  }
+
+  @media (min-width: 992px) {
+    .repeat-appointment-sidebar .appointments-sidebar-sticky {
+      position: sticky;
+      top: 1rem;
+      z-index: 20;
+    }
+  }
+
+  @media (max-width: 767.98px) {
+    .appointments-sidebar-scroll {
+      max-height: none;
+      overflow-y: visible;
+    }
+  }
+</style>
+
+<aside class="appointments-sidebar-sticky" aria-label="История приёмов">
+  <div class="card">
+    <div class="card-header bg-primary text-white">
+      <h5 class="mb-0">История приёмов</h5>
+    </div>
+
+    <div class="list-group list-group-flush appointments-sidebar-scroll" id="appointmentsList">
+      {% for app in appointments %}
+        <a href="/patient/{{ patient.id }}?appointment_id={{ app.appointment_id }}"
+           {% if open_in_new_tab %}target="_blank" rel="noopener noreferrer"{% endif %}
+           class="list-group-item list-group-item-action {% if selected_appointment is defined and selected_appointment and selected_appointment.id == app.appointment_id %}active{% endif %}">
+          <strong>{{ app.appointment_date.strftime('%d.%m.%Y') if app.appointment_date else '—' }}</strong><br>
+          <small>{{ app.doctor_name }}</small>
+          {% if open_in_new_tab %}
+            <span class="visually-hidden"> (откроется в новой вкладке)</span>
+          {% endif %}
+        </a>
+      {% else %}
+        <div class="list-group-item text-muted">Нет приёмов</div>
+      {% endfor %}
+    </div>
+
+    {% if not hide_add_button %}
+      <div class="card-footer">
+        <a href="/new-appointment/{{ patient.id }}" class="btn btn-success w-100">➕ Добавить приём</a>
+      </div>
+    {% endif %}
   </div>
-</div>
+</aside>
