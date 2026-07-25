@@ -87,11 +87,11 @@
                             </div>
                             <div class="hotkey-row">
                                 <span><kbd>Ctrl</kbd> + <kbd>↑</kbd></span>
-                                <span>Предыдущий раздел формы</span>
+                                <span>Плавно прокрутить страницу вверх</span>
                             </div>
                             <div class="hotkey-row">
                                 <span><kbd>Ctrl</kbd> + <kbd>↓</kbd></span>
-                                <span>Прокрутить страницу вниз</span>
+                                <span>Плавно прокрутить страницу вниз</span>
                             </div>
                         </section>
 
@@ -112,6 +112,34 @@
                             <div class="hotkey-row">
                                 <span><kbd>Shift</kbd> + <kbd>Enter</kbd></span>
                                 <span>Предыдущий тип анализа</span>
+                            </div>
+                        </section>
+
+                        <section class="hotkeys-group" aria-labelledby="hotkeysScheduleTitle">
+                            <h6 id="hotkeysScheduleTitle">Расписание</h6>
+                            <div class="hotkey-row">
+                                <span><kbd>Ctrl</kbd> + <kbd>←</kbd> / <kbd>→</kbd></span>
+                                <span>Предыдущая/следующая неделя; в форме записи — день</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>↑</kbd> / <kbd>↓</kbd></span>
+                                <span>Предыдущая/следующая запись</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Enter</kbd></span>
+                                <span>Открыть выбранную запись</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Ctrl</kbd> + <kbd>Enter</kbd></span>
+                                <span>Сохранить открытую форму записи</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>/</kbd></span>
+                                <span>Поставить курсор в выбор врача</span>
+                            </div>
+                            <div class="hotkey-row">
+                                <span><kbd>Esc</kbd></span>
+                                <span>Закрыть форму записи</span>
                             </div>
                         </section>
 
@@ -172,6 +200,8 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', path='js/simple_form_guard.js') }}"></script>
     <script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}" defer></script>
+    <script src="{{ url_for('static', path='js/albuminuria_daily_fix.js') }}" defer></script>
     <script src="{{ url_for('static', path='js/hotkeys.js') }}" defer></script>
+    <script src="{{ url_for('static', path='js/schedule_hotkeys.js') }}" defer></script>
 </body>
 </html>
