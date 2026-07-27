@@ -11,8 +11,9 @@
     <link rel="stylesheet" href="{{ url_for('static', path='css/04_kdigo_risk.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/05_admin_audit.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/06_hotkeys.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/07_user_guide.css') }}">
 </head>
-<body>
+<body class="app-layout">
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
             <a class="navbar-brand" href="/">МИС Нефролога</a>
@@ -37,11 +38,9 @@
             {% endif %}
         </div>
     </nav>
-
-    <div class="container mt-4">
+    <div class="container mt-4 app-content">
         {% block content %}{% endblock %}
     </div>
-
     {% if request.session.get('user_id') %}
     <button
         type="button"
@@ -55,7 +54,6 @@
         <span aria-hidden="true">⌨</span>
         <span class="hotkeys-help-label">Горячие клавиши</span>
     </button>
-
     {% set current_path = request.url.path %}
     {% set is_schedule_page = current_path.startswith('/schedule') %}
     {% set is_patient_card = current_path.startswith('/patient/') %}
@@ -63,7 +61,6 @@
     {% set is_new_patient = current_path == '/new-patient' %}
     {% set is_appointment_form = is_new_appointment or is_new_patient %}
     {% set is_main_page = current_path == '/' %}
-
     <div
         class="modal fade hotkeys-modal"
         id="hotkeysHelpModal"
@@ -117,7 +114,6 @@
                             {% endif %}
                         </div>
                     </section>
-
                     <section class="hotkeys-common" aria-labelledby="commonHotkeysTitle">
                         <h6 class="hotkeys-section-title" id="commonHotkeysTitle">Везде в программе</h6>
                         <div class="hotkeys-list">
@@ -133,7 +129,6 @@
             </div>
         </div>
     </div>
-
     <div
         id="hotkeysNotice"
         class="hotkeys-notice alert alert-secondary"
@@ -143,7 +138,13 @@
         hidden
     ></div>
     {% endif %}
-
+    <footer class="app-footer">
+        <div class="container app-footer__inner">
+            <span>Разработчик: <a href="https://github.com/Anastasia-Trahanova" target="_blank" rel="noopener noreferrer">Anastasia Trakhanova</a></span>
+            <span class="app-footer__separator" aria-hidden="true">•</span>
+            <a href="/static/docs/user_guide.html">Руководство пользователя</a>
+        </div>
+    </footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', path='js/simple_form_guard.js') }}"></script>
     <script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}" defer></script>
