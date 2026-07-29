@@ -1,7 +1,7 @@
 """SQL и транзакционная логика нового расписания."""
 from __future__ import annotations
 
-from datetime import date, datetime
+from datetime import date, datetime, time, timedelta
 from typing import Any
 
 from fastapi import HTTPException
@@ -9,6 +9,8 @@ from fastapi import HTTPException
 from app.db.connection import get_db_connection
 
 APPOINTMENT_TYPE_LABELS = {"primary": "Первичный", "repeat": "Повторный"}
+WALK_IN_NOTE = "Приём без записи"
+WALK_IN_DURATION_MINUTES = 30
 STATUS_LABELS = {
     "booked": "Ожидается",
     "arrived": "Пришёл",
@@ -104,6 +106,12 @@ def _serialize_entry(row: Any) -> dict[str, Any]:
     item = dict(row)
     starts_at: datetime = item["starts_at"]
     ends_at: datetime = item["ends_at"]
+    is_walk_in = _clean(item.get("note")).casefold() == WALK_IN_NOTE.casefold()
+    appointment_type_label = APPOINTMENT_TYPE_LABELS.get(
+        item.get("appointment_type"), item.get("appointment_type")
+    )
+    if is_walk_in and appointment_type_label:
+        appointment_type_label = f"{appointment_type_label} приём\n{WALK_IN_NOTE}"
     item.update(
         {
             "starts_at": starts_at.isoformat(timespec="minutes"),
@@ -112,13 +120,12 @@ def _serialize_entry(row: Any) -> dict[str, Any]:
             "start_time": starts_at.strftime("%H:%M"),
             "end_time": ends_at.strftime("%H:%M"),
             "time_label": f"{starts_at:%H:%M}–{ends_at:%H:%M}",
-            "appointment_type_label": APPOINTMENT_TYPE_LABELS.get(
-                item.get("appointment_type"), item.get("appointment_type")
-            ),
+            "appointment_type_label": appointment_type_label,
             "status_label": STATUS_LABELS.get(item.get("status"), item.get("status")),
             "location_full_name": format_schedule_location(item),
             "birth_date": item["birth_date"].isoformat() if item.get("birth_date") else None,
             "gender_value": "male" if item.get("gender") else "female",
+            "is_walk_in": is_walk_in,
         }
     )
     return item
@@ -734,3 +741,225 @@ def link_schedule_entry_to_appointment(
         """,
         (appointment_id, actual_doctor_id, entry_id),
     )
+
+def get_patient_upcoming_schedule_entry(
+    *,
+    patient_id: int,
+    now: datetime | None = None,
+    days: int = 30,
+) -> dict[str, Any] | None:
+    """Возвращает ближайшую активную запись пациента на следующие ``days`` дней."""
+    current = (now or datetime.now()).replace(microsecond=0)
+    horizon = current + timedelta(days=max(1, min(int(days), 90)))
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT id
+                FROM schedule_entries
+                WHERE patient_id = %s
+                  AND status = 'booked'
+                  AND appointment_id IS NULL
+                  AND ends_at > %s
+                  AND starts_at <= %s
+                ORDER BY starts_at, id
+                LIMIT 1
+                """,
+                (patient_id, current, horizon),
+            )
+            row = cur.fetchone()
+    return get_schedule_entry(int(row["id"])) if row else None
+
+
+def _walk_in_times(now: datetime) -> tuple[datetime, datetime]:
+    """Округляет начало вниз до пяти минут и задаёт стандартную длительность."""
+    starts_at = now.replace(
+        minute=(now.minute // 5) * 5,
+        second=0,
+        microsecond=0,
+    )
+    ends_at = starts_at + timedelta(minutes=WALK_IN_DURATION_MINUTES)
+    if ends_at.date() != starts_at.date():
+        ends_at = datetime.combine(starts_at.date(), time(23, 59))
+    return starts_at, ends_at
+
+
+def _resolve_walk_in_location(
+    cur: Any,
+    *,
+    doctor_id: int,
+    now: datetime,
+    preferred_location_id: int | None,
+) -> int:
+    if preferred_location_id and _doctor_location_allowed(cur, doctor_id, preferred_location_id):
+        return int(preferred_location_id)
+
+    cur.execute(
+        """
+        SELECT e.location_id
+        FROM schedule_entries e
+        JOIN doctor_locations dl
+          ON dl.doctor_id = e.scheduled_doctor_id
+         AND dl.location_id = e.location_id
+        WHERE e.scheduled_doctor_id = %s
+          AND e.status <> 'cancelled'
+          AND e.starts_at >= %s::date
+          AND e.starts_at < (%s::date + INTERVAL '1 day')
+        ORDER BY
+          CASE WHEN e.starts_at <= %s AND e.ends_at > %s THEN 0 ELSE 1 END,
+          ABS(EXTRACT(EPOCH FROM (e.starts_at - %s))),
+          e.id
+        LIMIT 1
+        """,
+        (doctor_id, now, now, now, now, now),
+    )
+    row = cur.fetchone()
+    if row:
+        return int(row["location_id"])
+
+    cur.execute(
+        """
+        SELECT location_id
+        FROM doctor_locations
+        WHERE doctor_id = %s
+        ORDER BY location_id
+        LIMIT 1
+        """,
+        (doctor_id,),
+    )
+    row = cur.fetchone()
+    if not row:
+        raise HTTPException(
+            status_code=409,
+            detail="Для врача не настроено место приёма",
+        )
+    return int(row["location_id"])
+
+
+def create_walk_in_schedule_entry(
+    *,
+    patient_id: int,
+    doctor_id: int,
+    created_by_user_id: int | None,
+    cancel_entry_id: int | None = None,
+    now: datetime | None = None,
+) -> dict[str, Any]:
+    """Создаёт внеплановую запись, намеренно разрешая пересечение по времени."""
+    current = (now or datetime.now()).replace(microsecond=0)
+    starts_at, ends_at = _walk_in_times(current)
+    entry_id: int
+
+    with get_db_connection() as conn:
+        try:
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT id FROM patients WHERE id = %s FOR SHARE",
+                    (patient_id,),
+                )
+                if not cur.fetchone():
+                    raise HTTPException(status_code=404, detail="Пациент не найден")
+
+                _lock_doctor_day(cur, doctor_id, starts_at.date())
+
+                # Повторная отправка в ту же пятиминутку не создаёт дубликат.
+                cur.execute(
+                    """
+                    SELECT id
+                    FROM schedule_entries
+                    WHERE scheduled_doctor_id = %s
+                      AND patient_id = %s
+                      AND starts_at = %s
+                      AND status = 'booked'
+                      AND appointment_id IS NULL
+                      AND note = %s
+                    ORDER BY id DESC
+                    LIMIT 1
+                    FOR UPDATE
+                    """,
+                    (doctor_id, patient_id, starts_at, WALK_IN_NOTE),
+                )
+                existing = cur.fetchone()
+                if existing:
+                    entry_id = int(existing["id"])
+                else:
+                    preferred_location_id: int | None = None
+                    if cancel_entry_id is not None:
+                        cur.execute(
+                            """
+                            SELECT id, patient_id, scheduled_doctor_id, location_id,
+                                   starts_at, ends_at, status, appointment_id
+                            FROM schedule_entries
+                            WHERE id = %s
+                            FOR UPDATE
+                            """,
+                            (cancel_entry_id,),
+                        )
+                        scheduled = cur.fetchone()
+                        if not scheduled:
+                            raise HTTPException(
+                                status_code=409,
+                                detail="Запланированная запись уже была изменена",
+                            )
+                        if int(scheduled["patient_id"]) != patient_id:
+                            raise HTTPException(
+                                status_code=403,
+                                detail="Запись принадлежит другому пациенту",
+                            )
+                        if scheduled["status"] != "booked" or scheduled["appointment_id"]:
+                            raise HTTPException(
+                                status_code=409,
+                                detail="Запланированную запись уже нельзя отменить",
+                            )
+                        if scheduled["ends_at"] <= current or scheduled["starts_at"] > current + timedelta(days=30):
+                            raise HTTPException(
+                                status_code=409,
+                                detail="Запланированная запись находится вне проверяемого периода",
+                            )
+                        preferred_location_id = int(scheduled["location_id"])
+                        # Для выбранного сценария старая запись должна исчезнуть из расписания.
+                        cur.execute("DELETE FROM schedule_entries WHERE id = %s", (cancel_entry_id,))
+
+                    location_id = _resolve_walk_in_location(
+                        cur,
+                        doctor_id=doctor_id,
+                        now=current,
+                        preferred_location_id=preferred_location_id,
+                    )
+                    appointment_type = (
+                        "repeat" if _patient_has_appointments(cur, patient_id) else "primary"
+                    )
+                    cur.execute(
+                        """
+                        INSERT INTO schedule_entries(
+                            scheduled_doctor_id, location_id, patient_id,
+                            starts_at, ends_at, appointment_type, status, note,
+                            created_by_user_id
+                        )
+                        VALUES (%s, %s, %s, %s, %s, %s, 'booked', %s, %s)
+                        RETURNING id
+                        """,
+                        (
+                            doctor_id,
+                            location_id,
+                            patient_id,
+                            starts_at,
+                            ends_at,
+                            appointment_type,
+                            WALK_IN_NOTE,
+                            created_by_user_id,
+                        ),
+                    )
+                    entry_id = int(cur.fetchone()["id"])
+            conn.commit()
+        except HTTPException:
+            conn.rollback()
+            raise
+        except Exception as exc:
+            conn.rollback()
+            raise HTTPException(
+                status_code=500,
+                detail=f"Не удалось создать внеплановый приём: {exc}",
+            ) from exc
+
+    return get_schedule_entry(entry_id)
+

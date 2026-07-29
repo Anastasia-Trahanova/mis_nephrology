@@ -7,9 +7,9 @@
 - подсвечивает выбранный приём;
 - остаётся видимой слева при прокрутке страницы на экранах ноутбука и компьютера;
 - по умолчанию показывает кнопку «➕ Добавить приём»;
+- перед внеплановым приёмом проверяет активные записи пациента на ближайшие 30 дней;
 - в форме повторного приёма открывает старые приёмы в новой вкладке
   и скрывает кнопку добавления нового приёма.
-
 Параметры шаблона:
 - appointments_sidebar_open_in_new_tab — открывать приёмы в новой вкладке;
 - appointments_sidebar_hide_add_button — скрывать кнопку добавления приёма.
@@ -21,7 +21,6 @@
   .appointments-sidebar-sticky {
     width: 100%;
   }
-
   .appointments-sidebar-scroll {
     max-height: calc(100vh - 9rem);
     overflow-y: auto;
@@ -37,6 +36,68 @@
     border-right-color: var(--bs-primary);
   }
 
+  .walk-in-dialog {
+    width: min(620px, calc(100vw - 2rem));
+    padding: 0;
+    border: 0;
+    border-radius: 0.85rem;
+    box-shadow: 0 1rem 3rem rgba(0, 0, 0, 0.22);
+  }
+
+  .walk-in-dialog::backdrop {
+    background: rgba(33, 37, 41, 0.55);
+  }
+
+  .walk-in-dialog__header,
+  .walk-in-dialog__body,
+  .walk-in-dialog__footer {
+    padding: 1rem 1.25rem;
+  }
+
+  .walk-in-dialog__header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border-bottom: 1px solid #dee2e6;
+  }
+
+  .walk-in-dialog__header h3 {
+    margin: 0;
+    font-size: 1.2rem;
+  }
+
+  .walk-in-dialog__close {
+    width: 2rem;
+    height: 2rem;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: #6c757d;
+    font-size: 1.55rem;
+    line-height: 1;
+  }
+
+  .walk-in-dialog__actions {
+    display: grid;
+    gap: 0.7rem;
+    margin-top: 1rem;
+  }
+
+  .walk-in-dialog__actions .btn {
+    min-height: 2.75rem;
+    white-space: normal;
+  }
+
+  .walk-in-dialog__footer {
+    border-top: 1px solid #dee2e6;
+    text-align: center;
+  }
+
+  .walk-in-dialog__error {
+    margin-top: 0.85rem;
+  }
+
   @media (min-width: 768px) {
     .patient-card-sidebar .appointments-sidebar-sticky {
       position: sticky;
@@ -44,7 +105,6 @@
       z-index: 20;
     }
   }
-
   @media (min-width: 992px) {
     .repeat-appointment-sidebar .appointments-sidebar-sticky {
       position: sticky;
@@ -66,7 +126,6 @@
     <div class="card-header bg-primary text-white">
       <h5 class="mb-0">История приёмов</h5>
     </div>
-
     <div class="list-group list-group-flush appointments-sidebar-scroll" id="appointmentsList">
       {% for app in appointments %}
         <a href="/patient/{{ patient.id }}?appointment_id={{ app.appointment_id }}"
@@ -82,11 +141,179 @@
         <div class="list-group-item text-muted">Нет приёмов</div>
       {% endfor %}
     </div>
-
-    {% if not hide_add_button %}
+    {% if not hide_add_button and request.session.get('role') == 'doctor' %}
       <div class="card-footer">
-        <a href="/new-appointment/{{ patient.id }}" class="btn btn-success w-100">➕ Добавить приём</a>
+        <button
+          type="button"
+          class="btn btn-success w-100"
+          id="walkInAppointmentOpen"
+          data-patient-id="{{ patient.id }}"
+        >➕ Добавить приём</button>
       </div>
     {% endif %}
   </div>
 </aside>
+
+{% if not hide_add_button and request.session.get('role') == 'doctor' %}
+<dialog class="walk-in-dialog" id="walkInAppointmentDialog" aria-labelledby="walkInAppointmentTitle">
+  <div class="walk-in-dialog__header">
+    <h3 id="walkInAppointmentTitle">Добавить внеплановый приём</h3>
+    <button type="button" class="walk-in-dialog__close" id="walkInAppointmentClose" aria-label="Закрыть">×</button>
+  </div>
+  <div class="walk-in-dialog__body">
+    <div id="walkInAppointmentMessage" aria-live="polite">Проверяем записи пациента…</div>
+    <div class="walk-in-dialog__actions" id="walkInAppointmentActions"></div>
+    <div class="alert alert-danger walk-in-dialog__error d-none" id="walkInAppointmentError" role="alert"></div>
+  </div>
+  <div class="walk-in-dialog__footer">
+    <button type="button" class="btn btn-outline-secondary" id="walkInAppointmentCancel">Отменить</button>
+  </div>
+</dialog>
+
+<script>
+(() => {
+  const openButton = document.getElementById('walkInAppointmentOpen');
+  const dialog = document.getElementById('walkInAppointmentDialog');
+  if (!openButton || !dialog) return;
+
+  const patientId = Number(openButton.dataset.patientId);
+  const message = document.getElementById('walkInAppointmentMessage');
+  const actions = document.getElementById('walkInAppointmentActions');
+  const errorBox = document.getElementById('walkInAppointmentError');
+  const closeButton = document.getElementById('walkInAppointmentClose');
+  const cancelButton = document.getElementById('walkInAppointmentCancel');
+  let upcomingEntry = null;
+  let busy = false;
+
+  const errorText = (payload) => {
+    const detail = payload && payload.detail;
+    if (typeof detail === 'string') return detail;
+    if (detail && typeof detail.message === 'string') return detail.message;
+    return 'Не удалось выполнить действие. Обновите страницу и повторите попытку.';
+  };
+
+  const showError = (text) => {
+    errorBox.textContent = text;
+    errorBox.classList.remove('d-none');
+  };
+
+  const clearError = () => {
+    errorBox.textContent = '';
+    errorBox.classList.add('d-none');
+  };
+
+  const setDisabled = (disabled) => {
+    busy = disabled;
+    openButton.disabled = disabled;
+    closeButton.disabled = disabled;
+    cancelButton.disabled = disabled;
+    actions.querySelectorAll('button').forEach((button) => {
+      button.disabled = disabled;
+    });
+  };
+
+  const makeActionButton = (label, className, action) => {
+    const button = document.createElement('button');
+    button.type = 'button';
+    button.className = `btn ${className}`;
+    button.textContent = label;
+    button.addEventListener('click', () => createWalkIn(action));
+    actions.appendChild(button);
+  };
+
+  const renderActions = () => {
+    actions.replaceChildren();
+    clearError();
+    if (upcomingEntry) {
+      message.textContent = `Пациент записан на ${upcomingEntry.label}.`;
+      makeActionButton(
+        'Отменить запись и принять пациента сегодня',
+        'btn-outline-danger',
+        'cancel_and_create'
+      );
+      makeActionButton(
+        'Сохранить запись и создать новый приём сегодня',
+        'btn-primary',
+        'keep_and_create'
+      );
+      return;
+    }
+
+    message.textContent = 'У пациента нет активных записей на ближайшие 30 дней.';
+    makeActionButton(
+      'Создать внеплановый приём сегодня',
+      'btn-primary',
+      'create'
+    );
+  };
+
+  const loadUpcoming = async () => {
+    actions.replaceChildren();
+    clearError();
+    message.textContent = 'Проверяем записи пациента…';
+    setDisabled(true);
+    try {
+      const response = await fetch(`/schedule/api/patients/${patientId}/upcoming-entry`, {
+        headers: { 'Accept': 'application/json' },
+        credentials: 'same-origin'
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(errorText(payload));
+      upcomingEntry = payload.item || null;
+      renderActions();
+    } catch (error) {
+      message.textContent = 'Не удалось проверить расписание пациента.';
+      showError(error.message);
+    } finally {
+      setDisabled(false);
+    }
+  };
+
+  const createWalkIn = async (action) => {
+    if (busy) return;
+    clearError();
+    setDisabled(true);
+    message.textContent = 'Создаём внеплановую запись…';
+    try {
+      const response = await fetch(`/schedule/api/patients/${patientId}/walk-in`, {
+        method: 'POST',
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json'
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({
+          action,
+          scheduled_entry_id: upcomingEntry ? upcomingEntry.id : null
+        })
+      });
+      const payload = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(errorText(payload));
+      window.location.assign(payload.redirect_url);
+    } catch (error) {
+      renderActions();
+      showError(error.message);
+      setDisabled(false);
+    }
+  };
+
+  openButton.addEventListener('click', () => {
+    if (typeof dialog.showModal === 'function') {
+      dialog.showModal();
+      loadUpcoming();
+      return;
+    }
+    window.location.assign(`/new-appointment/${patientId}`);
+  });
+
+  const closeDialog = () => {
+    if (!busy && dialog.open) dialog.close();
+  };
+  closeButton.addEventListener('click', closeDialog);
+  cancelButton.addEventListener('click', closeDialog);
+  dialog.addEventListener('cancel', (event) => {
+    if (busy) event.preventDefault();
+  });
+})();
+</script>
+{% endif %}

@@ -77,3 +77,8 @@
   .schedule-filters, .schedule-booking-workspace { grid-template-columns: 1fr; }
   .schedule-selected-day__content { min-height: 420px; }
 }
+
+/* Внеплановый приём: вторая строка метки выводится под типом приёма. */
+.schedule-entry__meta > span:first-child {
+  white-space: pre-line;
+}

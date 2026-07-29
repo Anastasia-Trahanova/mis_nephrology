@@ -10,14 +10,21 @@ from pydantic import BaseModel
 
 from app.repositories.schedule import (
     create_schedule_entry,
+    create_walk_in_schedule_entry,
     get_schedule_doctors,
     get_schedule_entries,
     get_schedule_locations_for_doctor,
+    get_patient_upcoming_schedule_entry,
     search_schedule_patients,
     set_schedule_entry_status,
     update_schedule_entry,
 )
-from app.security.permissions import ROLE_ADMIN, ROLE_DOCTOR, require_roles
+from app.security.permissions import (
+    ROLE_ADMIN,
+    ROLE_DOCTOR,
+    require_doctor_with_id,
+    require_roles,
+)
 
 router = APIRouter(tags=["schedule"])
 templates = Jinja2Templates(directory="app/templates")
@@ -54,6 +61,11 @@ class ScheduleEntryEditPayload(ScheduleEntryPayload):
 class ScheduleStatusPayload(BaseModel):
     status: str
     cancel_reason: str | None = None
+
+
+class WalkInAppointmentPayload(BaseModel):
+    action: str
+    scheduled_entry_id: int | None = None
 
 
 def _require_schedule_access(request: Request) -> None:
@@ -237,3 +249,61 @@ def schedule_update_status(entry_id: int, payload: ScheduleStatusPayload, reques
         cancel_reason=payload.cancel_reason,
     )
     return {"item": item}
+
+def _walk_in_date_time_label(item: dict) -> str:
+    starts_at = datetime.fromisoformat(str(item["starts_at"]))
+    return f"{starts_at.day} {MONTHS_GENITIVE[starts_at.month]} в {starts_at:%H:%M}"
+
+
+@router.get("/schedule/api/patients/{patient_id}/upcoming-entry")
+def patient_upcoming_schedule_entry(patient_id: int, request: Request):
+    require_doctor_with_id(request)
+    item = get_patient_upcoming_schedule_entry(
+        patient_id=patient_id,
+        now=datetime.now(),
+        days=30,
+    )
+    if not item:
+        return {"item": None, "period_days": 30}
+    return {
+        "item": {
+            "id": item["id"],
+            "label": _walk_in_date_time_label(item),
+            "starts_at": item["starts_at"],
+            "doctor_fio": item.get("scheduled_doctor_fio"),
+        },
+        "period_days": 30,
+    }
+
+
+@router.post("/schedule/api/patients/{patient_id}/walk-in", status_code=201)
+def patient_create_walk_in(
+    patient_id: int,
+    payload: WalkInAppointmentPayload,
+    request: Request,
+):
+    doctor_id = require_doctor_with_id(request)
+    allowed_actions = {"create", "keep_and_create", "cancel_and_create"}
+    if payload.action not in allowed_actions:
+        raise HTTPException(status_code=400, detail="Некорректное действие")
+    if payload.action == "cancel_and_create" and not payload.scheduled_entry_id:
+        raise HTTPException(status_code=400, detail="Не указана отменяемая запись")
+
+    item = create_walk_in_schedule_entry(
+        patient_id=patient_id,
+        doctor_id=doctor_id,
+        created_by_user_id=request.session.get("user_id"),
+        cancel_entry_id=(
+            payload.scheduled_entry_id
+            if payload.action == "cancel_and_create"
+            else None
+        ),
+        now=datetime.now(),
+    )
+    return {
+        "item": item,
+        "redirect_url": (
+            f"/new-appointment/{patient_id}?schedule_entry_id={item['id']}"
+        ),
+    }
+
