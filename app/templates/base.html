@@ -11,9 +11,9 @@
     <link rel="stylesheet" href="{{ url_for('static', path='css/04_kdigo_risk.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/05_admin_audit.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/06_hotkeys.css') }}">
-    <link rel="stylesheet" href="{{ url_for('static', path='css/07_user_guide.css') }}">
+    {% block extra_head %}{% endblock %}
 </head>
-<body class="app-layout">
+<body>
     <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
         <div class="container">
             <a class="navbar-brand" href="/">МИС Нефролога</a>
@@ -22,6 +22,7 @@
                 {% if request.session.get('role') in ('admin', 'doctor') %}
                 <a class="nav-link" href="/schedule">Расписание</a>
                 {% endif %}
+                <a class="nav-link{% if request.url.path.startswith('/clinical-reference') %} active{% endif %}" href="/clinical-reference">Клинический справочник</a>
                 {% if request.session.get('role') == 'admin' %}
                 <a class="nav-link" href="/ckd-registry">Регистр ХБП</a>
                 <a class="nav-link" href="/admin/audit">Журнал аудита</a>
@@ -38,7 +39,7 @@
             {% endif %}
         </div>
     </nav>
-    <div class="container mt-4 app-content">
+    <div class="container mt-4">
         {% block content %}{% endblock %}
     </div>
     {% if request.session.get('user_id') %}
@@ -138,18 +139,12 @@
         hidden
     ></div>
     {% endif %}
-    <footer class="app-footer">
-        <div class="container app-footer__inner">
-            <span>Разработчик: <a href="https://github.com/Anastasia-Trahanova" target="_blank" rel="noopener noreferrer">Anastasia Trakhanova</a></span>
-            <span class="app-footer__separator" aria-hidden="true">•</span>
-            <a href="/static/docs/user_guide.html">Руководство пользователя</a>
-        </div>
-    </footer>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0-alpha1/dist/js/bootstrap.bundle.min.js"></script>
     <script src="{{ url_for('static', path='js/simple_form_guard.js') }}"></script>
     <script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}" defer></script>
     <script src="{{ url_for('static', path='js/albuminuria_daily_fix.js') }}" defer></script>
     <script src="{{ url_for('static', path='js/hotkeys.js') }}" defer></script>
     <script src="{{ url_for('static', path='js/schedule_hotkeys.js') }}" defer></script>
+    {% block extra_scripts %}{% endblock %}
 </body>
 </html>

@@ -15,6 +15,7 @@ from .routers import (
     appointments,
     auth,
     ckd_registry,
+    clinical_reference,
     exports,
     home,
     lab_api,
@@ -23,13 +24,11 @@ from .routers import (
     schedule,
 )
 from .settings import settings
-
 logging.basicConfig(
     filename="app.log",
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s",
 )
-
 
 class LoggingMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
@@ -46,7 +45,6 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             print(log_message)
             logging.exception(log_message)
             raise
-
         duration = (time.perf_counter() - start_time) * 1000
         log_message = (
             f"{request.method} {request.url.path}"
@@ -60,7 +58,6 @@ class LoggingMiddleware(BaseHTTPMiddleware):
 
 app = FastAPI(title="МИС Нефролога", version="1.0.0")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
-
 # Важно: SessionMiddleware добавляется последним, чтобы он был внешним слоем
 # и request.session был доступен внутри AuthRequiredMiddleware.
 app.add_middleware(LoggingMiddleware)
@@ -71,7 +68,6 @@ app.add_middleware(
     same_site="lax",
     https_only=False,  # Для локальной разработки. На сервере с HTTPS поставить True.
 )
-
 # Подключаем роутеры: auth доступен без входа, остальные закрываются middleware.
 app.include_router(auth.router)
 app.include_router(home.router)
@@ -82,6 +78,7 @@ app.include_router(exports.router)
 app.include_router(appointment_filters.router)
 app.include_router(patients.router)
 app.include_router(appointments.router)
+app.include_router(clinical_reference.router)
 app.include_router(ckd_registry.router)
 app.include_router(admin.router)
 app.include_router(schedule.router)

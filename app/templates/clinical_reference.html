@@ -1,0 +1,1063 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/08_clinical_reference.css') }}">
+{% endblock %}
+
+{% block content %}
+{% set russian_guideline_url = "https://diseases.medelement.com/disease/%D1%85%D1%80%D0%BE%D0%BD%D0%B8%D1%87%D0%B5%D1%81%D0%BA%D0%B0%D1%8F-%D0%B1%D0%BE%D0%BB%D0%B5%D0%B7%D0%BD%D1%8C-%D0%BF%D0%BE%D1%87%D0%B5%D0%BA-%D1%83-%D0%B2%D0%B7%D1%80%D0%BE%D1%81%D0%BB%D1%8B%D1%85-%D0%BA%D1%80-%D1%80%D1%84-2024/18325" %}
+{% set kdigo_url = "https://kdigo.org/guidelines/ckd-evaluation-and-management/" %}
+
+<div class="clinical-reference-page" data-reference-root>
+    <header class="reference-header">
+        <div>
+            <h1>Клинический справочник</h1>
+            <p class="reference-subtitle">Практические материалы по ведению взрослых пациентов с хронической болезнью почек</p>
+        </div>
+        <label class="reference-search">
+            <span class="visually-hidden">Поиск по справочнику</span>
+            <input type="search" placeholder="Поиск по справочнику" autocomplete="off" data-reference-search>
+        </label>
+        <div class="reference-source-line">
+            <span class="source-badge source-badge-primary">Основной источник: КР РФ «Хроническая болезнь почек», взрослые, 2024</span>
+            <span class="source-badge">Дополнительный источник: KDIGO</span>
+        </div>
+        <div class="reference-version-note">
+            <strong>Важно:</strong> формула CKD‑EPI из российских рекомендаций и формула, реализованная в приложении, показаны отдельно. Это разные редакции уравнения.
+        </div>
+    </header>
+
+    <button class="reference-mobile-toc-button" type="button" aria-expanded="false" data-reference-toc-toggle>
+        Содержание
+    </button>
+
+    <div class="reference-layout">
+        <nav class="reference-toc" aria-label="Содержание клинического справочника" data-reference-toc>
+            <div class="reference-toc-title">Содержание</div>
+            <ol>
+                <li>
+                    <a href="#brief">1. Краткая информация</a>
+                    <ul class="toc-sublist">
+                        <li><a href="#definition">Определение и критерий времени</a></li>
+                        <li><a href="#coding">Кодирование по МКБ‑10</a></li>
+                        <li><a href="#risk-factors">Факторы риска</a></li>
+                        <li><a href="#clinical-picture">Клиническая картина</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="#diagnostics">2. Диагностика</a>
+                    <ul class="toc-sublist">
+                        <li><a href="#diagnostic-criteria">Критерии диагноза</a></li>
+                        <li><a href="#complaints-anamnesis">Жалобы и анамнез</a></li>
+                        <li><a href="#physical-exam">Физикальное обследование</a></li>
+                        <li><a href="#laboratory">Лабораторные исследования</a></li>
+                        <li><a href="#instrumental">Инструментальные исследования</a></li>
+                        <li><a href="#kidney-function">Формулы оценки функции почек</a></li>
+                        <li><a href="#ckd-classification">Стадии ХБП</a></li>
+                        <li><a href="#albuminuria">Альбуминурия</a></li>
+                        <li><a href="#kdigo-risk">Матрица риска</a></li>
+                    </ul>
+                </li>
+                <li>
+                    <a href="#treatment">3. Лечение</a>
+                    <ul class="toc-sublist">
+                        <li><a href="#treatment-principles">Общие принципы</a></li>
+                        <li><a href="#renoprotection">Ренопротекция</a></li>
+                        <li><a href="#bp-control">Контроль АД</a></li>
+                        <li><a href="#metabolic-treatment">Метаболические нарушения</a></li>
+                        <li><a href="#stage-c1">Тактика при С1</a></li>
+                        <li><a href="#stage-c2">Тактика при С2</a></li>
+                        <li><a href="#stage-c3a">Тактика при С3а</a></li>
+                        <li><a href="#stage-c3b">Тактика при С3б</a></li>
+                        <li><a href="#stage-c4">Тактика при С4</a></li>
+                        <li><a href="#stage-c5">Тактика при С5</a></li>
+                    </ul>
+                </li>
+                <li><a href="#rehabilitation">4. Медицинская реабилитация</a></li>
+                <li><a href="#prevention">5. Профилактика и наблюдение</a></li>
+                <li><a href="#care-organization">6. Организация медицинской помощи</a></li>
+                <li><a href="#additional">7. Дополнительная информация</a></li>
+                <li><a href="#quality">8. Критерии качества</a></li>
+                <li><a href="#appendices">9. Приложения</a></li>
+            </ol>
+        </nav>
+
+        <main class="reference-content">
+            <div class="reference-empty" hidden data-reference-empty>По вашему запросу ничего не найдено.</div>
+
+            <section class="reference-section" id="brief" data-reference-section>
+                <h2 class="reference-section-heading"><span class="reference-section-number">1.</span> Краткая информация</h2>
+
+                <details class="reference-card" id="definition" data-reference-card>
+                    <summary>Определение ХБП и временной критерий</summary>
+                    <div class="reference-card-body">
+                        <p>Хроническая болезнь почек — персистирующее в течение трёх месяцев или более поражение почек, возникающее вследствие различных этиологических факторов и сопровождающееся замещением нормальных структур фиброзом с развитием дисфункции органа.</p>
+                        <p>Временной критерий обязателен для подтверждения хронического характера изменений. Острые процессы в течение трёх месяцев могут завершиться восстановлением функции, сохранением резидуального дефекта либо необратимым повреждением.</p>
+                        <div class="reference-note">Диагноз ХБП устанавливается не по одному уровню креатинина, а по совокупности маркеров повреждения почек, стойкости изменений, СКФ и структурных данных.</div>
+                        <div class="source-reference">КР РФ 2024: разделы «Определение заболевания» и «Диагностика». <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="coding" data-reference-card>
+                    <summary>Кодирование ХБП и осложнений по МКБ‑10</summary>
+                    <div class="reference-card-body">
+                        <div class="reference-table-wrap">
+                            <table class="reference-table">
+                                <thead><tr><th>Код</th><th>Наименование</th><th>Стадия в клинической классификации</th></tr></thead>
+                                <tbody>
+                                    <tr><td>N18.1</td><td>Хроническая болезнь почек, стадия 1</td><td>С1</td></tr>
+                                    <tr><td>N18.2</td><td>Хроническая болезнь почек, стадия 2</td><td>С2</td></tr>
+                                    <tr><td>N18.3</td><td>Хроническая болезнь почек, стадия 3</td><td>С3а или С3б</td></tr>
+                                    <tr><td>N18.4</td><td>Хроническая болезнь почек, стадия 4</td><td>С4</td></tr>
+                                    <tr><td>N18.5</td><td>Хроническая болезнь почек, стадия 5</td><td>С5</td></tr>
+                                    <tr><td>N18.9</td><td>Хроническая болезнь почек с неуточнённой стадией</td><td>Стадия не определена</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p>К коду стадии добавляются коды этиологического заболевания, осложнений ХБП и ассоциированных состояний. При подготовке к диализу и проведении диализа применяются дополнительные коды Z49.0–Z49.2.</p>
+                        <div class="compact-grid compact-grid-2">
+                            <div class="mini-panel"><strong>D63.8*</strong><span>Анемия при хронических болезнях</span></div>
+                            <div class="mini-panel"><strong>E87.2</strong><span>Ацидоз</span></div>
+                            <div class="mini-panel"><strong>E87.5</strong><span>Гиперкалиемия</span></div>
+                            <div class="mini-panel"><strong>E21.1</strong><span>Вторичный гиперпаратиреоз</span></div>
+                            <div class="mini-panel"><strong>N25.0</strong><span>Почечная остеодистрофия</span></div>
+                            <div class="mini-panel"><strong>E43–E44</strong><span>Белково‑энергетическая недостаточность</span></div>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: таблицы 4 и 5. <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="risk-factors" data-reference-card>
+                    <summary>Факторы риска развития и прогрессирования ХБП</summary>
+                    <div class="reference-card-body">
+                        <div class="reference-table-wrap">
+                            <table class="reference-table">
+                                <thead><tr><th>Немодифицируемые</th><th>Модифицируемые</th></tr></thead>
+                                <tbody><tr>
+                                    <td>
+                                        <ul class="dense-list">
+                                            <li>пожилой возраст;</li>
+                                            <li>исходно низкое число нефронов и низкая масса тела при рождении;</li>
+                                            <li>наследственные факторы и семейный анамнез ХБП;</li>
+                                            <li>перенесённое острое повреждение почек;</li>
+                                            <li>расовые и этнические особенности.</li>
+                                        </ul>
+                                    </td>
+                                    <td>
+                                        <ul class="dense-list">
+                                            <li>сахарный диабет и артериальная гипертензия;</li>
+                                            <li>дислипопротеидемия, ожирение, метаболический синдром;</li>
+                                            <li>табакокурение и высокая белковая нагрузка;</li>
+                                            <li>гиперурикемия;</li>
+                                            <li>аутоиммунные болезни, хроническое воспаление и системные инфекции;</li>
+                                            <li>инфекции, конкременты и обструкция мочевых путей;</li>
+                                            <li>лекарственная токсичность;</li>
+                                            <li>беременность.</li>
+                                        </ul>
+                                    </td>
+                                </tr></tbody>
+                            </table>
+                        </div>
+                        <p>Часть факторов одновременно повышает риск сердечно‑сосудистых осложнений. Поэтому оценка ХБП включает не только риск терминальной почечной недостаточности, но и сердечно‑сосудистый риск.</p>
+                        <div class="source-reference">КР РФ 2024: таблица 2 и раздел «Этиология и патогенез». <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="clinical-picture" data-reference-card>
+                    <summary>Клиническая картина и признаки, позволяющие предполагать ХБП</summary>
+                    <div class="reference-card-body">
+                        <p>Ранние стадии С1–С3а часто имеют малосимптомное течение. Клинически выраженные проявления и заметные изменения по данным визуализации чаще соответствуют далеко зашедшему процессу.</p>
+                        <div class="reference-table-wrap">
+                            <table class="reference-table">
+                                <thead><tr><th>Источник информации</th><th>Возможные признаки</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Жалобы</td><td>Изменение цвета мочи, олигурия или полиурия, никтурия, отёки, симптомы уремии.</td></tr>
+                                    <tr><td>Анамнез</td><td>Ранее выявленные изменения мочи, структурные изменения почек, факторы риска, эпизоды ОПП, нефротоксические воздействия.</td></tr>
+                                    <tr><td>Физикальное обследование</td><td>Артериальная гипертензия, периферические и полостные отёки, увеличение почек, шум над почечными артериями.</td></tr>
+                                    <tr><td>Лабораторные данные</td><td>Альбуминурия или протеинурия, СКФ &lt;60, изменения мочевого осадка, азотемия, электролитные и кислотно‑основные нарушения.</td></tr>
+                                    <tr><td>Визуализация и морфология</td><td>Кисты, гидронефроз, аномалии развития, изменение размеров и гемодинамики, признаки хронического повреждения и фиброза.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: таблица 8 и раздел «Клиническая картина». <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="reference-section" id="diagnostics" data-reference-section>
+                <h2 class="reference-section-heading"><span class="reference-section-number">2.</span> Диагностика</h2>
+
+                <details class="reference-card" id="diagnostic-criteria" data-reference-card>
+                    <summary>Критерии диагноза ХБП</summary>
+                    <div class="reference-card-body">
+                        <p>Диагноз устанавливается при наличии одного или нескольких критериев:</p>
+                        <ol class="criteria-list">
+                            <li><strong>Маркеры повреждения почек</strong>, персистирующие не менее трёх месяцев.</li>
+                            <li><strong>СКФ &lt;60 мл/мин/1,73 м²</strong>, сохраняющаяся три месяца или более независимо от наличия других признаков.</li>
+                            <li><strong>Необратимые структурные изменения</strong>, однократно подтверждённые при визуализации или прижизненном патолого‑анатомическом исследовании.</li>
+                        </ol>
+                        <div class="reference-note">Однократное снижение СКФ без подтверждения длительности не позволяет автоматически установить ХБП, если отсутствуют документированные необратимые структурные изменения.</div>
+                        <div class="source-reference">КР РФ 2024: раздел «Диагностика», критерии диагноза ХБП. <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="complaints-anamnesis" data-reference-card>
+                    <summary>Жалобы, анамнез и анализ медицинской документации</summary>
+                    <div class="reference-card-body">
+                        <div class="content-columns">
+                            <div>
+                                <h4>Уточняются</h4>
+                                <ul>
+                                    <li>изменение диуреза и цвета мочи, никтурия;</li>
+                                    <li>отеки, одышка, снижение переносимости нагрузки;</li>
+                                    <li>ранее выявленная протеинурия, гематурия или снижение СКФ;</li>
+                                    <li>артериальная гипертензия и сахарный диабет;</li>
+                                    <li>инфекции, камни и обструкция мочевых путей;</li>
+                                    <li>системные и аутоиммунные заболевания;</li>
+                                    <li>эпизоды ОПП и госпитализации;</li>
+                                    <li>семейный анамнез ХБП и наследственных нефропатий.</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <h4>Отдельно оцениваются</h4>
+                                <ul>
+                                    <li>приём НПВП, нефротоксичных препаратов и потенциально опасных сочетаний;</li>
+                                    <li>контрастные исследования;</li>
+                                    <li>курение, питание, масса тела и физическая активность;</li>
+                                    <li>динамика креатинина и альбуминурии;</li>
+                                    <li>предыдущие результаты УЗИ и других методов визуализации.</li>
+                                </ul>
+                            </div>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: разделы «Клиническая картина» и «Диагностика». <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="physical-exam" data-reference-card>
+                    <summary>Физикальное обследование</summary>
+                    <div class="reference-card-body">
+                        <ul>
+                            <li>оценка артериального давления, частоты сердечных сокращений и признаков ортостатических реакций;</li>
+                            <li>выявление периферических и полостных отёков, признаков гипер- или гиповолемии;</li>
+                            <li>оценка массы тела и нутритивного статуса;</li>
+                            <li>поиск признаков сердечной недостаточности, сосудистых изменений и уремии;</li>
+                            <li>аускультация области проекции почечных артерий при соответствующем клиническом подозрении;</li>
+                            <li>оценка состояния сосудистого доступа у пациентов, готовящихся к ЗПТ или получающих диализ.</li>
+                        </ul>
+                        <div class="source-reference">КР РФ 2024: таблица 8 и раздел «Диагностика». <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="laboratory" data-reference-card>
+                    <summary>Лабораторная диагностика и контроль осложнений</summary>
+                    <div class="reference-card-body">
+                        <div class="reference-table-wrap">
+                            <table class="reference-table">
+                                <thead><tr><th>Задача</th><th>Основные исследования</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Оценка функции почек</td><td>Креатинин крови со стандартизованным определением, расчёт СКФ по CKD‑EPI; при ограниченной точности — цистатин C или измерение СКФ специальными методами.</td></tr>
+                                    <tr><td>Оценка повреждения почек</td><td>Количественное определение альбумина мочи, ACR или суточная экскреция; при выраженной протеинурии — общий белок мочи и отношение белок/креатинин.</td></tr>
+                                    <tr><td>Мочевой осадок</td><td>Эритроцитурия, лейкоцитурия, цилиндры, тубулярные клетки и другие изменения.</td></tr>
+                                    <tr><td>Анемия</td><td>Общий анализ крови, показатели обмена железа и дополнительные исследования по клиническим показаниям.</td></tr>
+                                    <tr><td>Метаболические нарушения</td><td>Калий, натрий, бикарбонат или показатели кислотно‑основного состояния, мочевина, альбумин.</td></tr>
+                                    <tr><td>МКН‑ХБП</td><td>Кальций, фосфор, ПТГ, щелочная фосфатаза и 25(ОН)D по стадии и клинической ситуации.</td></tr>
+                                    <tr><td>Сердечно‑сосудистый риск</td><td>Липидный профиль, гликемический контроль при сахарном диабете и другие исследования по сопутствующей патологии.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="reference-note">При выраженной альбуминурии/протеинурии методы определения общего белка могут быть полезны, но тест‑полоски недостаточно чувствительны для ранних изменений экскреции альбумина.</div>
+                        <div class="source-reference">КР РФ 2024: раздел «Лабораторные диагностические исследования», таблицы 12–14. <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="instrumental" data-reference-card>
+                    <summary>Инструментальные и иные диагностические исследования</summary>
+                    <div class="reference-card-body">
+                        <ul>
+                            <li><strong>УЗИ почек и мочевых путей:</strong> размеры, толщина паренхимы, кисты, гидронефроз, аномалии развития и признаки обструкции.</li>
+                            <li><strong>Дуплексное сканирование:</strong> при подозрении на нарушение проходимости почечных артерий и изменении интраренальной гемодинамики.</li>
+                            <li><strong>КТ и МРТ:</strong> по показаниям с предварительной оценкой риска контраст‑ассоциированного ОПП и ограничений контрастирования.</li>
+                            <li><strong>Биопсия почки:</strong> при необходимости этиологической и морфологической верификации, когда результат влияет на тактику.</li>
+                            <li><strong>Измерение СКФ экзогенными маркерами:</strong> в отдельных ситуациях, требующих максимально точной оценки функции почек.</li>
+                        </ul>
+                        <div class="reference-note reference-warning">При внутрисосудистом введении контрастных препаратов пациент с ХБП рассматривается как имеющий повышенный риск ОПП; профилактика и выбор препарата определяются клинической ситуацией.</div>
+                        <div class="source-reference">КР РФ 2024: разделы «Инструментальные диагностические исследования» и «Профилактика». <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="kidney-function" data-reference-card>
+                    <summary>Формулы оценки функции почек: рекомендации РФ и реализация в приложении</summary>
+                    <div class="reference-card-body">
+                        <div class="formula-section">
+                            <div class="formula-section-header">
+                                <span class="formula-source-label clinical">
+                                    Клинические рекомендации РФ 2024
+                                </span>
+
+                                <h3>Расчёт СКФ по формуле CKD-EPI 2009</h3>
+
+                                <p>
+                                    Формула приведена в приложении Г клинических рекомендаций «Хроническая болезнь почек (ХБП)» для взрослых. Креатинин крови указывается в мкмоль/л.
+                                </p>
+                            </div>
+
+                            <div class="formula-lines formula-lines-vertical">
+                                <section class="piecewise-formula">
+                                    <div class="piecewise-formula__condition">
+                                        Женщины, креатинин ≤ 62 мкмоль/л
+                                    </div>
+
+                                    <div class="piecewise-formula__equation">
+                                        <span>рСКФ = 144 ×</span>
+
+                                        <span class="math-powered-group">
+                                            <span class="math-paren">(</span>
+
+                                            <span class="math-fraction">
+                                                <span class="math-fraction__top">Cr</span>
+                                                <span class="math-fraction__bottom">88,4 × 0,7</span>
+                                            </span>
+
+                                            <span class="math-paren">)</span>
+                                            <sup>−0,328</sup>
+                                        </span>
+
+                                        <span>×</span>
+
+                                        <span class="math-power">
+                                            0,993<sup>возраст</sup>
+                                        </span>
+                                    </div>
+                                </section>
+
+                                <section class="piecewise-formula">
+                                    <div class="piecewise-formula__condition">
+                                        Женщины, креатинин &gt; 62 мкмоль/л
+                                    </div>
+
+                                    <div class="piecewise-formula__equation">
+                                        <span>рСКФ = 144 ×</span>
+
+                                        <span class="math-powered-group">
+                                            <span class="math-paren">(</span>
+
+                                            <span class="math-fraction">
+                                                <span class="math-fraction__top">Cr</span>
+                                                <span class="math-fraction__bottom">88,4 × 0,7</span>
+                                            </span>
+
+                                            <span class="math-paren">)</span>
+                                            <sup>−1,210</sup>
+                                        </span>
+
+                                        <span>×</span>
+
+                                        <span class="math-power">
+                                            0,993<sup>возраст</sup>
+                                        </span>
+                                    </div>
+                                </section>
+
+                                <section class="piecewise-formula">
+                                    <div class="piecewise-formula__condition">
+                                        Мужчины, креатинин ≤ 80 мкмоль/л
+                                    </div>
+
+                                    <div class="piecewise-formula__equation">
+                                        <span>рСКФ = 141 ×</span>
+
+                                        <span class="math-powered-group">
+                                            <span class="math-paren">(</span>
+
+                                            <span class="math-fraction">
+                                                <span class="math-fraction__top">Cr</span>
+                                                <span class="math-fraction__bottom">88,4 × 0,9</span>
+                                            </span>
+
+                                            <span class="math-paren">)</span>
+                                            <sup>−0,412</sup>
+                                        </span>
+
+                                        <span>×</span>
+
+                                        <span class="math-power">
+                                            0,993<sup>возраст</sup>
+                                        </span>
+                                    </div>
+                                </section>
+
+                                <section class="piecewise-formula">
+                                    <div class="piecewise-formula__condition">
+                                        Мужчины, креатинин &gt; 80 мкмоль/л
+                                    </div>
+
+                                    <div class="piecewise-formula__equation">
+                                        <span>рСКФ = 141 ×</span>
+
+                                        <span class="math-powered-group">
+                                            <span class="math-paren">(</span>
+
+                                            <span class="math-fraction">
+                                                <span class="math-fraction__top">Cr</span>
+                                                <span class="math-fraction__bottom">88,4 × 0,9</span>
+                                            </span>
+
+                                            <span class="math-paren">)</span>
+                                            <sup>−1,210</sup>
+                                        </span>
+
+                                        <span>×</span>
+
+                                        <span class="math-power">
+                                            0,993<sup>возраст</sup>
+                                        </span>
+                                    </div>
+                                </section>
+                            </div>
+
+                            <p class="formula-result">
+                                <strong>Результат:</strong> мл/мин/1,73 м².
+                            </p>
+                        </div>
+
+
+                        <div class="formula-section implementation">
+                            <div class="formula-section-header">
+                                <span class="formula-source-label app">
+                                    Реализовано в приложении
+                                </span>
+
+                                <h3>Расчёт СКФ по формуле CKD-EPI 2021</h3>
+
+                                <p>
+                                    В приложении применяется обновлённая формула CKD-EPI 2021 по креатинину без расового коэффициента.
+                                </p>
+                            </div>
+
+                            <div class="equation-card equation-card-wide">
+                                <div class="equation-display equation-display-large equation-display-wrap">
+                                    рСКФ =
+                                    142 × min(Scr / κ, 1)<sup>α</sup> ×
+                                    max(Scr / κ, 1)<sup>−1,200</sup> ×
+                                    0,9938<sup>возраст</sup> ×
+                                    F<sub>пол</sub>
+                                </div>
+                            </div>
+
+                            <div class="formula-parameter-list">
+                                <div>
+                                    <strong>Scr</strong>
+                                    <span>
+                                        креатинин крови в мг/дл.
+                                        Введённое значение в мкмоль/л делится на 88,4.
+                                    </span>
+                                </div>
+
+                                <div>
+                                    <strong>κ</strong>
+                                    <span>0,7 для женщин; 0,9 для мужчин.</span>
+                                </div>
+
+                                <div>
+                                    <strong>α</strong>
+                                    <span>−0,241 для женщин; −0,302 для мужчин.</span>
+                                </div>
+
+                                <div>
+                                    <strong>F<sub>пол</sub></strong>
+                                    <span>1,012 для женщин; 1,0 для мужчин.</span>
+                                </div>
+                            </div>
+
+                            <p class="formula-result">
+                                <strong>Результат:</strong> мл/мин/1,73 м².
+                                Значение округляется до двух знаков, после чего автоматически определяется стадия ХБП С1–С5.
+                            </p>
+                        </div>
+
+
+                        <div class="formula-section implementation secondary-formula">
+                            <div class="formula-section-header">
+                                <span class="formula-source-label app">
+                                    Дополнительный расчёт приложения
+                                </span>
+
+                                <h3>
+                                    Формула Кокрофта — Голта для дозирования лекарственных препаратов
+                                </h3>
+
+                                <p>
+                                    Формула Кокрофта — Голта не приведена в клинических рекомендациях РФ 2024 по ХБП. В приложении расчёт используется при назначении и коррекции доз лекарственных препаратов с учётом функции почек.
+                                </p>
+                            </div>
+
+                            <div class="equation-card equation-card-wide">
+                                <div class="equation-display equation-display-large equation-display-wrap">
+                                    Показатель =
+                                    <span class="fraction">
+                                        <span class="fraction-top">
+                                            (140 − возраст) × масса тела, кг
+                                        </span>
+                                        <span class="fraction-bottom">
+                                            72 × Scr, мг/дл
+                                        </span>
+                                    </span>
+                                    × F<sub>пол</sub>
+                                </div>
+
+                                <div class="equation-footnote">
+                                    F<sub>пол</sub> = 0,85 для женщин и 1,0 для мужчин.
+                                    Результат выражается в мл/мин и округляется до двух знаков.
+                                </div>
+                            </div>
+                        </div>
+
+                        
+
+                
+                        <details class="inner-details">
+                            <summary>Когда креатинин может искажать расчётную СКФ</summary>
+                            <div class="inner-details-body">
+                                <div class="reference-table-wrap">
+                                    <table class="reference-table">
+                                        <thead><tr><th>Возможное завышение креатинина</th><th>Возможное занижение креатинина</th></tr></thead>
+                                        <tbody><tr>
+                                            <td>Высокая мышечная масса, анаболические стероиды, мясная пища, креатин, отдельные лекарственные влияния и аналитические интерференции.</td>
+                                            <td>Низкая мышечная масса, атрофия и иммобилизация, ампутации, вегетарианская или низкобелковая диета, голодание и тяжёлая белково‑энергетическая недостаточность.</td>
+                                        </tr></tbody>
+                                    </table>
+                                </div>
+                                <p>При существенном ограничении точности рекомендуется подтверждающая оценка по цистатину C либо измерение СКФ специальными методами.</p>
+                            </div>
+                        </details>
+                        <div class="source-reference">КР РФ 2024: раздел «Оценка СКФ», таблица 13 и приложение Г. Реализация приложения: <code>egfr.py</code> и <code>cockcroft_gault.py</code>. <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть КР РФ ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="ckd-classification" data-reference-card>
+                    <summary>Классификация стадий ХБП по СКФ</summary>
+                    <div class="reference-card-body">
+                        <div class="reference-table-wrap">
+                            <table class="reference-table stage-table">
+                                <thead><tr><th>Стадия</th><th>Характеристика глобальной функции почек</th><th>СКФ, мл/мин/1,73 м²</th></tr></thead>
+                                <tbody>
+                                    <tr><td><span class="stage-pill">С1</span></td><td>Высокая или оптимальная</td><td>≥90</td></tr>
+                                    <tr><td><span class="stage-pill">С2</span></td><td>Незначительно сниженная</td><td>60–89</td></tr>
+                                    <tr><td><span class="stage-pill">С3а</span></td><td>Умеренно сниженная</td><td>45–59</td></tr>
+                                    <tr><td><span class="stage-pill">С3б</span></td><td>Существенно сниженная</td><td>30–44</td></tr>
+                                    <tr><td><span class="stage-pill">С4</span></td><td>Резко сниженная</td><td>15–29</td></tr>
+                                    <tr><td><span class="stage-pill">С5</span></td><td>Терминальная почечная недостаточность</td><td>&lt;15</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p>При С1 и С2 диагноз ХБП требует наличия других маркеров повреждения почек. СКФ ≥60 без таких маркеров сама по себе не подтверждает ХБП.</p>
+                        <div class="source-reference">КР РФ 2024: таблица 6. В приложении используются обозначения с русской буквой «С». <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="albuminuria" data-reference-card>
+                    <summary>Альбуминурия: единая таблица клинических градаций и расчётов приложения</summary>
+                    <div class="reference-card-body">
+                        <div class="formula-section implementation compact-formula">
+                            <div class="formula-section-header">
+                                <span class="formula-source-label app">Расчёт в приложении</span>
+                                <h3>Альбумин‑креатининовое отношение</h3>
+                            </div>
+                            <div class="equation-card equation-card-wide">
+                                <div class="equation-display equation-display-large">
+                                    ACR, мг/ммоль = <span class="fraction"><span class="fraction-top">альбумин мочи, мг/л</span><span class="fraction-bottom">креатинин мочи, ммоль/л</span></span>
+                                </div>
+                                <div class="equation-footnote">Для отображения в мг/г: ACR, мг/г ≈ ACR, мг/ммоль × 8,84.</div>
+                            </div>
+                        </div>
+
+                        <div class="reference-table-wrap">
+                            <table class="reference-table albuminuria-table">
+                                <thead>
+                                    <tr>
+                                        <th>Градация</th>
+                                        <th>Описание в КР РФ</th>
+                                        <th>Суточная экскреция альбумина, мг/сут</th>
+                                        <th>ACR в приложении, мг/ммоль</th>
+                                        <th>Как сохраняется в приложении</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr><td><strong>A1</strong></td><td>Оптимальная или повышенная</td><td>&lt;30</td><td>&lt;3</td><td>A1</td></tr>
+                                    <tr><td><strong>A2</strong></td><td>Высокая</td><td>30–299</td><td>3–30 включительно</td><td>A2</td></tr>
+                                    <tr><td><strong>A3</strong></td><td>Очень высокая</td><td>300–1999</td><td>&gt;30</td><td>A3</td></tr>
+                                    <tr><td><strong>A4</strong></td><td>Нефротическая</td><td>≥2000</td><td>Отдельная граница A4 не рассчитывается</td><td>A3 с сохранением фактического значения суточной экскреции</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <ul>
+                            <li>Если введены альбумин и креатинин мочи, категория определяется по ACR.</li>
+                            <li>Если полного набора для ACR нет, но указана суточная экскреция, категория определяется по суточному значению.</li>
+                            <li>При наличии обоих вариантов ACR имеет приоритет для категории A1–A3 в приложении.</li>
+                            <li>Фактические числовые значения сохраняются и отображаются независимо от категории.</li>
+                        </ul>
+                        <div class="reference-note">В КР РФ выделена нефротическая градация A4. Матрица KDIGO и текущая логика приложения используют три категории A1–A3, поэтому A4 не создаётся как отдельная программная категория.</div>
+                        <div class="source-reference">КР РФ 2024: таблица 7 и раздел об оценке альбуминурии. Реализация: <code>albuminuria.py</code>. <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="kdigo-risk" data-reference-card>
+                    <summary>Оценка риска прогрессирования по сочетанию стадии ХБП и альбуминурии</summary>
+                    <div class="reference-card-body">
+                        <div class="reference-table-wrap">
+                            <table class="reference-table kdigo-matrix">
+                                <thead>
+                                    <tr><th rowspan="2">Стадия ХБП</th><th colspan="3">Категория альбуминурии в приложении</th></tr>
+                                    <tr><th>A1</th><th>A2</th><th>A3</th></tr>
+                                </thead>
+                                <tbody>
+                                    <tr><th>С1</th><td class="risk-low">Низкий</td><td class="risk-moderate">Умеренно повышенный</td><td class="risk-high">Высокий</td></tr>
+                                    <tr><th>С2</th><td class="risk-low">Низкий</td><td class="risk-moderate">Умеренно повышенный</td><td class="risk-high">Высокий</td></tr>
+                                    <tr><th>С3а</th><td class="risk-moderate">Умеренно повышенный</td><td class="risk-high">Высокий</td><td class="risk-very-high">Очень высокий</td></tr>
+                                    <tr><th>С3б</th><td class="risk-high">Высокий</td><td class="risk-very-high">Очень высокий</td><td class="risk-very-high">Очень высокий</td></tr>
+                                    <tr><th>С4</th><td class="risk-very-high">Очень высокий</td><td class="risk-very-high">Очень высокий</td><td class="risk-very-high">Очень высокий</td></tr>
+                                    <tr><th>С5</th><td class="risk-very-high">Очень высокий</td><td class="risk-very-high">Очень высокий</td><td class="risk-very-high">Очень высокий</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p>Матрица отражает категорию риска неблагоприятных исходов для сочетания СКФ и альбуминурии. Это не индивидуальный процент вероятности события.</p>
+                        <div class="risk-legend">
+                            <span class="risk-low">Низкий</span><span class="risk-moderate">Умеренно повышенный</span><span class="risk-high">Высокий</span><span class="risk-very-high">Очень высокий</span>
+                        </div>
+                        <div class="source-reference">КР РФ требует совместного учёта СКФ и альбуминурии. Матрица и формулировки совпадают с <code>kdigo_risk.py</code>; дополнительный источник — <a href="{{ kdigo_url }}" target="_blank" rel="noopener noreferrer">KDIGO ↗</a>.</div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="reference-section" id="treatment" data-reference-section>
+                <h2 class="reference-section-heading"><span class="reference-section-number">3.</span> Лечение</h2>
+
+                <details class="reference-card" id="treatment-principles" data-reference-card>
+                    <summary>Общие принципы лечения и направленность по стадиям</summary>
+                    <div class="reference-card-body">
+                        <p>Лечение сочетает терапию причины заболевания, воздействие на универсальные механизмы прогрессирования, коррекцию сердечно‑сосудистого риска и лечение системных осложнений. Тактика не определяется только стадией: учитываются этиология, альбуминурия, темп снижения СКФ, артериальное давление, сахарный диабет, осложнения и переносимость терапии.</p>
+                        <div class="reference-table-wrap">
+                            <table class="reference-table">
+                                <thead><tr><th>Стадия</th><th>Направленность практических мероприятий по КР РФ</th></tr></thead>
+                                <tbody>
+                                    <tr><td>Факторы риска без ХБП</td><td>Регулярный скрининг и первичная профилактика.</td></tr>
+                                    <tr><td>С1</td><td>Диагностика и этиотропное лечение; коррекция факторов прогрессирования; оценка и коррекция сердечно‑сосудистого риска.</td></tr>
+                                    <tr><td>С2</td><td>Мероприятия С1 плюс оценка скорости прогрессирования и коррекция терапии.</td></tr>
+                                    <tr><td>С3</td><td>Мероприятия С2 плюс выявление, профилактика и лечение системных осложнений.</td></tr>
+                                    <tr><td>С4</td><td>Мероприятия С3 плюс подготовка к заместительной почечной терапии.</td></tr>
+                                    <tr><td>С5</td><td>Мероприятия С4, ЗПТ при наличии показаний и ведение осложнений терминальной почечной недостаточности.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: раздел «Лечение», таблица 16. <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="renoprotection" data-reference-card>
+                    <summary>Ренопротекция и снижение сердечно‑сосудистого риска</summary>
+                    <div class="reference-card-body">
+                        <div class="recommendation-list">
+                            <div class="recommendation-item"><strong>Образ жизни</strong><span>Регулярная физическая активность не менее 30 минут 5 раз в неделю, отказ от курения, индивидуальная коррекция избыточной массы тела.</span></div>
+                            <div class="recommendation-item"><strong>Блокада РАС</strong><span>иАПФ или БРА при отсутствии противопоказаний используются на стадиях С1–С5 для снижения протеинурии и риска прогрессирования; необходим контроль калия, СКФ, ОПП и лекарственных взаимодействий.</span></div>
+                            <div class="recommendation-item"><strong>иНГЛТ‑2</strong><span>При ХБП недиабетической этиологии — в дополнение к иАПФ/БРА при СКФ ≥20 мл/мин/1,73 м² и наличии показаний. При СД 2 типа — в составе терапии, направленной на снижение почечного и сердечно‑сосудистого риска.</span></div>
+                            <div class="recommendation-item"><strong>СД 2 типа</strong><span>Индивидуализированный гликемический контроль; при СКФ &gt;25 мл/мин/1,73 м² может рассматриваться финеренон по показаниям и с контролем гиперкалиемии.</span></div>
+                            <div class="recommendation-item"><strong>Липиды</strong><span>При гиперхолестеринемии ЛПНП на стадиях С1–С5 применяется гиполипидемическая терапия; на С5Д начало терапии для первичной профилактики имеет ограничения, но ранее назначенная терапия обычно не отменяется автоматически.</span></div>
+                            <div class="recommendation-item"><strong>Протеинурия</strong><span>При С3–С5 и явной протеинурии более 500 мг/сут или 500 мг/г в КР РФ рассматривается добавление пентоксифиллина к блокаде РАС с индивидуальным подбором и контролем.</span></div>
+                        </div>
+                        <div class="reference-note reference-warning">Назначение конкретного препарата, дозы и комбинации определяется полным текстом рекомендаций, инструкцией, причиной ХБП, СКФ, калием, объёмным статусом и сопутствующими заболеваниями.</div>
+                        <div class="source-reference">КР РФ 2024: раздел «Общие подходы к лечению», рекомендации по РАС, иНГЛТ‑2, СД, дислипидемии и протеинурии. <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="bp-control" data-reference-card>
+                    <summary>Артериальное давление и контроль безопасности терапии</summary>
+                    <div class="reference-card-body">
+                        <div class="reference-table-wrap">
+                            <table class="reference-table">
+                                <thead><tr><th>Клиническая ситуация</th><th>Ориентир по КР РФ</th></tr></thead>
+                                <tbody>
+                                    <tr><td>ХБП с АГ и альбуминурией A1–A2</td><td>САД 130–139 мм рт. ст. для снижения общей и сердечно‑сосудистой смертности.</td></tr>
+                                    <tr><td>ХБП с АГ и A3 или стойкой протеинурией</td><td>САД 120–130 мм рт. ст. и ДАД ≤80 мм рт. ст. при отсутствии противопоказаний.</td></tr>
+                                    <tr><td>Риск гипоперфузии</td><td>Следует избегать снижения САД ≤120 мм рт. ст.; терапия индивидуализируется.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p>После начала или усиления блокады РАС и антигипертензивной терапии оцениваются СКФ, креатинин, калий, объёмный статус и признаки гипоперфузии. При существенном снижении СКФ сначала анализируются обратимые причины, включая гиповолемию, НПВП и лекарственные взаимодействия.</p>
+                        <div class="source-reference">КР РФ 2024: раздел контроля АД и блокады РАС. <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card" id="metabolic-treatment" data-reference-card>
+                    <summary>Коррекция гиперкалиемии, ацидоза, МКН‑ХБП, анемии и питания</summary>
+                    <div class="reference-card-body">
+                        <div class="metabolic-treatment-list">
+                            <section class="metabolic-treatment-section">
+                                <h4>Гиперкалиемия</h4>
+                                <ul>
+                                    <li>
+                                        При С3–С5Д и концентрации калия более 5,0 ммоль/л пищевое поступление калия уменьшается до 2–3 г/сут.
+                                    </li>
+                                    <li>
+                                        Оцениваются лекарственные препараты, способствующие развитию гиперкалиемии, наличие метаболического ацидоза, объёмный статус и возможность применения петлевых диуретиков.
+                                    </li>
+                                    <li>
+                                        Острая симптомная гиперкалиемия требует неотложного лечения в соответствии с полным алгоритмом клинических рекомендаций.
+                                    </li>
+                                </ul>
+                            </section>
+
+                            <section class="metabolic-treatment-section">
+                                <h4>Метаболический ацидоз</h4>
+                                <ul>
+                                    <li>
+                                        При С3–С5 и концентрации бикарбоната менее 20 ммоль/л рекомендуется пероральная коррекция с достижением целевого диапазона 20–24 ммоль/л.
+                                    </li>
+                                    <li>
+                                        Во время лечения контролируются концентрация натрия, выраженность отёков и артериальное давление.
+                                    </li>
+                                </ul>
+                            </section>
+
+                            <section class="metabolic-treatment-section">
+                                <h4>Минеральные и костные нарушения при ХБП</h4>
+                                <ul>
+                                    <li>
+                                        Оцениваются концентрации кальция и фосфора, уровень паратиреоидного гормона и витамина D.
+                                    </li>
+                                    <li>
+                                        Результаты лабораторных исследований оцениваются совместно с клиническими проявлениями и стадией ХБП.
+                                    </li>
+                                </ul>
+                            </section>
+
+                            <section class="metabolic-treatment-section">
+                                <h4>Анемия при ХБП</h4>
+                                <ul>
+                                    <li>
+                                        Выполняются выявление и оценка анемии, связанной с хронической болезнью почек.
+                                    </li>
+                                    <li>
+                                        Лечение проводится в соответствии с отдельными клиническими рекомендациями по анемии при ХБП.
+                                    </li>
+                                </ul>
+                            </section>
+
+                            <section class="metabolic-treatment-section">
+                                <h4>Питание</h4>
+                                <ul>
+                                    <li>
+                                        Потребление натрия ограничивается до уровня менее 2,4 г/сут на всех стадиях ХБП.
+                                    </li>
+                                    <li>
+                                        При С3б–С5 и отсутствии белково-энергетической недостаточности потребление белка ограничивается до уровня менее 0,8 г/кг/сут.
+                                    </li>
+                                    <li>
+                                        Рекомендуемая энергетическая ценность питания составляет 30–35 ккал/кг/сут.
+                                    </li>
+                                    <li>
+                                        Предпочтение отдаётся растительным источникам белка и продуктам, не содержащим фосфатных пищевых добавок.
+                                    </li>
+                                    <li>
+                                        Ограничение калия и фосфора определяется стадией ХБП и результатами лабораторных исследований.
+                                    </li>
+                                </ul>
+                            </section>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: разделы коррекции метаболических нарушений, питания, МКН‑ХБП и анемии. <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+
+                <details class="reference-card stage-treatment-card" id="stage-c1" data-reference-card>
+                    <summary><span class="stage-summary"><span class="stage-badge">С1</span> Тактика при СКФ ≥90 мл/мин/1,73 м²</span></summary>
+                    <div class="reference-card-body">
+                        <div class="stage-treatment-grid">
+                            <div><h4>Главные задачи</h4><ul><li>подтвердить маркеры повреждения почек и хронический характер;</li><li>установить этиологию и провести этиотропное лечение;</li><li>оценить альбуминурию и сердечно‑сосудистый риск.</li></ul></div>
+                            <div><h4>Лечение</h4><ul><li>коррекция АД, диабета, дислипидемии, курения и ожирения;</li><li>иАПФ/БРА при отсутствии противопоказаний и по показаниям;</li><li>иНГЛТ‑2, GLP‑1 и финеренон — по клинической ситуации и сопутствующему СД;</li><li>физическая активность и отказ от курения.</li></ul></div>
+                            <div><h4>Питание</h4><ul><li>Na &lt;2,4 г/сут;</li><li>K 4–5 г/сут при отсутствии склонности к гиперкалиемии;</li><li>P 1,0–1,2 г/сут;</li><li>избегать чрезмерной белковой нагрузки.</li></ul></div>
+                            <div><h4>Наблюдение</h4><ul><li>A1–A2: ориентировочно ежегодно;</li><li>A3: каждые 6 месяцев;</li><li>A4: каждые 3 месяца;</li><li>частота повышается при быстром прогрессировании и изменении терапии.</li></ul></div>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: таблицы 16, 18 и 26; общие рекомендации по ренопротекции.</div>
+                    </div>
+                </details>
+
+                <details class="reference-card stage-treatment-card" id="stage-c2" data-reference-card>
+                    <summary><span class="stage-summary"><span class="stage-badge">С2</span> Тактика при СКФ 60–89 мл/мин/1,73 м²</span></summary>
+                    <div class="reference-card-body">
+                        <div class="stage-treatment-grid">
+                            <div><h4>Главные задачи</h4><ul><li>выполнять мероприятия С1;</li><li>оценить скорость снижения СКФ и динамику альбуминурии;</li><li>исключить обратимые причины ухудшения функции.</li></ul></div>
+                            <div><h4>Лечение</h4><ul><li>этиотропная терапия и многофакторная ренопротекция;</li><li>контроль АД с учётом альбуминурии;</li><li>мониторинг безопасности блокады РАС и других нефропротективных препаратов;</li><li>коррекция сердечно‑сосудистого риска.</li></ul></div>
+                            <div><h4>Питание</h4><ul><li>Na &lt;2,4 г/сут;</li><li>K 4–5 г/сут при отсутствии склонности к гиперкалиемии;</li><li>P 1,0–1,2 г/сут;</li><li>индивидуальная коррекция при лабораторных отклонениях.</li></ul></div>
+                            <div><h4>Наблюдение</h4><ul><li>A1–A2: ориентировочно ежегодно;</li><li>A3: каждые 6 месяцев;</li><li>A4: каждые 3 месяца;</li><li>после изменения лечения — дополнительный контроль креатинина и калия.</li></ul></div>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: таблицы 16, 18 и 26.</div>
+                    </div>
+                </details>
+
+                <details class="reference-card stage-treatment-card" id="stage-c3a" data-reference-card>
+                    <summary><span class="stage-summary"><span class="stage-badge">С3а</span> Тактика при СКФ 45–59 мл/мин/1,73 м²</span></summary>
+                    <div class="reference-card-body">
+                        <div class="stage-treatment-grid">
+                            <div><h4>Главные задачи</h4><ul><li>продолжить мероприятия С2;</li><li>начать систематический поиск осложнений дисфункции почек;</li><li>оценивать риск ОПП и лекарственные дозы.</li></ul></div>
+                            <div><h4>Лечение</h4><ul><li>ренопротекция и коррекция протеинурии;</li><li>контроль АД и сердечно‑сосудистого риска;</li><li>выявление анемии, ацидоза, гиперкалиемии, МКН‑ХБП и нутритивных нарушений;</li><li>коррекция доз лекарств по функции почек.</li></ul></div>
+                            <div><h4>Питание</h4><ul><li>Na &lt;2,4 г/сут;</li><li>K 4–5 г/сут при отсутствии гиперкалиемии; при K &gt;5,0 — 2–3 г/сут;</li><li>P 0,8–1,0 г/сут;</li><li>белок индивидуально, без необоснованного ограничения при риске БЭН.</li></ul></div>
+                            <div><h4>Наблюдение</h4><ul><li>A1–A2: каждые 6 месяцев;</li><li>A3–A4: каждые 3 месяца;</li><li>дополнительный контроль при изменении СКФ, калия, бикарбоната и терапии.</li></ul></div>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: таблицы 16, 18 и 26; раздел системных осложнений.</div>
+                    </div>
+                </details>
+
+                <details class="reference-card stage-treatment-card" id="stage-c3b" data-reference-card>
+                    <summary><span class="stage-summary"><span class="stage-badge">С3б</span> Тактика при СКФ 30–44 мл/мин/1,73 м²</span></summary>
+                    <div class="reference-card-body">
+                        <div class="stage-treatment-grid">
+                            <div><h4>Главные задачи</h4><ul><li>углублённая профилактика и лечение осложнений;</li><li>оценка темпа прогрессирования и риска перехода к С4;</li><li>пересмотр всех потенциально нефротоксичных препаратов.</li></ul></div>
+                            <div><h4>Лечение</h4><ul><li>продолжение ренопротекции при переносимости;</li><li>коррекция анемии, ацидоза, электролитных и минеральных нарушений;</li><li>контроль гиперкалиемии для сохранения полезной терапии;</li><li>оценка нутритивного статуса и риска БЭН.</li></ul></div>
+                            <div><h4>Питание</h4><ul><li>белок &lt;0,8 г/кг/сут при отсутствии БЭН и гиперкатаболизма;</li><li>энергия 30–35 ккал/кг/сут;</li><li>Na &lt;2,4 г/сут, P 0,8–1,0 г/сут;</li><li>K 2–3 г/сут при гиперкалиемии.</li></ul></div>
+                            <div><h4>Наблюдение</h4><ul><li>A1–A2: каждые 6 месяцев;</li><li>A3–A4: каждые 3 месяца;</li><li>чаще при быстром снижении СКФ, нестабильном калии или ацидозе.</li></ul></div>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: таблицы 16, 18 и 26; рекомендации по ограничению белка и осложнениям.</div>
+                    </div>
+                </details>
+
+                <details class="reference-card stage-treatment-card" id="stage-c4" data-reference-card>
+                    <summary><span class="stage-summary"><span class="stage-badge">С4</span> Тактика при СКФ 15–29 мл/мин/1,73 м²</span></summary>
+                    <div class="reference-card-body">
+                        <div class="stage-treatment-grid">
+                            <div><h4>Главные задачи</h4><ul><li>выполнять мероприятия С3;</li><li>начать или завершить подготовку к заместительной почечной терапии;</li><li>обсудить варианты диализа и трансплантации;</li><li>планировать постоянный доступ для диализа по показаниям.</li></ul></div>
+                            <div><h4>Лечение</h4><ul><li>активное лечение анемии, ацидоза, гиперкалиемии и МКН‑ХБП;</li><li>сохранение ренопротективной терапии при допустимом соотношении пользы и риска;</li><li>коррекция доз препаратов и профилактика ОПП;</li><li>обучение пациента и оценка социальных условий.</li></ul></div>
+                            <div><h4>Питание</h4><ul><li>белок &lt;0,8 г/кг/сут при отсутствии БЭН;</li><li>энергия 30–35 ккал/кг/сут;</li><li>Na &lt;2,4 г/сут, P &lt;0,8 г/сут;</li><li>K 2–3 г/сут при гиперкалиемии.</li></ul></div>
+                            <div><h4>Наблюдение</h4><ul><li>A1–A2: каждые 3 месяца;</li><li>A3–A4: ориентировочно каждые 6 недель;</li><li>частота повышается при нестабильных осложнениях и подготовке к ЗПТ.</li></ul></div>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: таблицы 16, 18 и 26; раздел подготовки к ЗПТ.</div>
+                    </div>
+                </details>
+
+                <details class="reference-card stage-treatment-card" id="stage-c5" data-reference-card>
+                    <summary><span class="stage-summary"><span class="stage-badge">С5</span> Тактика при СКФ &lt;15 мл/мин/1,73 м²</span></summary>
+                    <div class="reference-card-body">
+                        <div class="stage-treatment-grid">
+                            <div><h4>Главные задачи</h4><ul><li>оценивать симптомы уремии и жизнеугрожающие осложнения;</li><li>принимать решение о начале ЗПТ по клинической картине, а не только по СКФ;</li><li>выбирать модальность ЗПТ с учётом показаний, противопоказаний и предпочтений пациента.</li></ul></div>
+                            <div><h4>Лечение</h4><ul><li>диализ или трансплантация при наличии показаний;</li><li>лечение анемии, гиперкалиемии, ацидоза, МКН‑ХБП и БЭН;</li><li>сохранение остаточной функции почек и диуреза;</li><li>психологическая, социальная и образовательная поддержка.</li></ul></div>
+                            <div><h4>Питание и диализ</h4><ul><li>Na &lt;2,4 г/сут, K &lt;3 г/сут, P &lt;0,8 г/сут с индивидуальной коррекцией;</li><li>потребность в белке зависит от диализного статуса и нутритивного риска;</li><li>при гиперфосфатемии диета сочетается с диализной и лекарственной коррекцией.</li></ul></div>
+                            <div><h4>Наблюдение</h4><ul><li>ориентировочно каждые 2–4 недели для всех градаций альбуминурии;</li><li>контролируются симптомы, объёмный статус, электролиты, КОС, анемия и МКН‑ХБП;</li><li>при неотложных состояниях применяется экстренный маршрут.</li></ul></div>
+                        </div>
+                        <div class="reference-note">В отсутствие жизнеугрожающих осложнений КР РФ не рекомендуют начинать ЗПТ только на основании рСКФ &gt;9 мл/мин/1,73 м². Решение принимается по совокупности симптомов и осложнений.</div>
+                        <div class="source-reference">КР РФ 2024: таблицы 16, 18 и 26; раздел «Заместительная почечная терапия».</div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="reference-section" id="rehabilitation" data-reference-section>
+                <h2 class="reference-section-heading"><span class="reference-section-number">4.</span> Медицинская реабилитация</h2>
+                <details class="reference-card" data-reference-card>
+                    <summary>Физическая активность и индивидуальный план реабилитации</summary>
+                    <div class="reference-card-body">
+                        <p>Поддерживается регулярная аэробная активность с учётом переносимости, сердечно‑сосудистого статуса и противопоказаний. Базовый ориентир для пациентов с ХБП — не менее 30 минут умеренной нагрузки 5 дней в неделю.</p>
+                        <p>При С3б–С5Д и ограничениях повседневной активности рекомендуется индивидуальный план с участием специалиста по лечебной физкультуре. Цели: поддержание мышечной силы, подвижности, толерантности к нагрузке и качества жизни.</p>
+                        <div class="source-reference">КР РФ 2024: раздел «Медицинская реабилитация». <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть источник ↗</a></div>
+                    </div>
+                </details>
+                <details class="reference-card" data-reference-card>
+                    <summary>Реабилитация при заместительной почечной терапии</summary>
+                    <div class="reference-card-body">
+                        <ul>
+                            <li>адаптация нагрузки к графику и переносимости диализа;</li>
+                            <li>поддержание функциональности сосудистого или перитонеального доступа;</li>
+                            <li>профилактика падений, саркопении и белково‑энергетической недостаточности;</li>
+                            <li>психологическая и социальная поддержка;</li>
+                            <li>обучение самоконтролю и распознаванию осложнений.</li>
+                        </ul>
+                        <div class="source-reference">КР РФ 2024: разделы реабилитации и ЗПТ.</div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="reference-section" id="prevention" data-reference-section>
+                <h2 class="reference-section-heading"><span class="reference-section-number">5.</span> Профилактика и диспансерное наблюдение</h2>
+                <details class="reference-card" data-reference-card>
+                    <summary>Первичная и вторичная профилактика</summary>
+                    <div class="reference-card-body">
+                        <div class="content-columns">
+                            <div><h4>При факторах риска без установленной ХБП</h4><ul><li>отказ от курения;</li><li>контроль массы тела и физическая активность;</li><li>контроль АД и сахарного диабета;</li><li>предиктивная диагностика по СКФ и альбуминурии;</li><li>профилактика ОПП и нефротоксических воздействий.</li></ul></div>
+                            <div><h4>При установленной ХБП</h4><ul><li>оценка темпа прогрессирования;</li><li>контроль эффективности и безопасности терапии;</li><li>выявление осложнений по стадии;</li><li>коррекция сердечно‑сосудистого риска;</li><li>подготовка к ЗПТ на С4–С5.</li></ul></div>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: раздел «Профилактика и диспансерное наблюдение».</div>
+                    </div>
+                </details>
+                <details class="reference-card" data-reference-card>
+                    <summary>Ориентировочная частота обследований</summary>
+                    <div class="reference-card-body">
+                        <div class="reference-table-wrap">
+                            <table class="reference-table monitoring-table">
+                                <thead><tr><th>Стадия</th><th>A0–A1</th><th>A2</th><th>A3</th><th>A4</th></tr></thead>
+                                <tbody>
+                                    <tr><td>С1–С2</td><td>Ежегодно</td><td>Ежегодно</td><td>Каждые 6 мес.</td><td>Каждые 3 мес.</td></tr>
+                                    <tr><td>С3а–С3б</td><td>Каждые 6 мес.</td><td>Каждые 6 мес.</td><td>Каждые 3 мес.</td><td>Каждые 3 мес.</td></tr>
+                                    <tr><td>С4</td><td>Каждые 3 мес.</td><td>Каждые 3 мес.</td><td>Каждые 6 нед.</td><td>Каждые 6 нед.</td></tr>
+                                    <tr><td>С5</td><td>Каждые 2–4 нед.</td><td>Каждые 2–4 нед.</td><td>Каждые 2–4 нед.</td><td>Каждые 2–4 нед.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                        <p>Интервалы являются ориентировочными. При быстром прогрессировании, нестабильных осложнениях, изменении лечения, беременности или повышенном риске ОПП обследования проводятся чаще.</p>
+                        <div class="source-reference">КР РФ 2024: таблица 26.</div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="reference-section" id="care-organization" data-reference-section>
+                <h2 class="reference-section-heading"><span class="reference-section-number">6.</span> Организация медицинской помощи</h2>
+                <details class="reference-card" data-reference-card>
+                    <summary>Экстренная госпитализация</summary>
+                    <div class="reference-card-body">
+                        <ul>
+                            <li>развитие или подозрение на ОПП при ХБП;</li>
+                            <li>быстропрогрессирующее снижение СКФ или значимое повышение креатинина;</li>
+                            <li>острый нефритический синдром;</li>
+                            <li>жизнеугрожающая гиперкалиемия, ацидоз, гипергидратация или другие декомпенсированные нарушения;</li>
+                            <li>осложнённая артериальная гипертензия и симптомы уремии;</li>
+                            <li>осложнения диализного доступа или перитонеального диализа.</li>
+                        </ul>
+                        <div class="source-reference">КР РФ 2024: раздел «Организация оказания медицинской помощи».</div>
+                    </div>
+                </details>
+                <details class="reference-card" data-reference-card>
+                    <summary>Плановая госпитализация и специализированные процедуры</summary>
+                    <div class="reference-card-body">
+                        <ul>
+                            <li>впервые выявленное снижение СКФ &lt;60 для уточнения диагноза и этиологии при наличии показаний;</li>
+                            <li>сочетание выраженной протеинурии и гематурии;</li>
+                            <li>впервые выявленный нефротический синдром;</li>
+                            <li>биопсия почки и другие исследования, требующие стационара;</li>
+                            <li>индукционная иммуносупрессивная терапия;</li>
+                            <li>формирование сосудистого или перитонеального доступа;</li>
+                            <li>подготовка и начало ЗПТ.</li>
+                        </ul>
+                        <div class="source-reference">КР РФ 2024: раздел плановой госпитализации.</div>
+                    </div>
+                </details>
+                <details class="reference-card" data-reference-card>
+                    <summary>Критерии выписки и преемственность</summary>
+                    <div class="reference-card-body">
+                        <p>К моменту выписки должны быть определены диагноз и стадия ХБП, выполнен необходимый объём диагностики и лечения, стабилизированы угрожающие осложнения, сформирован план наблюдения и обеспечена преемственность между стационаром, нефрологом и первичным звеном.</p>
+                        <div class="source-reference">КР РФ 2024: раздел критериев выписки и организации амбулаторной помощи.</div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="reference-section" id="additional" data-reference-section>
+                <h2 class="reference-section-heading"><span class="reference-section-number">7.</span> Дополнительная информация</h2>
+                <details class="reference-card" data-reference-card>
+                    <summary>Профилактика острого повреждения почек</summary>
+                    <div class="reference-card-body">
+                        <p>Все пациенты с ХБП рассматриваются как имеющие повышенный риск ОПП. Перед потенциально опасными исследованиями и лечением оцениваются объёмный статус, функция почек, лекарственные сочетания и необходимость профилактических мероприятий.</p>
+                        <ul><li>избегать необоснованного применения НПВП и других нефротоксичных препаратов;</li><li>учитывать риск при инфекциях, дегидратации, операциях и контрастировании;</li><li>корректировать дозы лекарств по функции почек;</li><li>контролировать креатинин и электролиты после значимых воздействий.</li></ul>
+                        <div class="source-reference">КР РФ 2024: раздел профилактики ОПП.</div>
+                    </div>
+                </details>
+                <details class="reference-card" data-reference-card>
+                    <summary>Лекарственная безопасность при ХБП</summary>
+                    <div class="reference-card-body">
+                        <ul>
+                            <li>проверяется путь элиминации препарата и необходимость коррекции дозы;</li>
+                            <li>учитываются риск гиперкалиемии, ацидоза, задержки жидкости и снижения почечной перфузии;</li>
+                            <li>избегаются нежелательные комбинации, особенно блокада РАС с НПВП на фоне гиповолемии;</li>
+                            <li>после назначения потенциально влияющей на почки терапии планируется лабораторный контроль.</li>
+                        </ul>
+                        <div class="source-reference">КР РФ 2024: комментарии к ренопротективной терапии и профилактике ОПП.</div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="reference-section" id="quality" data-reference-section>
+                <h2 class="reference-section-heading"><span class="reference-section-number">8.</span> Критерии качества медицинской помощи</h2>
+                <details class="reference-card" data-reference-card>
+                    <summary>Ключевые проверяемые действия</summary>
+                    <div class="reference-card-body">
+                        <div class="quality-checklist">
+                            <label><input type="checkbox" disabled> Определена расчётная СКФ.</label>
+                            <label><input type="checkbox" disabled> Количественно оценена альбуминурия или протеинурия.</label>
+                            <label><input type="checkbox" disabled> Установлены стадия ХБП и градация альбуминурии.</label>
+                            <label><input type="checkbox" disabled> Указан корректный код МКБ‑10.</label>
+                            <label><input type="checkbox" disabled> Оценены модифицируемые факторы прогрессирования.</label>
+                            <label><input type="checkbox" disabled> Проведена ренопротективная терапия при отсутствии противопоказаний.</label>
+                            <label><input type="checkbox" disabled> Оценены системные осложнения по стадии.</label>
+                            <label><input type="checkbox" disabled> При С4–С5 выполнена подготовка постоянного доступа для диализа по показаниям.</label>
+                            <label><input type="checkbox" disabled> Даны рекомендации по физической активности.</label>
+                        </div>
+                        <div class="source-reference">КР РФ 2024: раздел «Критерии оценки качества медицинской помощи».</div>
+                    </div>
+                </details>
+            </section>
+
+            <section class="reference-section" id="appendices" data-reference-section>
+                <h2 class="reference-section-heading"><span class="reference-section-number">9.</span> Приложения и источники</h2>
+                <details class="reference-card" data-reference-card>
+                    <summary>Использованные источники и границы справочника</summary>
+                    <div class="reference-card-body">
+                        <div class="source-document primary-document">
+                            <strong>Основной источник</strong>
+                            <span>Клинические рекомендации РФ «Хроническая болезнь почек (ХБП)», взрослые, 2024. Разработчик — Национальная Ассоциация нефрологов; одобрены Научно‑практическим Советом Минздрава РФ.</span>
+                            <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть рекомендации ↗</a>
+                        </div>
+                        <div class="source-document">
+                            <strong>Дополнительный источник</strong>
+                            <span>KDIGO Clinical Practice Guideline for the Evaluation and Management of Chronic Kidney Disease.</span>
+                            <a href="{{ kdigo_url }}" target="_blank" rel="noopener noreferrer">Открыть KDIGO ↗</a>
+                        </div>
+                        <div class="reference-note">Справочник систематизирует содержание рекомендаций и алгоритмы приложения, но не заменяет полный текст клинических рекомендаций, инструкции к лекарственным препаратам и индивидуальное клиническое решение.</div>
+                    </div>
+                </details>
+                <details class="reference-card" data-reference-card>
+                    <summary>Соответствие алгоритмам приложения</summary>
+                    <div class="reference-card-body">
+                        <div class="reference-table-wrap"><table class="reference-table"><thead><tr><th>Расчёт</th><th>Реализация</th><th>Результат</th></tr></thead><tbody>
+                            <tr><td>СКФ</td><td>CKD‑EPI 2021 creatinine, без расового коэффициента</td><td>мл/мин/1,73 м², 2 знака</td></tr>
+                            <tr><td>Клиренс креатинина</td><td>Кокрофт — Голт</td><td>мл/мин, 2 знака</td></tr>
+                            <tr><td>Стадия ХБП</td><td>С1, С2, С3а, С3б, С4, С5</td><td>по рассчитанной CKD‑EPI 2021</td></tr>
+                            <tr><td>ACR</td><td>альбумин, мг/л ÷ креатинин, ммоль/л</td><td>мг/ммоль, 2 знака</td></tr>
+                            <tr><td>Альбуминурия</td><td>A1, A2 или A3 по ACR либо суточной экскреции</td><td>категория A1–A3</td></tr>
+                            <tr><td>Риск</td><td>матрица С1–С5 × A1–A3</td><td>низкий, умеренно повышенный, высокий, очень высокий</td></tr>
+                        </tbody></table></div>
+                    </div>
+                </details>
+            </section>
+        </main>
+
+        <aside class="reference-aside" aria-label="Источники и подсказки">
+            <section class="reference-aside-card">
+                <h2>Источники</h2>
+                <div class="source-card primary">
+                    <div class="source-card-title">Клинические рекомендации РФ</div>
+                    <span class="source-chip primary">Основной источник</span>
+                    <p>Хроническая болезнь почек, взрослые</p>
+                    <dl class="source-meta"><div><dt>Год</dt><dd>2024</dd></div><div><dt>ID</dt><dd>469</dd></div><div><dt>Статус</dt><dd>Действует</dd></div></dl>
+                    <a href="{{ russian_guideline_url }}" target="_blank" rel="noopener noreferrer">Открыть ↗</a>
+                </div>
+                <div class="source-card secondary">
+                    <div class="source-card-title">KDIGO</div>
+                    <span class="source-chip">Дополнительный источник</span>
+                    <p>Evaluation and Management of CKD</p>
+                    <a href="{{ kdigo_url }}" target="_blank" rel="noopener noreferrer">Открыть ↗</a>
+                </div>
+            </section>
+            <section class="reference-aside-card">
+                <h3>Как пользоваться</h3>
+                <ul class="aside-list">
+                    <li>Все подразделы закрыты при загрузке.</li>
+                    <li>Нажатие на заголовок раскрывает только нужный материал.</li>
+                    <li>Поиск раскрывает совпавшие подразделы автоматически.</li>
+                    <li>Оглавление переводит к нужной карточке и раскрывает её.</li>
+                </ul>
+            </section>
+            <section class="reference-aside-card aside-disclaimer">
+                <h3>Статус материалов</h3>
+                <p>Российские рекомендации являются основой. Реализация расчётов в приложении отмечена отдельно, если она отличается от формул в рекомендациях.</p>
+            </section>
+        </aside>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', path='js/clinical_reference.js') }}" defer></script>
+{% endblock %}
