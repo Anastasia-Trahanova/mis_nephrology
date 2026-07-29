@@ -3,21 +3,37 @@
 from __future__ import annotations
 
 from .formatting import add_field_inline, add_table_title
-from .text import icd10_diagnoses_conclusion_text, kdigo_conclusion_text
+from .text import icd10_diagnosis_item_text
+
+
+_DIAGNOSIS_LABELS = (
+    ("main", "Основной диагноз"),
+    ("complication", "Осложнения основного диагноза"),
+    ("comorbidity", "Сопутствующие заболевания"),
+)
+
+
+def _group_text(records, diagnosis_type: str) -> str:
+    items = [
+        item
+        for item in records
+        if item.get("diagnosis_type") == diagnosis_type
+    ]
+    items.sort(key=lambda item: (item.get("sort_order") or 0, item.get("id") or 0))
+    values = [icd10_diagnosis_item_text(item) for item in items]
+    return "; ".join(value for value in values if value)
 
 
 def add_conclusion_section(doc, context):
-    """Диагнозы МКБ-10 одной строкой и сохранённый прогноз KDIGO."""
-    diagnosis_text = icd10_diagnoses_conclusion_text(context.get("diagnoses") or [])
-    prognosis_text = kdigo_conclusion_text((context.get("kdigo") or {}).get("current"))
-
-    if not diagnosis_text and not prognosis_text:
+    """Выводит только заполненные группы диагнозов."""
+    records = context.get("diagnoses") or []
+    groups = [
+        (label, _group_text(records, diagnosis_type))
+        for diagnosis_type, label in _DIAGNOSIS_LABELS
+    ]
+    if not any(value for _, value in groups):
         return
 
     add_table_title(doc, "Заключение")
-
-    if diagnosis_text:
-        add_field_inline(doc, "Диагноз", diagnosis_text, space_before=0)
-
-    if prognosis_text:
-        add_field_inline(doc, "Прогноз по KDIGO", prognosis_text)
+    for label, value in groups:
+        add_field_inline(doc, label, value, space_before=0)

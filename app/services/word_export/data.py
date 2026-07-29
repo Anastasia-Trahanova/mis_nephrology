@@ -1,10 +1,8 @@
 """
-Назначение файла: сбор данных для Word-заключения.
+Сбор данных для Word-заключения.
 
-Что выполняет файл:
-- получает данные приёма, пациента, назначений, диеты и историй анализов;
-- подготавливает display-поля для альбуминурии и KDIGO;
-- не создаёт Document и не управляет внешним видом Word-файла.
+Получает выбранный приём, определяет его тип, загружает место приёма,
+диагнозы, назначения и историю исследований до даты выбранного приёма.
 """
 
 from __future__ import annotations
@@ -13,10 +11,7 @@ from app.repositories.appointments import (
     get_appointment_diet,
     get_appointment_full_data,
     get_appointment_medications,
-)
-from app.repositories.ckd_prognosis import (
-    get_appointment_ckd_prognosis,
-    get_patient_ckd_prognosis_history,
+    get_patient_appointments,
 )
 from app.repositories.diagnoses import get_appointment_icd10_diagnoses
 from app.repositories.lab_history import (
@@ -30,11 +25,10 @@ from app.repositories.lab_history import (
 from app.repositories.reference_data import get_location_info
 
 from .formatting import value_with_unit
-from .text import prognosis_display
 
 
 def prepare_albuminuria_records(records):
-    """Добавляет поля для красивого вывода альбуминурии в Word."""
+    """Добавляет отображаемые значения вместе с исходными единицами измерения."""
     prepared = []
     for record in records or []:
         item = dict(record)
@@ -50,23 +44,23 @@ def prepare_albuminuria_records(records):
     return prepared
 
 
-def prepare_ckd_prognosis_records(records):
-    """Добавляет поле prognosis_display для компактного вывода прогноза ХБП."""
-    prepared = []
-    for record in records or []:
-        item = dict(record)
-        item["prognosis_display"] = prognosis_display(item)
-        prepared.append(item)
-    return prepared
+
+def _visit_kind(appointments, appointment_id: int) -> str:
+    """Повторяет логику ЭМК: самый ранний приём первичный, остальные повторные."""
+    appointments = list(appointments or [])
+    if appointments and appointments[-1].get("appointment_id") == appointment_id:
+        return "первичный"
+    return "повторный"
 
 
 def get_word_export_context(appointment_id: int) -> dict | None:
-    """Собирает все данные, необходимые для Word-экспорта."""
     appointment = get_appointment_full_data(appointment_id)
     if not appointment:
         return None
 
     patient_id = appointment.get("patient_id")
+    appointments = get_patient_appointments(patient_id)
+
     until_date = None
     if appointment.get("appointment_date"):
         until_date = appointment["appointment_date"].date()
@@ -77,6 +71,7 @@ def get_word_export_context(appointment_id: int) -> dict | None:
 
     return {
         "appointment": appointment,
+        "visit_kind": _visit_kind(appointments, appointment_id),
         "medications": get_appointment_medications(appointment_id),
         "diet_info": get_appointment_diet(appointment_id),
         "diagnoses": get_appointment_icd10_diagnoses(appointment_id),
@@ -90,11 +85,5 @@ def get_word_export_context(appointment_id: int) -> dict | None:
                 get_patient_albuminuria_history(patient_id, until_date)
             ),
             "ultrasound_history": get_patient_ultrasound_history(patient_id, until_date),
-        },
-        "kdigo": {
-            "history": prepare_ckd_prognosis_records(
-                get_patient_ckd_prognosis_history(patient_id, until_date)
-            ),
-            "current": get_appointment_ckd_prognosis(appointment_id),
         },
     }

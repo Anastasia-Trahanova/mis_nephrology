@@ -1,12 +1,9 @@
 """
-Назначение файла: техническое форматирование Word-заключения.
+Техническое форматирование Word-заключения.
 
-Что выполняет файл:
-- форматирует даты, пустые значения и имя файла;
-- применяет шрифт Times New Roman;
-- добавляет стандартные абзацы и таблицы в python-docx документ;
-- не загружает данные из БД;
-- не формирует медицинский текст заключения.
+Пустые значения не выводятся: в документе нет прочерков и служебных
+заглушек. Обычный текст после строки с ФИО выравнивается по ширине и
+получает отступ первой строки 1,25 см.
 """
 
 from __future__ import annotations
@@ -14,26 +11,35 @@ from __future__ import annotations
 import re
 
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.shared import Pt
+from docx.shared import Cm, Pt
+
+
+def has_value(value) -> bool:
+    """Возвращает True для реально заполненного значения, включая число 0."""
+    if value is None:
+        return False
+    if isinstance(value, str):
+        return bool(value.strip()) and value.strip() != "—"
+    return True
 
 
 def fmt_date(value, with_time: bool = False) -> str:
-    """Форматирует date/datetime для заключения."""
+    """Форматирует date/datetime; пустая дата остаётся пустой."""
     if not value:
-        return "—"
+        return ""
     try:
         if with_time:
             return value.strftime("%d.%m.%Y %H:%M")
         return value.strftime("%d.%m.%Y")
     except Exception:
-        return str(value)
+        return str(value).strip()
 
 
 def clean_value(value) -> str:
-    """Красиво выводит пустые значения."""
-    if value is None or value == "":
-        return "—"
-    return str(value)
+    """Возвращает пустую строку вместо прочерка для незаполненного поля."""
+    if not has_value(value):
+        return ""
+    return str(value).strip()
 
 
 def safe_filename(text) -> str:
@@ -50,42 +56,108 @@ def set_run_font(run, size: int = 12, bold: bool = False):
     run.font.size = Pt(size)
 
 
-def add_centered_paragraph(doc, text, size: int = 9, bold: bool = False, space_after: int = 0):
-    if not text:
-        return
+def _add_body_paragraph(doc, *, space_before: int = 0, space_after: int = 1):
+    paragraph = doc.add_paragraph()
+    paragraph.alignment = WD_ALIGN_PARAGRAPH.JUSTIFY
+    paragraph.paragraph_format.first_line_indent = Cm(1.25)
+    paragraph.paragraph_format.space_before = Pt(space_before)
+    paragraph.paragraph_format.space_after = Pt(space_after)
+    paragraph.paragraph_format.line_spacing = 1
+    return paragraph
+
+
+def add_centered_paragraph(
+    doc,
+    text,
+    size: int = 9,
+    bold: bool = False,
+    space_after: int = 0,
+):
+    if not has_value(text):
+        return None
     paragraph = doc.add_paragraph()
     paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
     paragraph.paragraph_format.space_before = Pt(0)
     paragraph.paragraph_format.space_after = Pt(space_after)
     paragraph.paragraph_format.line_spacing = 1
-    run = paragraph.add_run(str(text))
+    run = paragraph.add_run(str(text).strip())
     set_run_font(run, size=size, bold=bold)
+    return paragraph
 
 
-def add_field_inline(doc, title, value, size: int = 12, space_before: int = 0, space_after: int = 1):
-    """Одно поле = один абзац: Жалобы: текст жалоб."""
-    if value is None or value == "":
-        value = "—"
+def add_field_inline(
+    doc,
+    title,
+    value,
+    size: int = 12,
+    space_before: int = 0,
+    space_after: int = 1,
+    title_bold: bool = True,
+):
+    """Добавляет только заполненное поле: «Название: значение»."""
+    if not has_value(value):
+        return None
 
-    paragraph = doc.add_paragraph()
-    paragraph.paragraph_format.space_before = Pt(space_before)
-    paragraph.paragraph_format.space_after = Pt(space_after)
-    paragraph.paragraph_format.line_spacing = 1
+    paragraph = _add_body_paragraph(
+        doc,
+        space_before=space_before,
+        space_after=space_after,
+    )
 
     title_run = paragraph.add_run(f"{title}: ")
-    set_run_font(title_run, size=size, bold=True)
+    set_run_font(title_run, size=size, bold=title_bold)
 
-    value_run = paragraph.add_run(str(value))
+    value_run = paragraph.add_run(str(value).strip())
     set_run_font(value_run, size=size, bold=False)
+    return paragraph
+
+
+def add_fields_inline(
+    doc,
+    fields,
+    *,
+    size: int = 12,
+    separator: str = "; ",
+    space_before: int = 0,
+    space_after: int = 1,
+    title_bold: bool = False,
+):
+    """Объединяет несколько заполненных полей в один абзац."""
+    visible = [(title, value) for title, value in fields if has_value(value)]
+    if not visible:
+        return None
+
+    paragraph = _add_body_paragraph(
+        doc,
+        space_before=space_before,
+        space_after=space_after,
+    )
+
+    for index, (title, value) in enumerate(visible):
+        if index:
+            separator_run = paragraph.add_run(separator)
+            set_run_font(separator_run, size=size, bold=False)
+
+        title_run = paragraph.add_run(f"{title}: ")
+        set_run_font(title_run, size=size, bold=title_bold)
+
+        value_run = paragraph.add_run(str(value).strip())
+        set_run_font(value_run, size=size, bold=False)
+
+    return paragraph
 
 
 def add_table_title(doc, title):
+    if not has_value(title):
+        return None
     paragraph = doc.add_paragraph()
     paragraph.paragraph_format.space_before = Pt(6)
     paragraph.paragraph_format.space_after = Pt(2)
     paragraph.paragraph_format.line_spacing = 1
-    run = paragraph.add_run(title)
+    paragraph.paragraph_format.keep_with_next = True
+    run = paragraph.add_run(str(title).strip())
     set_run_font(run, size=12, bold=True)
+    return paragraph
 
 
 def format_table_cell(cell, value, bold: bool = False, size: int = 10):
@@ -100,6 +172,10 @@ def format_table_cell(cell, value, bold: bool = False, size: int = 10):
 
 def add_small_table(doc, title, headers, rows):
     """Компактная таблица с названием раздела."""
+    rows = list(rows or [])
+    if not rows:
+        return None
+
     add_table_title(doc, title)
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
@@ -122,24 +198,41 @@ def add_small_table(doc, title, headers, rows):
                 paragraph.paragraph_format.line_spacing = 1
 
     doc.add_paragraph()
+    return table
 
 
 def add_history_table(doc, title, records, fields, date_key: str = "investigation_date"):
     """
-    Таблица истории анализов/расчётов.
+    Добавляет таблицу истории только при наличии данных.
 
-    Первый столбец — показатель, дальше столбцы по датам исследования/оценки.
-    date_key позволяет использовать не только investigation_date, но и другие даты.
+    Пустые показатели не создают строки, а пустые исследования не создают
+    столбцы. Первый столбец — показатель, остальные — даты исследований.
     """
+    records = list(records or [])
+    if not records:
+        return None
+
+    visible_fields = [
+        (label, key)
+        for label, key in fields
+        if any(has_value(record.get(key)) for record in records)
+    ]
+    if not visible_fields:
+        return None
+
+    visible_records = [
+        record
+        for record in records
+        if any(has_value(record.get(key)) for _, key in visible_fields)
+    ]
+    if not visible_records:
+        return None
+
     add_table_title(doc, title)
 
-    if not records:
-        add_field_inline(doc, title, "нет данных")
-        return
-
-    headers = ["Показатель"]
-    for record in records:
-        headers.append(fmt_date(record.get(date_key)))
+    headers = ["Показатель"] + [
+        fmt_date(record.get(date_key)) for record in visible_records
+    ]
 
     table = doc.add_table(rows=1, cols=len(headers))
     table.style = "Table Grid"
@@ -149,10 +242,10 @@ def add_history_table(doc, title, records, fields, date_key: str = "investigatio
     for index, header in enumerate(headers):
         format_table_cell(header_cells[index], header, bold=True, size=10)
 
-    for label, key in fields:
+    for label, key in visible_fields:
         cells = table.add_row().cells
         format_table_cell(cells[0], label, bold=True, size=10)
-        for index, record in enumerate(records, start=1):
+        for index, record in enumerate(visible_records, start=1):
             format_table_cell(cells[index], record.get(key), bold=False, size=10)
 
     for row in table.rows:
@@ -163,6 +256,7 @@ def add_history_table(doc, title, records, fields, date_key: str = "investigatio
                 paragraph.paragraph_format.line_spacing = 1
 
     doc.add_paragraph()
+    return table
 
 
 def unit_label(value) -> str:
@@ -177,7 +271,7 @@ def unit_label(value) -> str:
 
 
 def value_with_unit(value, unit) -> str:
-    if value is None or value == "":
-        return "—"
+    if not has_value(value):
+        return ""
     unit_text = unit_label(unit)
     return f"{value} {unit_text}".strip()

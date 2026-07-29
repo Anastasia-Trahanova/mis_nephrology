@@ -50,7 +50,7 @@ def build_appointment_docx(appointment_id: int):
     style.font.size = Pt(12)
 
     add_clinic_header(doc, context["location_info"])
-    add_document_title(doc)
+    add_document_title(doc, context.get("visit_kind", "повторный"))
     add_patient_section(doc, appointment)
     add_survey_section(doc, appointment)
     add_examination_section(doc, appointment)
