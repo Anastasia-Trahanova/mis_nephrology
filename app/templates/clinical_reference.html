@@ -22,9 +22,7 @@
             <span class="source-badge source-badge-primary">Основной источник: КР РФ «Хроническая болезнь почек», взрослые, 2024</span>
             <span class="source-badge">Дополнительный источник: KDIGO</span>
         </div>
-        <div class="reference-version-note">
-            <strong>Важно:</strong> формула CKD‑EPI из российских рекомендаций и формула, реализованная в приложении, показаны отдельно. Это разные редакции уравнения.
-        </div>
+        
     </header>
 
     <button class="reference-mobile-toc-button" type="button" aria-expanded="false" data-reference-toc-toggle>
@@ -290,231 +288,187 @@
                     <div class="reference-card-body">
                         <div class="formula-section">
                             <div class="formula-section-header">
-                                <span class="formula-source-label clinical">
-                                    Клинические рекомендации РФ 2024
-                                </span>
-
-                                <h3>Расчёт СКФ по формуле CKD-EPI 2009</h3>
-
-                                <p>
-                                    Формула приведена в приложении Г клинических рекомендаций «Хроническая болезнь почек (ХБП)» для взрослых. Креатинин крови указывается в мкмоль/л.
-                                </p>
+                                <span class="formula-source-label clinical">Клинические рекомендации РФ 2024</span>
+                                <h3>Расчёт СКФ по формуле CKD‑EPI 2009</h3>
+                                <p>Формулы приведены в приложении Г клинических рекомендаций «Хроническая болезнь почек (ХБП)» для взрослых. Креатинин крови указывается в мкмоль/л.</p>
                             </div>
 
-                            <div class="formula-lines formula-lines-vertical">
-                                <section class="piecewise-formula">
-                                    <div class="piecewise-formula__condition">
-                                        Женщины, креатинин ≤ 62 мкмоль/л
+                            <div style="display:grid; grid-template-columns:1fr; gap:.75rem;">
+                                <div class="equation-card">
+                                    <div class="equation-condition">Женщины, креатинин крови ≤ 62 мкмоль/л</div>
+                                    <div style="overflow-x:auto; padding:.35rem 0; text-align:center;">
+                                        <math display="block" aria-label="рСКФ CKD-EPI равна 144 умножить на 0,993 в степени возраст и умножить на отношение креатинина к 88,4, затем делённое на 0,7, в степени минус 0,328" style="font-size:clamp(1.12rem, 2vw, 1.5rem); margin:0 auto;">
+                                            <mrow>
+                                                <msub><mtext>рСКФ</mtext><mtext>CKD‑EPI</mtext></msub>
+                                                <mo>=</mo>
+                                                <mn>144</mn><mo>×</mo>
+                                                <msup><mn>0,993</mn><mtext>возраст</mtext></msup>
+                                                <mo>×</mo>
+                                                <msup>
+                                                    <mrow>
+                                                        <mo>(</mo>
+                                                        <mfrac>
+                                                            <mfrac><mi>Cr</mi><mn>88,4</mn></mfrac>
+                                                            <mn>0,7</mn>
+                                                        </mfrac>
+                                                        <mo>)</mo>
+                                                    </mrow>
+                                                    <mrow><mo>−</mo><mn>0,328</mn></mrow>
+                                                </msup>
+                                            </mrow>
+                                        </math>
                                     </div>
+                                </div>
 
-                                    <div class="piecewise-formula__equation">
-                                        <span>рСКФ = 144 ×</span>
-
-                                        <span class="math-powered-group">
-                                            <span class="math-paren">(</span>
-
-                                            <span class="math-fraction">
-                                                <span class="math-fraction__top">Cr</span>
-                                                <span class="math-fraction__bottom">88,4 × 0,7</span>
-                                            </span>
-
-                                            <span class="math-paren">)</span>
-                                            <sup>−0,328</sup>
-                                        </span>
-
-                                        <span>×</span>
-
-                                        <span class="math-power">
-                                            0,993<sup>возраст</sup>
-                                        </span>
+                                <div class="equation-card">
+                                    <div class="equation-condition">Женщины, креатинин крови &gt; 62 мкмоль/л</div>
+                                    <div style="overflow-x:auto; padding:.35rem 0; text-align:center;">
+                                        <math display="block" aria-label="рСКФ CKD-EPI равна 144 умножить на 0,993 в степени возраст и умножить на отношение креатинина к 88,4, затем делённое на 0,7, в степени минус 1,210" style="font-size:clamp(1.12rem, 2vw, 1.5rem); margin:0 auto;">
+                                            <mrow>
+                                                <msub><mtext>рСКФ</mtext><mtext>CKD‑EPI</mtext></msub>
+                                                <mo>=</mo>
+                                                <mn>144</mn><mo>×</mo>
+                                                <msup><mn>0,993</mn><mtext>возраст</mtext></msup>
+                                                <mo>×</mo>
+                                                <msup>
+                                                    <mrow>
+                                                        <mo>(</mo>
+                                                        <mfrac>
+                                                            <mfrac><mi>Cr</mi><mn>88,4</mn></mfrac>
+                                                            <mn>0,7</mn>
+                                                        </mfrac>
+                                                        <mo>)</mo>
+                                                    </mrow>
+                                                    <mrow><mo>−</mo><mn>1,210</mn></mrow>
+                                                </msup>
+                                            </mrow>
+                                        </math>
                                     </div>
-                                </section>
+                                </div>
 
-                                <section class="piecewise-formula">
-                                    <div class="piecewise-formula__condition">
-                                        Женщины, креатинин &gt; 62 мкмоль/л
+                                <div class="equation-card">
+                                    <div class="equation-condition">Мужчины, креатинин крови ≤ 80 мкмоль/л</div>
+                                    <div style="overflow-x:auto; padding:.35rem 0; text-align:center;">
+                                        <math display="block" aria-label="рСКФ CKD-EPI равна 141 умножить на 0,993 в степени возраст и умножить на отношение креатинина к 88,4, затем делённое на 0,9, в степени минус 0,412" style="font-size:clamp(1.12rem, 2vw, 1.5rem); margin:0 auto;">
+                                            <mrow>
+                                                <msub><mtext>рСКФ</mtext><mtext>CKD‑EPI</mtext></msub>
+                                                <mo>=</mo>
+                                                <mn>141</mn><mo>×</mo>
+                                                <msup><mn>0,993</mn><mtext>возраст</mtext></msup>
+                                                <mo>×</mo>
+                                                <msup>
+                                                    <mrow>
+                                                        <mo>(</mo>
+                                                        <mfrac>
+                                                            <mfrac><mi>Cr</mi><mn>88,4</mn></mfrac>
+                                                            <mn>0,9</mn>
+                                                        </mfrac>
+                                                        <mo>)</mo>
+                                                    </mrow>
+                                                    <mrow><mo>−</mo><mn>0,412</mn></mrow>
+                                                </msup>
+                                            </mrow>
+                                        </math>
                                     </div>
+                                </div>
 
-                                    <div class="piecewise-formula__equation">
-                                        <span>рСКФ = 144 ×</span>
-
-                                        <span class="math-powered-group">
-                                            <span class="math-paren">(</span>
-
-                                            <span class="math-fraction">
-                                                <span class="math-fraction__top">Cr</span>
-                                                <span class="math-fraction__bottom">88,4 × 0,7</span>
-                                            </span>
-
-                                            <span class="math-paren">)</span>
-                                            <sup>−1,210</sup>
-                                        </span>
-
-                                        <span>×</span>
-
-                                        <span class="math-power">
-                                            0,993<sup>возраст</sup>
-                                        </span>
+                                <div class="equation-card">
+                                    <div class="equation-condition">Мужчины, креатинин крови &gt; 80 мкмоль/л</div>
+                                    <div style="overflow-x:auto; padding:.35rem 0; text-align:center;">
+                                        <math display="block" aria-label="рСКФ CKD-EPI равна 141 умножить на 0,993 в степени возраст и умножить на отношение креатинина к 88,4, затем делённое на 0,9, в степени минус 1,210" style="font-size:clamp(1.12rem, 2vw, 1.5rem); margin:0 auto;">
+                                            <mrow>
+                                                <msub><mtext>рСКФ</mtext><mtext>CKD‑EPI</mtext></msub>
+                                                <mo>=</mo>
+                                                <mn>141</mn><mo>×</mo>
+                                                <msup><mn>0,993</mn><mtext>возраст</mtext></msup>
+                                                <mo>×</mo>
+                                                <msup>
+                                                    <mrow>
+                                                        <mo>(</mo>
+                                                        <mfrac>
+                                                            <mfrac><mi>Cr</mi><mn>88,4</mn></mfrac>
+                                                            <mn>0,9</mn>
+                                                        </mfrac>
+                                                        <mo>)</mo>
+                                                    </mrow>
+                                                    <mrow><mo>−</mo><mn>1,210</mn></mrow>
+                                                </msup>
+                                            </mrow>
+                                        </math>
                                     </div>
-                                </section>
-
-                                <section class="piecewise-formula">
-                                    <div class="piecewise-formula__condition">
-                                        Мужчины, креатинин ≤ 80 мкмоль/л
-                                    </div>
-
-                                    <div class="piecewise-formula__equation">
-                                        <span>рСКФ = 141 ×</span>
-
-                                        <span class="math-powered-group">
-                                            <span class="math-paren">(</span>
-
-                                            <span class="math-fraction">
-                                                <span class="math-fraction__top">Cr</span>
-                                                <span class="math-fraction__bottom">88,4 × 0,9</span>
-                                            </span>
-
-                                            <span class="math-paren">)</span>
-                                            <sup>−0,412</sup>
-                                        </span>
-
-                                        <span>×</span>
-
-                                        <span class="math-power">
-                                            0,993<sup>возраст</sup>
-                                        </span>
-                                    </div>
-                                </section>
-
-                                <section class="piecewise-formula">
-                                    <div class="piecewise-formula__condition">
-                                        Мужчины, креатинин &gt; 80 мкмоль/л
-                                    </div>
-
-                                    <div class="piecewise-formula__equation">
-                                        <span>рСКФ = 141 ×</span>
-
-                                        <span class="math-powered-group">
-                                            <span class="math-paren">(</span>
-
-                                            <span class="math-fraction">
-                                                <span class="math-fraction__top">Cr</span>
-                                                <span class="math-fraction__bottom">88,4 × 0,9</span>
-                                            </span>
-
-                                            <span class="math-paren">)</span>
-                                            <sup>−1,210</sup>
-                                        </span>
-
-                                        <span>×</span>
-
-                                        <span class="math-power">
-                                            0,993<sup>возраст</sup>
-                                        </span>
-                                    </div>
-                                </section>
+                                </div>
                             </div>
 
-                            <p class="formula-result">
-                                <strong>Результат:</strong> мл/мин/1,73 м².
-                            </p>
+                            <p class="formula-result"><strong>Результат:</strong> мл/мин/1,73 м².</p>
                         </div>
-
 
                         <div class="formula-section implementation">
                             <div class="formula-section-header">
-                                <span class="formula-source-label app">
-                                    Реализовано в приложении
-                                </span>
-
-                                <h3>Расчёт СКФ по формуле CKD-EPI 2021</h3>
-
-                                <p>
-                                    В приложении применяется обновлённая формула CKD-EPI 2021 по креатинину без расового коэффициента.
-                                </p>
+                                <span class="formula-source-label app">Реализовано в приложении</span>
+                                <h3>Расчёт СКФ по формуле CKD‑EPI 2021</h3>
+                                <p>В приложении применяется формула CKD‑EPI 2021 по креатинину без расового коэффициента.</p>
                             </div>
-
                             <div class="equation-card equation-card-wide">
-                                <div class="equation-display equation-display-large equation-display-wrap">
-                                    рСКФ =
-                                    142 × min(Scr / κ, 1)<sup>α</sup> ×
-                                    max(Scr / κ, 1)<sup>−1,200</sup> ×
-                                    0,9938<sup>возраст</sup> ×
-                                    F<sub>пол</sub>
+                                <div style="overflow-x:auto; padding:.35rem 0; text-align:center;">
+                                    <math display="block" aria-label="рСКФ равна 142 умножить на минимум отношения Scr к каппа и единицы в степени альфа, умножить на максимум отношения Scr к каппа и единицы в степени минус 1,200, умножить на 0,9938 в степени возраст и на коэффициент пола" style="font-size:clamp(1.08rem, 2vw, 1.42rem); margin:0 auto;">
+                                        <mrow>
+                                            <mtext>рСКФ</mtext><mo>=</mo><mn>142</mn><mo>×</mo>
+                                            <msup>
+                                                <mrow>
+                                                    <mi mathvariant="normal">min</mi><mo>(</mo>
+                                                    <mfrac><mi>Scr</mi><mi>κ</mi></mfrac><mo>,</mo><mn>1</mn><mo>)</mo>
+                                                </mrow>
+                                                <mi>α</mi>
+                                            </msup>
+                                            <mo>×</mo>
+                                            <msup>
+                                                <mrow>
+                                                    <mi mathvariant="normal">max</mi><mo>(</mo>
+                                                    <mfrac><mi>Scr</mi><mi>κ</mi></mfrac><mo>,</mo><mn>1</mn><mo>)</mo>
+                                                </mrow>
+                                                <mrow><mo>−</mo><mn>1,200</mn></mrow>
+                                            </msup>
+                                            <mo>×</mo>
+                                            <msup><mn>0,9938</mn><mtext>возраст</mtext></msup>
+                                            <mo>×</mo>
+                                            <msub><mi>F</mi><mtext>пол</mtext></msub>
+                                        </mrow>
+                                    </math>
                                 </div>
                             </div>
-
                             <div class="formula-parameter-list">
-                                <div>
-                                    <strong>Scr</strong>
-                                    <span>
-                                        креатинин крови в мг/дл.
-                                        Введённое значение в мкмоль/л делится на 88,4.
-                                    </span>
-                                </div>
-
-                                <div>
-                                    <strong>κ</strong>
-                                    <span>0,7 для женщин; 0,9 для мужчин.</span>
-                                </div>
-
-                                <div>
-                                    <strong>α</strong>
-                                    <span>−0,241 для женщин; −0,302 для мужчин.</span>
-                                </div>
-
-                                <div>
-                                    <strong>F<sub>пол</sub></strong>
-                                    <span>1,012 для женщин; 1,0 для мужчин.</span>
-                                </div>
+                                <div><strong>Scr</strong><span>креатинин крови в мг/дл. Введённое значение в мкмоль/л делится на 88,4.</span></div>
+                                <div><strong>κ</strong><span>0,7 для женщин; 0,9 для мужчин.</span></div>
+                                <div><strong>α</strong><span>−0,241 для женщин; −0,302 для мужчин.</span></div>
+                                <div><strong>F<sub>пол</sub></strong><span>1,012 для женщин; 1,0 для мужчин.</span></div>
                             </div>
-
-                            <p class="formula-result">
-                                <strong>Результат:</strong> мл/мин/1,73 м².
-                                Значение округляется до двух знаков, после чего автоматически определяется стадия ХБП С1–С5.
-                            </p>
+                            <p class="formula-result"><strong>Результат:</strong> мл/мин/1,73 м². Значение округляется до двух знаков, после чего автоматически определяется стадия ХБП С1–С5.</p>
                         </div>
-
 
                         <div class="formula-section implementation secondary-formula">
                             <div class="formula-section-header">
-                                <span class="formula-source-label app">
-                                    Дополнительный расчёт приложения
-                                </span>
-
-                                <h3>
-                                    Формула Кокрофта — Голта для дозирования лекарственных препаратов
-                                </h3>
-
-                                <p>
-                                    Формула Кокрофта — Голта не приведена в клинических рекомендациях РФ 2024 по ХБП. В приложении расчёт используется при назначении и коррекции доз лекарственных препаратов с учётом функции почек.
-                                </p>
+                                <span class="formula-source-label app">Дополнительный расчёт приложения</span>
+                                <h3>Расчёт функции почек по формуле Кокрофта — Голта для дозирования лекарственных препаратов</h3>
+                                <p>В приложении формула используется как дополнительный расчёт функции почек при назначении и коррекции доз лекарственных препаратов.</p>
                             </div>
-
                             <div class="equation-card equation-card-wide">
-                                <div class="equation-display equation-display-large equation-display-wrap">
-                                    Показатель =
-                                    <span class="fraction">
-                                        <span class="fraction-top">
-                                            (140 − возраст) × масса тела, кг
-                                        </span>
-                                        <span class="fraction-bottom">
-                                            72 × Scr, мг/дл
-                                        </span>
-                                    </span>
-                                    × F<sub>пол</sub>
+                                <div style="overflow-x:auto; padding:.35rem 0; text-align:center;">
+                                    <math display="block" aria-label="расчётный показатель по Кокрофту — Голту равен разности 140 и возраста, умноженной на массу тела, делённой на 72 и Scr, затем умноженной на коэффициент пола" style="font-size:clamp(1.08rem, 2vw, 1.42rem); margin:0 auto;">
+                                        <mrow>
+                                            <msub><mtext>рСКФ</mtext><mtext>КГ</mtext></msub>
+                                            <mo>=</mo>
+                                            <mfrac>
+                                                <mrow><mo>(</mo><mn>140</mn><mo>−</mo><mtext>возраст</mtext><mo>)</mo><mo>×</mo><mtext>масса тела, кг</mtext></mrow>
+                                                <mrow><mn>72</mn><mo>×</mo><mi>Scr</mi><mo>,</mo><mtext>мг/дл</mtext></mrow>
+                                            </mfrac>
+                                            <mo>×</mo><msub><mi>F</mi><mtext>пол</mtext></msub>
+                                        </mrow>
+                                    </math>
                                 </div>
-
-                                <div class="equation-footnote">
-                                    F<sub>пол</sub> = 0,85 для женщин и 1,0 для мужчин.
-                                    Результат выражается в мл/мин и округляется до двух знаков.
-                                </div>
+                                <div class="equation-footnote">F<sub>пол</sub> = 0,85 для женщин и 1,0 для мужчин. Результат выражается в мл/мин без нормирования на площадь поверхности тела и округляется до двух знаков.</div>
                             </div>
                         </div>
 
-                        
-
-                
                         <details class="inner-details">
                             <summary>Когда креатинин может искажать расчётную СКФ</summary>
                             <div class="inner-details-body">
@@ -694,72 +648,40 @@
                             <section class="metabolic-treatment-section">
                                 <h4>Гиперкалиемия</h4>
                                 <ul>
-                                    <li>
-                                        При С3–С5Д и концентрации калия более 5,0 ммоль/л пищевое поступление калия уменьшается до 2–3 г/сут.
-                                    </li>
-                                    <li>
-                                        Оцениваются лекарственные препараты, способствующие развитию гиперкалиемии, наличие метаболического ацидоза, объёмный статус и возможность применения петлевых диуретиков.
-                                    </li>
-                                    <li>
-                                        Острая симптомная гиперкалиемия требует неотложного лечения в соответствии с полным алгоритмом клинических рекомендаций.
-                                    </li>
+                                    <li>При С3–С5Д и концентрации калия более 5,0 ммоль/л пищевое поступление калия уменьшается до 2–3 г/сут.</li>
+                                    <li>Оцениваются лекарственные препараты, способствующие развитию гиперкалиемии, наличие метаболического ацидоза, объёмный статус и возможность применения петлевых диуретиков.</li>
+                                    <li>Острая симптомная гиперкалиемия требует неотложного лечения в соответствии с полным алгоритмом клинических рекомендаций.</li>
                                 </ul>
                             </section>
-
                             <section class="metabolic-treatment-section">
                                 <h4>Метаболический ацидоз</h4>
                                 <ul>
-                                    <li>
-                                        При С3–С5 и концентрации бикарбоната менее 20 ммоль/л рекомендуется пероральная коррекция с достижением целевого диапазона 20–24 ммоль/л.
-                                    </li>
-                                    <li>
-                                        Во время лечения контролируются концентрация натрия, выраженность отёков и артериальное давление.
-                                    </li>
+                                    <li>При С3–С5 и концентрации бикарбоната менее 20 ммоль/л рекомендуется пероральная коррекция с достижением целевого диапазона 20–24 ммоль/л.</li>
+                                    <li>Во время лечения контролируются концентрация натрия, выраженность отёков и артериальное давление.</li>
                                 </ul>
                             </section>
-
                             <section class="metabolic-treatment-section">
                                 <h4>Минеральные и костные нарушения при ХБП</h4>
                                 <ul>
-                                    <li>
-                                        Оцениваются концентрации кальция и фосфора, уровень паратиреоидного гормона и витамина D.
-                                    </li>
-                                    <li>
-                                        Результаты лабораторных исследований оцениваются совместно с клиническими проявлениями и стадией ХБП.
-                                    </li>
+                                    <li>Оцениваются концентрации кальция и фосфора, уровень паратиреоидного гормона и витамина D.</li>
+                                    <li>Результаты лабораторных исследований оцениваются совместно с клиническими проявлениями и стадией ХБП.</li>
                                 </ul>
                             </section>
-
                             <section class="metabolic-treatment-section">
                                 <h4>Анемия при ХБП</h4>
                                 <ul>
-                                    <li>
-                                        Выполняются выявление и оценка анемии, связанной с хронической болезнью почек.
-                                    </li>
-                                    <li>
-                                        Лечение проводится в соответствии с отдельными клиническими рекомендациями по анемии при ХБП.
-                                    </li>
+                                    <li>Выполняются выявление и оценка анемии, связанной с хронической болезнью почек.</li>
+                                    <li>Лечение проводится в соответствии с отдельными клиническими рекомендациями по анемии при ХБП.</li>
                                 </ul>
                             </section>
-
                             <section class="metabolic-treatment-section">
                                 <h4>Питание</h4>
                                 <ul>
-                                    <li>
-                                        Потребление натрия ограничивается до уровня менее 2,4 г/сут на всех стадиях ХБП.
-                                    </li>
-                                    <li>
-                                        При С3б–С5 и отсутствии белково-энергетической недостаточности потребление белка ограничивается до уровня менее 0,8 г/кг/сут.
-                                    </li>
-                                    <li>
-                                        Рекомендуемая энергетическая ценность питания составляет 30–35 ккал/кг/сут.
-                                    </li>
-                                    <li>
-                                        Предпочтение отдаётся растительным источникам белка и продуктам, не содержащим фосфатных пищевых добавок.
-                                    </li>
-                                    <li>
-                                        Ограничение калия и фосфора определяется стадией ХБП и результатами лабораторных исследований.
-                                    </li>
+                                    <li>Потребление натрия ограничивается до уровня менее 2,4 г/сут на всех стадиях ХБП.</li>
+                                    <li>При С3б–С5 и отсутствии белково-энергетической недостаточности потребление белка ограничивается до уровня менее 0,8 г/кг/сут.</li>
+                                    <li>Рекомендуемая энергетическая ценность питания составляет 30–35 ккал/кг/сут.</li>
+                                    <li>Предпочтение отдаётся растительным источникам белка и продуктам, не содержащим фосфатных пищевых добавок.</li>
+                                    <li>Ограничение калия и фосфора определяется стадией ХБП и результатами лабораторных исследований.</li>
                                 </ul>
                             </section>
                         </div>
@@ -1012,7 +934,7 @@
                     <div class="reference-card-body">
                         <div class="reference-table-wrap"><table class="reference-table"><thead><tr><th>Расчёт</th><th>Реализация</th><th>Результат</th></tr></thead><tbody>
                             <tr><td>СКФ</td><td>CKD‑EPI 2021 creatinine, без расового коэффициента</td><td>мл/мин/1,73 м², 2 знака</td></tr>
-                            <tr><td>Клиренс креатинина</td><td>Кокрофт — Голт</td><td>мл/мин, 2 знака</td></tr>
+                            <tr><td>Расчёт функции почек для дозирования лекарственных препаратов</td><td>Кокрофт — Голт</td><td>мл/мин, 2 знака</td></tr>
                             <tr><td>Стадия ХБП</td><td>С1, С2, С3а, С3б, С4, С5</td><td>по рассчитанной CKD‑EPI 2021</td></tr>
                             <tr><td>ACR</td><td>альбумин, мг/л ÷ креатинин, ммоль/л</td><td>мг/ммоль, 2 знака</td></tr>
                             <tr><td>Альбуминурия</td><td>A1, A2 или A3 по ACR либо суточной экскреции</td><td>категория A1–A3</td></tr>
