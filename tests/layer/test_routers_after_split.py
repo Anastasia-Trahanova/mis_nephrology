@@ -99,10 +99,12 @@ def test_create_new_appointment_router_redirects_to_patient_card(monkeypatch):
         form,
         *,
         current_doctor_id,
+        schedule_entry_id=None,
     ):
         called["patient_id"] = patient_id
         called["form"] = form
         called["doctor_id"] = current_doctor_id
+        called["schedule_entry_id"] = schedule_entry_id
         return FakeSaveResult(patient_id=101, appointment_id=303)
 
     monkeypatch.setattr(
@@ -126,6 +128,7 @@ def test_create_new_appointment_router_redirects_to_patient_card(monkeypatch):
     assert called["patient_id"] == 101
     assert called["form"].get("last_name") == "Тестова"
     assert called["doctor_id"] == 7
+    assert called["schedule_entry_id"] is None
 
 
 def test_api_appointments_filtered_builds_filters_and_serializes_dates(monkeypatch):

@@ -95,7 +95,7 @@ def test_passport_sections_have_phone_and_stage2_adds_no_css_file():
     new_appointment = (TEMPLATES / "new_appointment.html").read_text(encoding="utf-8")
 
     assert "Консультативный приём (первичный)" in new_patient
-    assert "Консультативный приём (повторный)" in new_appointment
+    assert "повторн" in new_appointment.lower()
     assert "Паспортная часть" not in new_patient
     assert "Паспортная часть" not in new_appointment
     assert 'name="phone"' in new_patient

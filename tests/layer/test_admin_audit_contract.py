@@ -430,6 +430,7 @@ def test_22_auth_login_failed_writes_audit_event(monkeypatch):
     monkeypatch.setattr(auth, "log_audit_event", lambda request, action, **kwargs: events.append((action, kwargs)))
 
     app = FastAPI()
+    app.mount("/static", StaticFiles(directory="app/static"), name="static")
     app.add_middleware(SessionMiddleware, secret_key="test-secret-key", session_cookie=TEST_SESSION_COOKIE)
     app.include_router(auth.router)
 

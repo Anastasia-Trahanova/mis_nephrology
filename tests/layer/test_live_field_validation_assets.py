@@ -11,6 +11,7 @@
 """
 
 from pathlib import Path
+import re
 
 ROOT = Path(__file__).resolve().parents[2]
 
@@ -37,7 +38,7 @@ def test_live_validation_js_contains_short_messages_and_field_rules():
 def test_live_validation_js_prevents_bad_submit_and_focuses_field():
     content = (ROOT / "app" / "static" / "js" / "simple_form_guard.js").read_text(encoding="utf-8")
 
-    assert "addEventListener(\"submit\"" in content
+    assert re.search(r'document\.addEventListener\(\s*["\']submit["\']', content)
     assert "event.preventDefault()" in content
     assert "scrollIntoView" in content
     assert ".focus" in content

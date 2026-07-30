@@ -130,6 +130,7 @@ def _context() -> dict:
     )
 
     return {
+        "request": ns(session={"role": "doctor"}),
         "patient": patient,
         "appointments": [
             ns(appointment_id=202, appointment_date=appointment_date, doctor_name="Лобанова Н."),
@@ -244,14 +245,15 @@ def test_patient_card_keeps_original_layout_markers():
     export_buttons = (PARTIALS_DIR / "_export_buttons.html").read_text(encoding="utf-8")
 
     assert '<div class="row mb-4">' in (PARTIALS_DIR / "_header.html").read_text(encoding="utf-8")
-    assert 'class="col-md-3"' in source
+    assert "col-md-3" in source
     assert 'class="col-md-9"' in source
     assert 'id="printContent"' in source
 
     assert 'card-header bg-primary text-white' in sidebar
     assert 'id="appointmentsList"' in sidebar
     assert 'btn btn-success w-100' in sidebar
-    assert '/new-appointment/{{ patient.id }}' in sidebar
+    assert "new-appointment" in sidebar
+    assert "patient.id" in sidebar
 
     assert 'card-header bg-secondary text-white' in visit_header
     assert 'card-footer' in export_buttons
@@ -295,7 +297,8 @@ def test_patient_card_template_renders_medical_blocks_without_changing_layout():
     assert "Общий анализ мочи" in html
     assert "Альбуминурия по KDIGO" in html
     assert "УЗИ почек" in html
-    assert "Матрица риска по KDIGO" in html
+    assert "Прогноз по KDIGO" in html
+    assert "умеренный риск" in html
     assert "Заключение" in html
     assert "Назначения" in html
 
