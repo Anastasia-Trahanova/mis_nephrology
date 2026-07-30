@@ -1,237 +1,253 @@
-{#
-Административная страница журнала действий МИС.
-Показывает события audit_events как рабочий контрольный журнал: фильтры, категории,
-одну кнопку подробностей для каждого действия и CSV-выгрузку.
-#}
+{# Компактный журнал действий МИС. Медицинские тексты здесь не показываются. #}
 {% extends "base.html" %}
 
 {% macro result_badge(event) -%}
-  {% if event.result == 'success' %}<span class="badge text-bg-success">{{ event.result_label }}</span>
-  {% elif event.result == 'error' %}<span class="badge text-bg-danger">{{ event.result_label }}</span>
-  {% elif event.result == 'denied' %}<span class="badge text-bg-warning">{{ event.result_label }}</span>
-  {% else %}<span class="badge text-bg-secondary">{{ event.result_label or event.result }}</span>{% endif %}
+  {% if event.result == 'success' %}
+    <span class="badge text-bg-success">{{ event.result_label or 'успешно' }}</span>
+  {% elif event.result == 'error' %}
+    <span class="badge text-bg-danger">{{ event.result_label or 'ошибка' }}</span>
+  {% elif event.result == 'denied' %}
+    <span class="badge text-bg-warning">{{ event.result_label or 'отказано' }}</span>
+  {% else %}
+    <span class="badge text-bg-secondary">{{ event.result_label or event.result }}</span>
+  {% endif %}
+{%- endmacro %}
+
+{% macro current_filters(new_offset=None) -%}
+  {% if selected_action %}<input type="hidden" name="action" value="{{ selected_action }}">{% endif %}
+  {% if selected_result %}<input type="hidden" name="result" value="{{ selected_result }}">{% endif %}
+  {% if selected_user_role %}<input type="hidden" name="user_role" value="{{ selected_user_role }}">{% endif %}
+  {% if selected_action_category %}<input type="hidden" name="action_category" value="{{ selected_action_category }}">{% endif %}
+  {% if user_login %}<input type="hidden" name="user_login" value="{{ user_login }}">{% endif %}
+  {% if patient_id %}<input type="hidden" name="patient_id" value="{{ patient_id }}">{% endif %}
+  {% if appointment_id %}<input type="hidden" name="appointment_id" value="{{ appointment_id }}">{% endif %}
+  {% if date_from %}<input type="hidden" name="date_from" value="{{ date_from }}">{% endif %}
+  {% if date_to %}<input type="hidden" name="date_to" value="{{ date_to }}">{% endif %}
+  {% if only_errors %}<input type="hidden" name="only_errors" value="1">{% endif %}
+  <input type="hidden" name="limit" value="{{ limit }}">
+  <input type="hidden" name="offset" value="{{ new_offset if new_offset is not none else offset }}">
 {%- endmacro %}
 
 {% block content %}
+<style>
+  .audit-summary-card { border: 0; border-left: 4px solid var(--bs-primary); }
+  .audit-filter-details summary { cursor: pointer; user-select: none; }
+  .audit-events-table td { vertical-align: middle; }
+  .audit-event-action { min-width: 220px; }
+  .audit-event-object { min-width: 185px; }
+  .audit-muted { color: var(--bs-secondary-color); font-size: .875rem; }
+  @media (max-width: 767.98px) {
+    .audit-events-table thead { display: none; }
+    .audit-events-table tr { display: block; border: 1px solid var(--bs-border-color); border-radius: .5rem; margin-bottom: .75rem; padding: .75rem; }
+    .audit-events-table td { display: block; border: 0; padding: .2rem 0; }
+    .audit-events-table td:last-child { margin-top: .5rem; }
+  }
+</style>
+
 <div class="admin-audit-page">
-  <div class="d-flex justify-content-between align-items-start mb-4 gap-3 flex-wrap">
+  <div class="d-flex justify-content-between align-items-start gap-3 flex-wrap mb-3">
     <div>
-      <h1 class="h3 mb-1">Журнал работы МИС</h1>
-      <p class="text-muted mb-0">
-        Общая лента событий: входы, просмотры, действия с пациентами и приёмами,
-        выгрузки, ошибки, отказы доступа и действия администратора.
-      </p>
+      <h1 class="h3 mb-1">Журнал действий</h1>
+      <p class="text-muted mb-0">Кто, когда и какое действие выполнил в МИС.</p>
+    </div>
+    <div class="d-flex gap-2">
+      <a class="btn btn-outline-secondary" href="/admin/audit">Сбросить фильтры</a>
+      <form method="get" action="/admin/audit/export.csv">
+        {{ current_filters(0) }}
+        <button class="btn btn-outline-primary" type="submit">Скачать CSV</button>
+      </form>
     </div>
   </div>
 
-  <div class="row g-3 mb-4">
-    <div class="col-md-2 col-sm-6">
-      <div class="card shadow-sm h-100"><div class="card-body">
-        <div class="text-muted small">Событий</div>
+  <div class="row g-2 mb-3">
+    <div class="col-6 col-lg-3">
+      <div class="card audit-summary-card shadow-sm h-100"><div class="card-body py-3">
+        <div class="audit-muted">Всего событий</div>
         <div class="fs-4 fw-semibold">{{ summary.total_events or 0 }}</div>
       </div></div>
     </div>
-    <div class="col-md-2 col-sm-6">
-      <div class="card shadow-sm h-100"><div class="card-body">
-        <div class="text-muted small">Пользователей</div>
+    <div class="col-6 col-lg-3">
+      <div class="card audit-summary-card shadow-sm h-100"><div class="card-body py-3">
+        <div class="audit-muted">Пользователей</div>
         <div class="fs-4 fw-semibold">{{ summary.active_users or 0 }}</div>
       </div></div>
     </div>
-    <div class="col-md-2 col-sm-6">
-      <div class="card shadow-sm h-100"><div class="card-body">
-        <div class="text-muted small">Успешных</div>
-        <div class="fs-4 fw-semibold text-success">{{ summary.success_events or 0 }}</div>
+    <div class="col-6 col-lg-3">
+      <div class="card audit-summary-card shadow-sm h-100"><div class="card-body py-3">
+        <div class="audit-muted">Ошибок и отказов</div>
+        <div class="fs-4 fw-semibold text-danger">{{ (summary.error_events or 0) + (summary.denied_events or 0) }}</div>
       </div></div>
     </div>
-    <div class="col-md-2 col-sm-6">
-      <div class="card shadow-sm h-100"><div class="card-body">
-        <div class="text-muted small">Ошибок</div>
-        <div class="fs-4 fw-semibold text-danger">{{ summary.error_events or 0 }}</div>
-      </div></div>
-    </div>
-    <div class="col-md-2 col-sm-6">
-      <div class="card shadow-sm h-100"><div class="card-body">
-        <div class="text-muted small">Отказов</div>
-        <div class="fs-4 fw-semibold text-warning">{{ summary.denied_events or 0 }}</div>
-      </div></div>
-    </div>
-    <div class="col-md-2 col-sm-6">
-      <div class="card shadow-sm h-100"><div class="card-body">
-        <div class="text-muted small">Выгрузок</div>
-        <div class="fs-4 fw-semibold text-info">{{ summary.export_events or 0 }}</div>
+    <div class="col-6 col-lg-3">
+      <div class="card audit-summary-card shadow-sm h-100"><div class="card-body py-3">
+        <div class="audit-muted">Выгрузок</div>
+        <div class="fs-4 fw-semibold">{{ summary.export_events or 0 }}</div>
       </div></div>
     </div>
   </div>
 
-  <form class="card shadow-sm mb-4" method="get" action="/admin/audit">
+  <form class="card shadow-sm mb-3" method="get" action="/admin/audit">
     <div class="card-body">
-      <div class="row g-3 align-items-end">
-        <div class="col-lg-3 col-md-4">
-          <label class="form-label" for="action_category">Категория</label>
-          <select class="form-select" id="action_category" name="action_category">
-            <option value="">Все категории</option>
-            {% for value, label in action_category_choices %}
-              <option value="{{ value }}" {% if selected_action_category == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div class="col-lg-3 col-md-4">
-          <label class="form-label" for="action">Действие</label>
-          <select class="form-select" id="action" name="action">
-            <option value="">Все действия</option>
-            {% for value, label in action_choices %}
-              <option value="{{ value }}" {% if selected_action == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div class="col-lg-2 col-md-4">
-          <label class="form-label" for="result">Результат</label>
-          <select class="form-select" id="result" name="result">
-            <option value="">Любой</option>
-            <option value="success" {% if selected_result == 'success' %}selected{% endif %}>Успешно</option>
-            <option value="error" {% if selected_result == 'error' %}selected{% endif %}>Ошибка</option>
-            <option value="denied" {% if selected_result == 'denied' %}selected{% endif %}>Отказано</option>
-          </select>
-        </div>
-
-        <div class="col-lg-2 col-md-4">
-          <label class="form-label" for="user_role">Роль</label>
-          <select class="form-select" id="user_role" name="user_role">
-            <option value="">Любая</option>
-            {% for value, label in role_choices %}
-              <option value="{{ value }}" {% if selected_user_role == value %}selected{% endif %}>{{ label }}</option>
-            {% endfor %}
-          </select>
-        </div>
-
-        <div class="col-lg-2 col-md-4">
-          <label class="form-label" for="user_login">Пользователь</label>
-          <input class="form-control" id="user_login" name="user_login" value="{{ user_login }}" placeholder="ФИО/логин">
-        </div>
-
-        <div class="col-lg-2 col-md-4">
-          <label class="form-label" for="patient_id">ID пациента</label>
-          <input class="form-control" id="patient_id" name="patient_id" value="{{ patient_id }}" inputmode="numeric">
-        </div>
-
-        <div class="col-lg-2 col-md-4">
-          <label class="form-label" for="appointment_id">ID приёма</label>
-          <input class="form-control" id="appointment_id" name="appointment_id" value="{{ appointment_id }}" inputmode="numeric">
-        </div>
-
-        <div class="col-lg-2 col-md-4">
+      <input type="hidden" name="offset" value="0">
+      <div class="row g-2 align-items-end">
+        <div class="col-md-2">
           <label class="form-label" for="date_from">С даты</label>
           <input class="form-control" id="date_from" name="date_from" value="{{ date_from }}" type="date">
         </div>
-
-        <div class="col-lg-2 col-md-4">
+        <div class="col-md-2">
           <label class="form-label" for="date_to">По дату</label>
           <input class="form-control" id="date_to" name="date_to" value="{{ date_to }}" type="date">
         </div>
-
-        <div class="col-lg-2 col-md-4">
-          <label class="form-label" for="limit">Лимит</label>
-          <input class="form-control" id="limit" name="limit" value="{{ limit }}" inputmode="numeric">
+        <div class="col-md-4">
+          <label class="form-label" for="user_login">Пользователь</label>
+          <input class="form-control" id="user_login" name="user_login" value="{{ user_login }}" placeholder="ФИО или логин">
         </div>
-
-        <div class="col-lg-2 col-md-4">
+        <div class="col-md-2">
           <div class="form-check mb-2">
             <input class="form-check-input" id="only_errors" name="only_errors" type="checkbox" value="1" {% if only_errors %}checked{% endif %}>
-            <label class="form-check-label" for="only_errors">только ошибки/отказы</label>
+            <label class="form-check-label" for="only_errors">Только проблемы</label>
           </div>
         </div>
-
-        <div class="col-lg-3 col-md-8 d-flex gap-2">
-          <button class="btn btn-primary flex-fill" type="submit">Показать</button>
-          <button class="btn btn-outline-secondary flex-fill" type="submit" formaction="/admin/audit/export.csv" formmethod="get">
-            CSV
-          </button>
+        <div class="col-md-2 d-grid">
+          <button class="btn btn-primary" type="submit">Показать</button>
         </div>
       </div>
+
+      <details class="audit-filter-details mt-3" {% if selected_action or selected_result or selected_user_role or selected_action_category or patient_id or appointment_id %}open{% endif %}>
+        <summary class="fw-semibold">Дополнительные фильтры</summary>
+        <div class="row g-2 align-items-end mt-1">
+          <div class="col-lg-3 col-md-4">
+            <label class="form-label" for="action_category">Категория</label>
+            <select class="form-select" id="action_category" name="action_category">
+              <option value="">Все категории</option>
+              {% for value, label in action_category_choices %}
+                <option value="{{ value }}" {% if selected_action_category == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-lg-3 col-md-4">
+            <label class="form-label" for="action">Действие</label>
+            <select class="form-select" id="action" name="action">
+              <option value="">Все действия</option>
+              {% for value, label in action_choices %}
+                <option value="{{ value }}" {% if selected_action == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-lg-2 col-md-4">
+            <label class="form-label" for="result">Результат</label>
+            <select class="form-select" id="result" name="result">
+              <option value="">Любой</option>
+              <option value="success" {% if selected_result == 'success' %}selected{% endif %}>Успешно</option>
+              <option value="error" {% if selected_result == 'error' %}selected{% endif %}>Ошибка</option>
+              <option value="denied" {% if selected_result == 'denied' %}selected{% endif %}>Отказано</option>
+            </select>
+          </div>
+          <div class="col-lg-2 col-md-4">
+            <label class="form-label" for="user_role">Роль</label>
+            <select class="form-select" id="user_role" name="user_role">
+              <option value="">Любая</option>
+              {% for value, label in role_choices %}
+                <option value="{{ value }}" {% if selected_user_role == value %}selected{% endif %}>{{ label }}</option>
+              {% endfor %}
+            </select>
+          </div>
+          <div class="col-lg-1 col-md-4">
+            <label class="form-label" for="patient_id">Пациент</label>
+            <input class="form-control" id="patient_id" name="patient_id" value="{{ patient_id }}" inputmode="numeric" placeholder="ID">
+          </div>
+          <div class="col-lg-1 col-md-4">
+            <label class="form-label" for="appointment_id">Приём</label>
+            <input class="form-control" id="appointment_id" name="appointment_id" value="{{ appointment_id }}" inputmode="numeric" placeholder="ID">
+          </div>
+          <div class="col-lg-2 col-md-4">
+            <label class="form-label" for="limit">Строк на странице</label>
+            <select class="form-select" id="limit" name="limit">
+              {% for option in (50, 100, 200, 500) %}
+                <option value="{{ option }}" {% if limit == option %}selected{% endif %}>{{ option }}</option>
+              {% endfor %}
+            </select>
+          </div>
+        </div>
+      </details>
     </div>
   </form>
 
   <div class="card shadow-sm">
     <div class="card-body">
-      <div class="d-flex justify-content-between align-items-center mb-3 gap-3 flex-wrap">
-        <div>
-          <h2 class="h5 mb-1">Последние события</h2>
-          <p class="text-muted mb-0 small">Каждое действие можно открыть одной кнопкой «Подробнее».</p>
-        </div>
-        {% if offset > 0 %}
-          <a class="btn btn-outline-secondary btn-sm" href="/admin/audit">Сбросить смещение</a>
-        {% endif %}
+      <div class="d-flex justify-content-between align-items-center gap-2 flex-wrap mb-2">
+        <h2 class="h5 mb-0">События</h2>
+        <span class="text-muted small">Показано: {{ events|length }}</span>
       </div>
 
       {% if events %}
-      <div class="table-responsive">
-        <table class="table table-sm align-middle audit-events-table">
-          <thead>
-            <tr>
-              <th style="min-width: 155px;">Дата и время</th>
-              <th>Пользователь</th>
-              <th>Категория</th>
-              <th>Действие</th>
-              <th>Пациент / приём</th>
-              <th>Результат</th>
-              <th>Детали</th>
-              <th class="text-end">Подробнее</th>
-            </tr>
-          </thead>
-          <tbody>
-          {% for event in events %}
-            <tr class="{% if event.result == 'error' %}table-danger{% elif event.result == 'denied' %}table-warning{% endif %}">
-              <td>
-                {% if event.created_at %}
-                  {{ event.created_at.strftime('%d.%m.%Y %H:%M:%S') if event.created_at.strftime is defined else event.created_at }}
-                {% else %}—{% endif %}
-                <div class="text-muted small">ID {{ event.id }}</div>
-              </td>
-              <td>
-                <div class="fw-semibold">{{ event.user_login or '—' }}</div>
-                <div class="text-muted small">{{ event.user_role or 'роль не указана' }}</div>
-                {% if event.ip_address %}<div class="text-muted small">IP {{ event.ip_address }}</div>{% endif %}
-              </td>
-              <td>
-                <span class="badge text-bg-light border">{{ event.action_category_label }}</span>
-              </td>
-              <td>
-                <div>{{ event.action_label or event.action }}</div>
-                <div class="text-muted small">{{ event.method or '' }} {{ event.path or '' }}</div>
-              </td>
-              <td>
-                {% if event.patient_id and event.patient_name %}
-                  <a href="/patient/{{ event.patient_id }}">{{ event.patient_name }}</a>
-                {% elif event.patient_name %}
-                  {{ event.patient_name }}
-                {% else %}
-                  —
-                {% endif %}
-                {% if event.appointment_id %}
-                  <div class="small">приём №{{ event.appointment_id }}</div>
-                {% endif %}
-              </td>
-              <td>{{ result_badge(event) }}</td>
-              <td>
-                <div>{{ event.details or event.event_sentence or '—' }}</div>
-                {% if event.error_message %}<div class="text-danger small">{{ event.error_message }}</div>{% endif %}
-                {% if event.status_code %}<div class="text-muted small">HTTP {{ event.status_code }}</div>{% endif %}
-              </td>
-              <td class="text-end">
-                <a class="btn btn-outline-primary btn-sm" href="/admin/audit/{{ event.id }}">Подробнее</a>
-              </td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      </div>
-      {% else %}
-        <div class="audit-empty-state">
-          <h3>Событий нет</h3>
-          <p>По выбранным фильтрам журнал ничего не вернул. Попробуйте расширить период или убрать часть фильтров.</p>
+        <div class="table-responsive">
+          <table class="table table-hover table-sm audit-events-table mb-0">
+            <thead>
+              <tr>
+                <th>Дата и время</th>
+                <th>Пользователь</th>
+                <th class="audit-event-action">Действие</th>
+                <th class="audit-event-object">Объект</th>
+                <th>Результат</th>
+                <th class="text-end">Подробнее</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for event in events %}
+                <tr class="{% if event.result == 'error' %}table-danger{% elif event.result == 'denied' %}table-warning{% endif %}">
+                  <td>
+                    {% if event.created_at %}
+                      {{ event.created_at.strftime('%d.%m.%Y %H:%M:%S') if event.created_at.strftime is defined else event.created_at }}
+                    {% else %}—{% endif %}
+                  </td>
+                  <td>
+                    <div class="fw-semibold">{{ event.user_login or 'Неизвестно' }}</div>
+                    <div class="audit-muted">{{ event.user_role or 'роль не указана' }}</div>
+                  </td>
+                  <td>
+                    <div>{{ event.action_label or event.action }}</div>
+                    <div class="audit-muted">{{ event.action_category_label or '' }}</div>
+                  </td>
+                  <td>
+                    {% if event.patient_name %}<div>{{ event.patient_name }}</div>{% endif %}
+                    <div class="audit-muted">
+                      {% if event.patient_id %}пациент №{{ event.patient_id }}{% endif %}
+                      {% if event.patient_id and event.appointment_id %} · {% endif %}
+                      {% if event.appointment_id %}приём №{{ event.appointment_id }}{% endif %}
+                      {% if not event.patient_id and not event.appointment_id %}—{% endif %}
+                    </div>
+                  </td>
+                  <td>{{ result_badge(event) }}</td>
+                  <td class="text-end">
+                    <a class="btn btn-outline-primary btn-sm" href="/admin/audit/{{ event.id }}">Открыть</a>
+                  </td>
+                </tr>
+              {% endfor %}
+            </tbody>
+          </table>
         </div>
+
+        <div class="d-flex justify-content-between mt-3">
+          <div>
+            {% if offset > 0 %}
+              <form class="d-inline" method="get" action="/admin/audit">
+                {{ current_filters([offset - limit, 0]|max) }}
+                <button class="btn btn-outline-secondary btn-sm" type="submit">← Предыдущие</button>
+              </form>
+            {% endif %}
+          </div>
+          <div>
+            {% if events|length == limit %}
+              <form class="d-inline" method="get" action="/admin/audit">
+                {{ current_filters(offset + limit) }}
+                <button class="btn btn-outline-secondary btn-sm" type="submit">Следующие →</button>
+              </form>
+            {% endif %}
+          </div>
+        </div>
+      {% else %}
+        <div class="alert alert-light border mb-0">По выбранным фильтрам событий нет.</div>
       {% endif %}
     </div>
   </div>

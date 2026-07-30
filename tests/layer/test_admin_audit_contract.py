@@ -238,7 +238,7 @@ def test_05_admin_audit_page_requires_admin(monkeypatch, admin_session):
         response = client.get("/admin/audit")
 
     assert response.status_code == 200
-    assert "Журнал работы МИС" in response.text
+    assert "Журнал действий" in response.text
 
 
 def test_06_doctor_cannot_open_admin_audit_page(monkeypatch, doctor_session):
@@ -475,10 +475,10 @@ def test_24_middleware_does_not_log_without_session(captured_events):
     assert captured_events == []
 
 
-def test_25_audit_list_uses_one_details_button():
-    """В ленте журнала у каждого действия должна быть одна кнопка подробностей."""
+def test_25_audit_list_uses_one_open_button():
+    """В ленте журнала у каждого действия должна быть одна понятная кнопка открытия."""
     template = Path("app/templates/admin/audit.html").read_text(encoding="utf-8")
 
-    assert 'href="/admin/audit/{{ event.id }}">Подробнее</a>' in template
+    assert 'href="/admin/audit/{{ event.id }}">Открыть</a>' in template
     assert '>Событие</a>' not in template
     assert 'href="/admin/audit/appointment/{{ event.appointment_id }}">Приём</a>' not in template

@@ -130,7 +130,7 @@ def admin_audit_page(
     events = get_audit_events(limit=safe_limit, offset=safe_offset, **filters)
     summary = get_audit_summary(date_from=filters.get("date_from"), date_to=filters.get("date_to"))
 
-    log_audit_event(request, "open_admin_audit", details="Открыт журнал аудита", entity_type="audit")
+    # Открытие списка фиксирует AuditMiddleware, чтобы событие не дублировалось.
 
     return templates.TemplateResponse(
         request=request,

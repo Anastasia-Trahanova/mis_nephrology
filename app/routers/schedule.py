@@ -8,6 +8,12 @@ from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 
+from app.repositories.audit_log import (
+    ACTION_CATEGORIES,
+    ACTION_LABELS,
+    CATEGORY_ACTIONS,
+    log_audit_event,
+)
 from app.repositories.schedule import (
     create_schedule_entry,
     create_walk_in_schedule_entry,
@@ -38,6 +44,24 @@ MONTHS_GENITIVE = (
     "", "января", "февраля", "марта", "апреля", "мая", "июня",
     "июля", "августа", "сентября", "октября", "ноября", "декабря",
 )
+
+SCHEDULE_AUDIT_LABELS = {
+    "open_schedule": "Открыл расписание",
+    "create_schedule_entry": "Создал запись в расписании",
+    "update_schedule_entry": "Изменил запись в расписании",
+    "change_schedule_status": "Изменил статус записи",
+    "create_walk_in_schedule_entry": "Создал внеплановую запись",
+}
+ACTION_LABELS.update(SCHEDULE_AUDIT_LABELS)
+ACTION_CATEGORIES.update({action: "appointment" for action in SCHEDULE_AUDIT_LABELS})
+CATEGORY_ACTIONS.setdefault("appointment", set()).update(SCHEDULE_AUDIT_LABELS)
+
+STATUS_LABELS = {
+    "booked": "записан",
+    "arrived": "пришёл",
+    "cancelled": "отменён",
+    "no_show": "не явился",
+}
 
 
 class ScheduleEntryPayload(BaseModel):
@@ -128,12 +152,44 @@ def _combine(day: date, value: time) -> datetime:
     return datetime.combine(day, value.replace(second=0, microsecond=0))
 
 
+def _schedule_entry_label(item: dict) -> str:
+    value = item.get("starts_at")
+    if not value:
+        return f"запись №{item.get('id')}"
+    if isinstance(value, datetime):
+        starts_at = value
+    else:
+        try:
+            starts_at = datetime.fromisoformat(str(value))
+        except ValueError:
+            return f"запись №{item.get('id')}"
+    return f"запись №{item.get('id')} на {starts_at:%d.%m.%Y %H:%M}"
+
+
+def _log_schedule_event(
+    request: Request,
+    action: str,
+    item: dict,
+    *,
+    details: str,
+) -> None:
+    """Пишет только служебный факт операции, без содержимого медицинской формы."""
+    log_audit_event(
+        request,
+        action,
+        patient_id=item.get("patient_id"),
+        appointment_id=item.get("appointment_id"),
+        entity_type="schedule_entry",
+        entity_id=item.get("id"),
+        details=details,
+    )
+
+
 @router.get("/schedule", response_class=HTMLResponse)
 def schedule_page(request: Request, doctor_id: int | None = None, week: str | None = Query(None)):
     _require_schedule_access(request)
     selected_week = _monday(_parse_iso_date(week, date.today()))
     doctors = get_schedule_doctors()
-
     requested_doctor_id = doctor_id
     if requested_doctor_id is None and request.session.get("role") == ROLE_DOCTOR:
         try:
@@ -143,7 +199,6 @@ def schedule_page(request: Request, doctor_id: int | None = None, week: str | No
 
     selected_doctor_id = _validated_doctor_id(requested_doctor_id, doctors)
     locations = get_schedule_locations_for_doctor(selected_doctor_id) if selected_doctor_id else []
-
     return templates.TemplateResponse(
         request=request,
         name="schedule/index.html",
@@ -217,6 +272,12 @@ def schedule_create_entry(payload: ScheduleEntryPayload, request: Request):
         gender=payload.gender,
         created_by_user_id=request.session.get("user_id"),
     )
+    _log_schedule_event(
+        request,
+        "create_schedule_entry",
+        item,
+        details=f"Создана {_schedule_entry_label(item)}",
+    )
     return {"item": item}
 
 
@@ -255,6 +316,12 @@ def schedule_update_entry(entry_id: int, payload: ScheduleEntryEditPayload, requ
         phone=payload.phone,
         gender=payload.gender,
     )
+    _log_schedule_event(
+        request,
+        "update_schedule_entry",
+        item,
+        details=f"Изменена {_schedule_entry_label(item)}",
+    )
     return {"item": item}
 
 
@@ -267,7 +334,15 @@ def schedule_update_status(entry_id: int, payload: ScheduleStatusPayload, reques
         user_id=request.session.get("user_id"),
         cancel_reason=payload.cancel_reason,
     )
+    status_label = STATUS_LABELS.get(payload.status, payload.status)
+    _log_schedule_event(
+        request,
+        "change_schedule_status",
+        item,
+        details=f"Для {_schedule_entry_label(item)} установлен статус «{status_label}»",
+    )
     return {"item": item}
+
 
 def _walk_in_date_time_label(item: dict) -> str:
     starts_at = datetime.fromisoformat(str(item["starts_at"]))
@@ -307,7 +382,6 @@ def patient_create_walk_in(
         raise HTTPException(status_code=400, detail="Некорректное действие")
     if payload.action == "cancel_and_create" and not payload.scheduled_entry_id:
         raise HTTPException(status_code=400, detail="Не указана отменяемая запись")
-
     item = create_walk_in_schedule_entry(
         patient_id=patient_id,
         doctor_id=doctor_id,
@@ -319,10 +393,20 @@ def patient_create_walk_in(
         ),
         now=datetime.now(),
     )
+    action_details = {
+        "create": "Создана внеплановая запись",
+        "keep_and_create": "Создана внеплановая запись; будущая запись сохранена",
+        "cancel_and_create": "Создана внеплановая запись; будущая запись отменена",
+    }
+    _log_schedule_event(
+        request,
+        "create_walk_in_schedule_entry",
+        item,
+        details=f"{action_details[payload.action]}: {_schedule_entry_label(item)}",
+    )
     return {
         "item": item,
         "redirect_url": (
             f"/new-appointment/{patient_id}?schedule_entry_id={item['id']}"
         ),
     }
-

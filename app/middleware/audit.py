@@ -11,7 +11,6 @@
 - функцию classify_request(), если нужно добавить новое действие в журнал;
 - список игнорируемых технических путей;
 - текст details для безопасных служебных пояснений.
-
 Что не редактировать здесь:
 - SQL записи журнала — он в app/repositories/audit_log.py;
 - права доступа — они в app/security/permissions.py;
@@ -73,9 +72,8 @@ def _query_int(request: Request, name: str) -> int | None:
 def classify_request(request: Request, status_code: int) -> AuditAction | None:
     """
     Определяет, какое событие записать для запроса.
-
-    В журнал попадают только безопасные факты: открытие карточки, списка, Word-экспорта,
-    административного журнала и ошибки доступа/сервера.
+    В журнал попадают только безопасные факты: открытие карточки, списка, расписания,
+    Word-экспорта и ошибки доступа/сервера.
     """
     path = request.url.path
     method = request.method.upper()
@@ -89,7 +87,6 @@ def classify_request(request: Request, status_code: int) -> AuditAction | None:
             result="denied",
             details=f"{method} {path}",
         )
-
     if status_code >= 500:
         return AuditAction(
             action="server_error",
@@ -139,9 +136,16 @@ def classify_request(request: Request, status_code: int) -> AuditAction | None:
     if method == "GET" and path == "/ckd-registry":
         return AuditAction(action="open_ckd_registry")
 
-    if method == "GET" and path == "/admin/audit":
-        return AuditAction(action="open_admin_audit")
+    if method == "GET" and path == "/schedule":
+        return AuditAction(action="open_schedule", details="открыто расписание")
 
+    if method == "GET" and path == "/admin/audit":
+        return AuditAction(
+            action="open_admin_audit",
+            details="открыт журнал работы МИС",
+        )
+
+    # Выгрузка и страницы подробностей создают точные события в admin.py.
     return None
 
 
@@ -174,5 +178,4 @@ class AuditMiddleware(BaseHTTPMiddleware):
                     details=event.details,
                     status_code=response.status_code,
                 )
-
         return response

@@ -11,6 +11,7 @@ from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
+from .middleware.audit import AuditMiddleware
 from .routers import (
     admin,
     appointment_filters,
@@ -50,7 +51,6 @@ class LoggingMiddleware(BaseHTTPMiddleware):
             print(log_message)
             logging.exception(log_message)
             raise
-
         duration = (time.perf_counter() - start_time) * 1000
         log_message = (
             f"{request.method} {request.url.path} "
@@ -79,8 +79,11 @@ async def authentication_required_handler(
     return auth.unauthorized_response(request, exc.reason)
 
 
-# Middleware добавляются изнутри наружу: TrustedHostMiddleware выполняется первым.
+# Middleware добавляются изнутри наружу:
+# TrustedHost -> Session -> Audit -> Logging -> приложение.
+# Поэтому аудит видит пользователя из request.session.
 app.add_middleware(LoggingMiddleware)
+app.add_middleware(AuditMiddleware)
 app.add_middleware(
     SessionMiddleware,
     secret_key=settings.session_secret_key,
@@ -94,7 +97,6 @@ app.add_middleware(
     allowed_hosts=settings.allowed_hosts,
     www_redirect=False,
 )
-
 
 protected_dependencies = [Depends(auth.require_authenticated_user)]
 
@@ -134,7 +136,6 @@ def protected_redoc():
 
 # /login остаётся публичным. Logout и session endpoints защищены в auth.router.
 app.include_router(auth.router)
-
 # Все рабочие разделы требуют только активную сессию.
 # Ограничения «врач видит только своих пациентов» здесь намеренно нет.
 app.include_router(home.router, dependencies=protected_dependencies)
