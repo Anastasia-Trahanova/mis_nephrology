@@ -1,39 +1,62 @@
-"""
-ЛЕГЕНДА
-Файл: app/routers/ckd_registry.py
-Назначение: административная страница регистра ХБП.
-Доступ: только пользователь с ролью admin.
-"""
+"""Страница динамических списков пациентов для врачей и администратора."""
+
+from __future__ import annotations
+
+from io import BytesIO
 
 from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import HTMLResponse
+from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
-from ..registry_queries import get_ckd_registry_dashboard
+from ..registry_queries import (
+    EGFR_CATEGORIES,
+    INDICATORS,
+    OPERATOR_LABELS,
+    PERIOD_LABELS,
+    RegistryFilters,
+    build_registry_csv,
+    get_patient_registry,
+)
 
 router = APIRouter(tags=["ckd_registry"])
 templates = Jinja2Templates(directory="app/templates")
 
+_ALLOWED_ROLES = {"admin", "doctor"}
 
-def require_admin(request: Request) -> None:
-    """Пускает в регистр только администратора."""
-    if request.session.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Раздел доступен только администратору")
+
+def require_registry_access(request: Request) -> None:
+    """Разрешает раздел врачам и администратору."""
+    if request.session.get("role") not in _ALLOWED_ROLES:
+        raise HTTPException(status_code=403, detail="Раздел доступен медицинским сотрудникам")
 
 
 @router.get("/ckd-registry", response_class=HTMLResponse)
-def ckd_registry_dashboard(request: Request):
-    require_admin(request)
-    dashboard = get_ckd_registry_dashboard()
+def patient_lists_page(request: Request):
+    require_registry_access(request)
+    filters = RegistryFilters.from_mapping(request.query_params)
+    result = get_patient_registry(filters)
     return templates.TemplateResponse(
         request=request,
         name="ckd_registry.html",
         context={
             "request": request,
-            "dashboard": dashboard,
-            "summary": dashboard.get("summary", {}),
-            "queues": dashboard.get("queues", {}),
-            "doctor_high_risk": dashboard.get("doctor_high_risk", []),
-            "location_incomplete": dashboard.get("location_incomplete", []),
+            "filters": filters,
+            "result": result,
+            "indicators": INDICATORS,
+            "egfr_categories": EGFR_CATEGORIES,
+            "period_labels": PERIOD_LABELS,
+            "operator_labels": OPERATOR_LABELS,
         },
+    )
+
+
+@router.get("/ckd-registry/export.csv")
+def export_patient_list(request: Request):
+    require_registry_access(request)
+    filters = RegistryFilters.from_mapping(request.query_params)
+    content, filename = build_registry_csv(filters)
+    return StreamingResponse(
+        BytesIO(content.encode("utf-8")),
+        media_type="text/csv; charset=utf-8",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )

@@ -1,399 +1,486 @@
-"""
-ЛЕГЕНДА
-Файл: app/registry_queries.py
-Назначение: серверные запросы для административного регистра ХБП.
-Что делает: за один SQL-запрос собирает сводку, клинические очереди и управленческие списки.
-Почему отдельный файл: не раздувает основной database.py и не ломает существующие функции приложения.
+"""Динамические списки пациентов по клиническим показателям.
+
+Модуль изолирован от остальных repositories: он читает существующие таблицы,
+не меняет схему БД и возвращает только данные для страницы списков пациентов.
 """
 
-from typing import Any, Dict
+from __future__ import annotations
+
+import csv
+import io
+from dataclasses import dataclass, replace
+from datetime import date, datetime
+from decimal import Decimal, InvalidOperation
+from typing import Any, Mapping
+from urllib.parse import urlencode
 
 from app.db.connection import get_db_connection
 
 
-CKD_REGISTRY_SQL = """
-WITH
-latest_appointment AS (
-    SELECT DISTINCT ON (a.patient_id)
-        a.patient_id,
-        a.id AS appointment_id,
-        a.appointment_date,
-        a.doctor_id,
-        a.location_id,
-        d.last_name || ' ' || d.first_name || ' ' || COALESCE(d.patronymic, '') AS doctor_name,
-        l.name AS location_name,
-        b.name AS branch_name
-    FROM appointments a
-    JOIN doctors d ON d.id = a.doctor_id
-    JOIN locations l ON l.id = a.location_id
-    JOIN branches b ON b.id = l.branch_id
-    ORDER BY a.patient_id, a.appointment_date DESC, a.id DESC
-),
-metric_ranked AS (
-    SELECT
-        a.patient_id,
-        cm.appointment_id,
-        COALESCE(cm.investigation_date, a.appointment_date::date) AS investigation_date,
-        cm.creatinine,
-        cm.egfr_ckdepi,
-        cm.ckd_stage,
-        ROW_NUMBER() OVER (
-            PARTITION BY a.patient_id
-            ORDER BY COALESCE(cm.investigation_date, a.appointment_date::date) DESC, a.appointment_date DESC, cm.id DESC
-        ) AS rn
-    FROM calculated_metrics cm
-    JOIN appointments a ON a.id = cm.appointment_id
-    WHERE cm.creatinine IS NOT NULL OR cm.egfr_ckdepi IS NOT NULL OR cm.ckd_stage IS NOT NULL
-),
-latest_metric AS (
-    SELECT * FROM metric_ranked WHERE rn = 1
-),
-previous_metric AS (
-    SELECT * FROM metric_ranked WHERE rn = 2
-),
-albuminuria_ranked AS (
-    SELECT
-        a.patient_id,
-        ar.appointment_id,
-        ar.investigation_date,
-        ar.urine_albumin,
-        ar.urine_albumin_unit,
-        ar.urine_creatinine,
-        ar.urine_creatinine_unit,
-        ar.albumin_creatinine_ratio,
-        ar.albuminuria_category,
-        ROW_NUMBER() OVER (
-            PARTITION BY a.patient_id
-            ORDER BY ar.investigation_date DESC, a.appointment_date DESC, ar.id DESC
-        ) AS rn
-    FROM albuminuria_results ar
-    JOIN appointments a ON a.id = ar.appointment_id
-),
-latest_albuminuria AS (
-    SELECT * FROM albuminuria_ranked WHERE rn = 1
-),
-prognosis_ranked AS (
-    SELECT
-        a.patient_id,
-        cpr.appointment_id,
-        cpr.assessment_date,
-        cpr.gfr_category,
-        cpr.albuminuria_category,
-        cpr.combined_category,
-        cpr.prognosis_level,
-        cpr.prognosis_text,
-        ROW_NUMBER() OVER (
-            PARTITION BY a.patient_id
-            ORDER BY cpr.assessment_date DESC, a.appointment_date DESC, cpr.id DESC
-        ) AS rn
-    FROM ckd_prognosis_results cpr
-    JOIN appointments a ON a.id = cpr.appointment_id
-),
-latest_prognosis AS (
-    SELECT * FROM prognosis_ranked WHERE rn = 1
-),
-diet_ranked AS (
-    SELECT
-        a.patient_id,
-        ad.appointment_id,
-        a.appointment_date,
-        ad.next_control_date,
-        ad.diet,
-        ad.recommendations,
-        ROW_NUMBER() OVER (
-            PARTITION BY a.patient_id
-            ORDER BY a.appointment_date DESC, ad.id DESC
-        ) AS rn
-    FROM appointment_diets ad
-    JOIN appointments a ON a.id = ad.appointment_id
-),
-latest_diet AS (
-    SELECT * FROM diet_ranked WHERE rn = 1
-),
-patient_snapshot AS (
-    SELECT
-        p.id AS patient_id,
-        p.last_name || ' ' || p.first_name || ' ' || COALESCE(p.patronymic, '') AS patient_fio,
-        p.birth_date,
-        EXTRACT(YEAR FROM AGE(CURRENT_DATE, p.birth_date))::int AS age,
-        CASE WHEN p.gender THEN 'Мужской' ELSE 'Женский' END AS gender_str,
+INDICATORS: dict[str, dict[str, Any]] = {
+    "hemoglobin": {
+        "label": "Гемоглобин",
+        "unit": "г/л",
+        "table": "cbc_results",
+        "column": "hemoglobin",
+        "date_sql": "r.investigation_date",
+        "default_operator": "lt",
+        "default_from": Decimal("120"),
+        "default_to": None,
+    },
+    "potassium": {
+        "label": "Калий",
+        "unit": "ммоль/л",
+        "table": "biochemistry_results",
+        "column": "potassium",
+        "date_sql": "r.investigation_date",
+        "default_operator": "gt",
+        "default_from": Decimal("5.5"),
+        "default_to": None,
+    },
+    "ptg": {
+        "label": "ПТГ",
+        "unit": "пг/мл",
+        "table": "biochemistry_results",
+        "column": "ptg",
+        "date_sql": "r.investigation_date",
+        "default_operator": "gt",
+        "default_from": Decimal("150"),
+        "default_to": None,
+    },
+    "egfr": {
+        "label": "СКФ CKD-EPI 2021",
+        "unit": "мл/мин/1,73 м²",
+        "table": "calculated_metrics",
+        "column": "egfr_ckdepi",
+        "date_sql": "COALESCE(r.investigation_date, a.appointment_date::date)",
+        "default_operator": "lt",
+        "default_from": Decimal("30"),
+        "default_to": None,
+    },
+}
 
-        la.appointment_id AS last_appointment_id,
-        la.appointment_date AS last_appointment_date,
-        la.doctor_id AS last_doctor_id,
-        la.doctor_name AS last_doctor_name,
-        la.location_id AS last_location_id,
-        la.location_name AS last_location_name,
-        la.branch_name AS last_branch_name,
+EGFR_CATEGORIES: dict[str, dict[str, Any]] = {
+    "С1": {"label": "С1 — 90 и выше", "minimum": Decimal("90"), "maximum": None},
+    "С2": {"label": "С2 — 60–89", "minimum": Decimal("60"), "maximum": Decimal("90")},
+    "С3а": {"label": "С3а — 45–59", "minimum": Decimal("45"), "maximum": Decimal("60")},
+    "С3б": {"label": "С3б — 30–44", "minimum": Decimal("30"), "maximum": Decimal("45")},
+    "С4": {"label": "С4 — 15–29", "minimum": Decimal("15"), "maximum": Decimal("30")},
+    "С5": {"label": "С5 — ниже 15", "minimum": None, "maximum": Decimal("15")},
+}
 
-        lm.appointment_id AS metric_appointment_id,
-        lm.investigation_date AS metric_date,
-        lm.creatinine AS latest_creatinine,
-        lm.egfr_ckdepi AS latest_egfr,
-        lm.ckd_stage AS latest_gfr_category,
+PERIOD_LABELS = {
+    0: "за всё время",
+    1: "за последний месяц",
+    3: "за последние 3 месяца",
+    6: "за последние 6 месяцев",
+    12: "за последний год",
+}
 
-        pm.investigation_date AS previous_metric_date,
-        pm.egfr_ckdepi AS previous_egfr,
-        CASE
-            WHEN pm.egfr_ckdepi IS NOT NULL AND lm.egfr_ckdepi IS NOT NULL THEN ROUND((pm.egfr_ckdepi - lm.egfr_ckdepi)::numeric, 2)
-            ELSE NULL
-        END AS egfr_decline_abs,
-        CASE
-            WHEN pm.egfr_ckdepi IS NOT NULL AND pm.egfr_ckdepi > 0 AND lm.egfr_ckdepi IS NOT NULL THEN
-                ROUND(((pm.egfr_ckdepi - lm.egfr_ckdepi) / pm.egfr_ckdepi * 100)::numeric, 1)
-            ELSE NULL
-        END AS egfr_decline_percent,
+OPERATOR_LABELS = {
+    "lt": "ниже",
+    "gt": "выше",
+    "between": "от–до",
+}
 
-        lar.investigation_date AS albuminuria_date,
-        lar.albumin_creatinine_ratio AS latest_acr,
-        lar.albuminuria_category AS latest_albuminuria_category,
 
-        lp.assessment_date AS prognosis_date,
-        lp.gfr_category AS prognosis_gfr_category,
-        lp.albuminuria_category AS prognosis_albuminuria_category,
-        lp.combined_category,
-        lp.prognosis_level,
-        lp.prognosis_text,
+def _decimal(value: Any, default: Decimal | None = None) -> Decimal | None:
+    if value in (None, ""):
+        return default
+    try:
+        parsed = Decimal(str(value).strip().replace(",", "."))
+    except (InvalidOperation, ValueError):
+        return default
+    return parsed if parsed >= 0 else default
 
-        ld.next_control_date,
-        ld.diet,
-        ld.recommendations,
 
-        EXISTS (
-            SELECT 1
-            FROM diagnoses d
-            JOIN appointments adx ON adx.id = d.appointment_id
-            WHERE adx.patient_id = p.id
-              AND (
-                    d.main_diagnosis ILIKE '%ХБП%'
-                    OR d.main_diagnosis ILIKE '%хроническ%поч%'
-                  )
-        ) AS has_ckd_diagnosis,
+def _positive_int(value: Any, default: int, maximum: int) -> int:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return default
+    return min(max(parsed, 1), maximum)
 
-        (
-            lm.ckd_stage IS NOT NULL
-            OR lar.albuminuria_category IS NOT NULL
-            OR lp.prognosis_level IS NOT NULL
-            OR EXISTS (
-                SELECT 1
-                FROM diagnoses d
-                JOIN appointments adx ON adx.id = d.appointment_id
-                WHERE adx.patient_id = p.id
-                  AND (
-                        d.main_diagnosis ILIKE '%ХБП%'
-                        OR d.main_diagnosis ILIKE '%хроническ%поч%'
-                      )
-            )
-        ) AS is_ckd_observed,
 
-        (lp.prognosis_level IS NULL) AS flag_no_prognosis,
-        (lar.albuminuria_category = 'A3') AS flag_a3,
-        (lm.ckd_stage IN ('G4', 'G5')) AS flag_g4_g5,
-        (lp.prognosis_level = 'very_high') AS flag_very_high,
-        (ld.next_control_date IS NOT NULL AND ld.next_control_date < CURRENT_DATE) AS flag_overdue_control,
-        (lar.albuminuria_category IS NULL) AS flag_no_albuminuria,
-        (lm.investigation_date IS NULL OR lm.investigation_date < CURRENT_DATE - INTERVAL '180 days') AS flag_no_fresh_creatinine,
-        (
-            la.appointment_id IS NOT NULL
-            AND (
-                lm.ckd_stage IS NULL
-                OR lar.albuminuria_category IS NULL
-                OR lp.prognosis_level IS NULL
-            )
-        ) AS flag_incomplete_labs,
-        (
-            pm.egfr_ckdepi IS NOT NULL
-            AND lm.egfr_ckdepi IS NOT NULL
-            AND pm.egfr_ckdepi > lm.egfr_ckdepi
-            AND (
-                (pm.egfr_ckdepi - lm.egfr_ckdepi) >= 5
-                OR ((pm.egfr_ckdepi - lm.egfr_ckdepi) / NULLIF(pm.egfr_ckdepi, 0)) >= 0.10
-            )
-        ) AS flag_rapid_egfr_decline
-    FROM patients p
-    LEFT JOIN latest_appointment la ON la.patient_id = p.id
-    LEFT JOIN latest_metric lm ON lm.patient_id = p.id
-    LEFT JOIN previous_metric pm ON pm.patient_id = p.id
-    LEFT JOIN latest_albuminuria lar ON lar.patient_id = p.id
-    LEFT JOIN latest_prognosis lp ON lp.patient_id = p.id
-    LEFT JOIN latest_diet ld ON ld.patient_id = p.id
-),
-appointment_quality AS (
-    SELECT
-        a.id AS appointment_id,
-        a.patient_id,
-        a.doctor_id,
-        a.location_id,
-        a.appointment_date,
-        NOT EXISTS (SELECT 1 FROM surveys s WHERE s.appointment_id = a.id) AS missing_survey,
-        NOT EXISTS (SELECT 1 FROM examinations e WHERE e.appointment_id = a.id) AS missing_examination,
-        NOT EXISTS (SELECT 1 FROM biochemistry_results bch WHERE bch.appointment_id = a.id AND bch.creatinine IS NOT NULL) AS missing_creatinine,
-        NOT EXISTS (SELECT 1 FROM albuminuria_results ar WHERE ar.appointment_id = a.id AND ar.albuminuria_category IS NOT NULL) AS missing_albuminuria,
-        NOT EXISTS (SELECT 1 FROM ckd_prognosis_results cpr WHERE cpr.appointment_id = a.id AND cpr.prognosis_level IS NOT NULL) AS missing_prognosis,
-        NOT EXISTS (SELECT 1 FROM diagnoses d WHERE d.appointment_id = a.id AND d.main_diagnosis IS NOT NULL) AS missing_diagnosis
-    FROM appointments a
-),
-appointment_quality_marked AS (
-    SELECT
-        aq.*,
-        (
-            missing_survey
-            OR missing_examination
-            OR missing_creatinine
-            OR missing_albuminuria
-            OR missing_prognosis
-            OR missing_diagnosis
-        ) AS is_incomplete
-    FROM appointment_quality aq
-),
-patient_json AS (
-    SELECT
-        patient_id,
-        jsonb_build_object(
-            'patient_id', patient_id,
-            'patient_fio', patient_fio,
-            'age', age,
-            'gender', gender_str,
-            'last_appointment_id', last_appointment_id,
-            'last_appointment_date', last_appointment_date,
-            'last_doctor_name', last_doctor_name,
-            'last_location_name', last_location_name,
-            'metric_date', metric_date,
-            'latest_creatinine', latest_creatinine,
-            'latest_egfr', latest_egfr,
-            'latest_gfr_category', latest_gfr_category,
-            'albuminuria_date', albuminuria_date,
-            'latest_acr', latest_acr,
-            'latest_albuminuria_category', latest_albuminuria_category,
-            'combined_category', combined_category,
-            'prognosis_level', prognosis_level,
-            'prognosis_text', prognosis_text,
-            'next_control_date', next_control_date,
-            'previous_metric_date', previous_metric_date,
-            'previous_egfr', previous_egfr,
-            'egfr_decline_abs', egfr_decline_abs,
-            'egfr_decline_percent', egfr_decline_percent
-        ) AS item
-    FROM patient_snapshot
-)
-SELECT jsonb_build_object(
-    'generated_at', NOW(),
-    'summary', (
-        SELECT jsonb_build_object(
-            'patients_total', COUNT(*),
-            'patients_with_appointments', COUNT(*) FILTER (WHERE last_appointment_id IS NOT NULL),
-            'ckd_patients_total', COUNT(*) FILTER (WHERE is_ckd_observed),
-            'high_risk_ckd_patients', COUNT(*) FILTER (WHERE is_ckd_observed AND prognosis_level IN ('high', 'very_high')),
-            'very_high_ckd_patients', COUNT(*) FILTER (WHERE is_ckd_observed AND prognosis_level = 'very_high'),
-            'without_albuminuria', COUNT(*) FILTER (WHERE is_ckd_observed AND flag_no_albuminuria),
-            'without_fresh_creatinine', COUNT(*) FILTER (WHERE is_ckd_observed AND flag_no_fresh_creatinine),
-            'without_prognosis', COUNT(*) FILTER (WHERE is_ckd_observed AND flag_no_prognosis),
-            'g4_g5_without_control_date', COUNT(*) FILTER (WHERE is_ckd_observed AND flag_g4_g5 AND next_control_date IS NULL),
-            'a3_patients', COUNT(*) FILTER (WHERE flag_a3),
-            'g4_g5_patients', COUNT(*) FILTER (WHERE flag_g4_g5),
-            'very_high_patients', COUNT(*) FILTER (WHERE flag_very_high),
-            'overdue_control_patients', COUNT(*) FILTER (WHERE flag_overdue_control),
-            'incomplete_lab_patients', COUNT(*) FILTER (WHERE flag_incomplete_labs),
-            'rapid_egfr_decline_patients', COUNT(*) FILTER (WHERE flag_rapid_egfr_decline),
-            'incomplete_appointments_total', (SELECT COUNT(*) FROM appointment_quality_marked WHERE is_incomplete)
+@dataclass(frozen=True)
+class RegistryFilters:
+    indicator: str = "hemoglobin"
+    mode: str = "manual"
+    operator: str = "lt"
+    value_from: Decimal = Decimal("120")
+    value_to: Decimal | None = None
+    egfr_category: str = "С4"
+    period_months: int = 6
+    page: int = 1
+    page_size: int = 25
+
+    @classmethod
+    def from_mapping(cls, values: Mapping[str, Any]) -> "RegistryFilters":
+        indicator = str(values.get("indicator") or "hemoglobin")
+        if indicator not in INDICATORS:
+            indicator = "hemoglobin"
+        spec = INDICATORS[indicator]
+
+        mode = str(values.get("mode") or ("category" if indicator == "egfr" else "manual"))
+        if indicator != "egfr" or mode not in {"category", "manual"}:
+            mode = "manual"
+
+        operator = str(values.get("operator") or spec["default_operator"])
+        if operator not in OPERATOR_LABELS:
+            operator = spec["default_operator"]
+
+        value_from = _decimal(values.get("value_from"), spec["default_from"])
+        if value_from is None:
+            value_from = spec["default_from"]
+        value_to = _decimal(values.get("value_to"), spec["default_to"])
+        if operator == "between":
+            if value_to is None:
+                value_to = value_from
+            if value_to < value_from:
+                value_from, value_to = value_to, value_from
+        else:
+            value_to = None
+
+        category = str(values.get("egfr_category") or "С4")
+        if category not in EGFR_CATEGORIES:
+            category = "С4"
+
+        try:
+            period_months = int(values.get("period_months", 6))
+        except (TypeError, ValueError):
+            period_months = 6
+        if period_months not in PERIOD_LABELS:
+            period_months = 6
+
+        return cls(
+            indicator=indicator,
+            mode=mode,
+            operator=operator,
+            value_from=value_from,
+            value_to=value_to,
+            egfr_category=category,
+            period_months=period_months,
+            page=_positive_int(values.get("page"), 1, 100000),
+            page_size=_positive_int(values.get("page_size"), 25, 100),
         )
-        FROM patient_snapshot
-    ),
-    'queues', jsonb_build_object(
-        'without_prognosis', COALESCE((
-            SELECT jsonb_agg(pj.item ORDER BY (pj.item->>'last_appointment_date') DESC NULLS LAST)
-            FROM patient_snapshot ps
-            JOIN patient_json pj ON pj.patient_id = ps.patient_id
-            WHERE ps.is_ckd_observed AND ps.flag_no_prognosis
-        ), '[]'::jsonb),
-        'a3', COALESCE((
-            SELECT jsonb_agg(pj.item ORDER BY (pj.item->>'latest_acr')::numeric DESC NULLS LAST)
-            FROM patient_snapshot ps
-            JOIN patient_json pj ON pj.patient_id = ps.patient_id
-            WHERE ps.flag_a3
-        ), '[]'::jsonb),
-        'g4_g5', COALESCE((
-            SELECT jsonb_agg(pj.item ORDER BY ps.latest_egfr ASC NULLS LAST)
-            FROM patient_snapshot ps
-            JOIN patient_json pj ON pj.patient_id = ps.patient_id
-            WHERE ps.flag_g4_g5
-        ), '[]'::jsonb),
-        'very_high', COALESCE((
-            SELECT jsonb_agg(pj.item ORDER BY (pj.item->>'last_appointment_date') DESC NULLS LAST)
-            FROM patient_snapshot ps
-            JOIN patient_json pj ON pj.patient_id = ps.patient_id
-            WHERE ps.flag_very_high
-        ), '[]'::jsonb),
-        'overdue_control', COALESCE((
-            SELECT jsonb_agg(pj.item ORDER BY ps.next_control_date ASC NULLS LAST)
-            FROM patient_snapshot ps
-            JOIN patient_json pj ON pj.patient_id = ps.patient_id
-            WHERE ps.flag_overdue_control
-        ), '[]'::jsonb),
-        'incomplete_labs', COALESCE((
-            SELECT jsonb_agg(pj.item ORDER BY (pj.item->>'last_appointment_date') DESC NULLS LAST)
-            FROM patient_snapshot ps
-            JOIN patient_json pj ON pj.patient_id = ps.patient_id
-            WHERE ps.flag_incomplete_labs
-        ), '[]'::jsonb),
-        'rapid_egfr_decline', COALESCE((
-            SELECT jsonb_agg(pj.item ORDER BY ps.egfr_decline_abs DESC NULLS LAST)
-            FROM patient_snapshot ps
-            JOIN patient_json pj ON pj.patient_id = ps.patient_id
-            WHERE ps.flag_rapid_egfr_decline
-        ), '[]'::jsonb)
-    ),
-    'doctor_high_risk', COALESCE((
-        SELECT jsonb_agg(row_to_json(x) ORDER BY x.very_high_patients DESC, x.high_and_very_high_patients DESC, x.total_latest_patients DESC)
-        FROM (
-            SELECT
-                d.id AS doctor_id,
-                d.last_name || ' ' || d.first_name || ' ' || COALESCE(d.patronymic, '') AS doctor_name,
-                COUNT(ps.patient_id) FILTER (WHERE ps.last_doctor_id = d.id) AS total_latest_patients,
-                COUNT(ps.patient_id) FILTER (WHERE ps.last_doctor_id = d.id AND ps.prognosis_level IN ('high', 'very_high')) AS high_and_very_high_patients,
-                COUNT(ps.patient_id) FILTER (WHERE ps.last_doctor_id = d.id AND ps.prognosis_level = 'very_high') AS very_high_patients,
-                COUNT(ps.patient_id) FILTER (WHERE ps.last_doctor_id = d.id AND ps.flag_incomplete_labs) AS incomplete_latest_patients,
-                COUNT(ps.patient_id) FILTER (WHERE ps.last_doctor_id = d.id AND ps.flag_overdue_control) AS overdue_control_patients
-            FROM doctors d
-            LEFT JOIN patient_snapshot ps ON ps.last_doctor_id = d.id
-            GROUP BY d.id, d.last_name, d.first_name, d.patronymic
-        ) x
-    ), '[]'::jsonb),
-    'location_incomplete', COALESCE((
-        SELECT jsonb_agg(row_to_json(x) ORDER BY x.incomplete_appointments DESC, x.incomplete_latest_patients DESC, x.appointments_total DESC)
-        FROM (
-            SELECT
-                l.id AS location_id,
-                l.name AS location_name,
-                b.name AS branch_name,
-                COUNT(aq.appointment_id) AS appointments_total,
-                COUNT(aq.appointment_id) FILTER (WHERE aq.is_incomplete) AS incomplete_appointments,
-                COUNT(ps.patient_id) FILTER (WHERE ps.flag_incomplete_labs) AS incomplete_latest_patients,
-                COUNT(ps.patient_id) FILTER (WHERE ps.prognosis_level = 'very_high') AS very_high_latest_patients
-            FROM locations l
-            JOIN branches b ON b.id = l.branch_id
-            LEFT JOIN appointment_quality_marked aq ON aq.location_id = l.id
-            LEFT JOIN patient_snapshot ps ON ps.last_location_id = l.id
-            GROUP BY l.id, l.name, b.name
-        ) x
-    ), '[]'::jsonb)
-) AS dashboard;
-"""
+
+    @property
+    def indicator_spec(self) -> dict[str, Any]:
+        return INDICATORS[self.indicator]
+
+    def without_page_query(self) -> str:
+        values = {
+            "indicator": self.indicator,
+            "mode": self.mode,
+            "operator": self.operator,
+            "value_from": _plain_number(self.value_from),
+            "egfr_category": self.egfr_category,
+            "period_months": self.period_months,
+            "page_size": self.page_size,
+        }
+        if self.value_to is not None:
+            values["value_to"] = _plain_number(self.value_to)
+        return urlencode(values)
 
 
-def get_ckd_registry_dashboard() -> Dict[str, Any]:
-    """Возвращает данные для страницы регистра ХБП одним обращением к базе."""
+def _plain_number(value: Decimal | float | int | None) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, Decimal):
+        text = format(value, "f")
+    else:
+        text = str(value)
+    return text.rstrip("0").rstrip(".") if "." in text else text
+
+
+def _category_sql(value_sql: str = "latest.result_value") -> str:
+    return f"""
+        CASE
+            WHEN {value_sql} >= 90 THEN 'С1'
+            WHEN {value_sql} >= 60 THEN 'С2'
+            WHEN {value_sql} >= 45 THEN 'С3а'
+            WHEN {value_sql} >= 30 THEN 'С3б'
+            WHEN {value_sql} >= 15 THEN 'С4'
+            ELSE 'С5'
+        END
+    """
+
+
+def _condition_sql(filters: RegistryFilters) -> str:
+    if filters.indicator == "egfr" and filters.mode == "category":
+        category = EGFR_CATEGORIES[filters.egfr_category]
+        minimum = category["minimum"]
+        maximum = category["maximum"]
+        if minimum is None:
+            return "latest.result_value < %(category_max)s"
+        if maximum is None:
+            return "latest.result_value >= %(category_min)s"
+        return "latest.result_value >= %(category_min)s AND latest.result_value < %(category_max)s"
+
+    if filters.operator == "gt":
+        return "latest.result_value > %(value_from)s"
+    if filters.operator == "between":
+        return "latest.result_value >= %(value_from)s AND latest.result_value <= %(value_to)s"
+    return "latest.result_value < %(value_from)s"
+
+
+def _registry_sql(filters: RegistryFilters) -> str:
+    spec = filters.indicator_spec
+    source_table = spec["table"]
+    source_column = spec["column"]
+    source_date = spec["date_sql"]
+    condition = _condition_sql(filters)
+    sort_direction = "DESC" if filters.operator == "gt" else "ASC"
+    category_sql = _category_sql()
+
+    # Названия таблиц и колонок берутся только из INDICATORS, пользовательские
+    # значения передаются исключительно параметрами psycopg2.
+    return f"""
+        WITH observation AS (
+            SELECT DISTINCT ON (a.patient_id)
+                a.patient_id,
+                a.id AS first_appointment_id,
+                a.appointment_date AS first_appointment_date
+            FROM appointments a
+            ORDER BY a.patient_id, a.appointment_date ASC, a.id ASC
+        ),
+        latest_appointment AS (
+            SELECT DISTINCT ON (a.patient_id)
+                a.patient_id,
+                a.id AS appointment_id,
+                a.appointment_date,
+                d.last_name || ' ' || d.first_name || ' ' || COALESCE(d.patronymic, '') AS doctor_name
+            FROM appointments a
+            JOIN doctors d ON d.id = a.doctor_id
+            ORDER BY a.patient_id, a.appointment_date DESC, a.id DESC
+        ),
+        indicator_values AS (
+            SELECT
+                a.patient_id,
+                a.id AS appointment_id,
+                {source_date} AS result_date,
+                r.{source_column}::numeric AS result_value
+            FROM {source_table} r
+            JOIN appointments a ON a.id = r.appointment_id
+            WHERE r.{source_column} IS NOT NULL
+        ),
+        first_visit_value AS (
+            SELECT
+                obs.patient_id,
+                iv.result_date,
+                iv.result_value
+            FROM observation obs
+            LEFT JOIN LATERAL (
+                SELECT result_date, result_value
+                FROM indicator_values
+                WHERE appointment_id = obs.first_appointment_id
+                ORDER BY result_date ASC
+                LIMIT 1
+            ) iv ON TRUE
+        ),
+        latest_value AS (
+            SELECT DISTINCT ON (patient_id)
+                patient_id,
+                appointment_id,
+                result_date,
+                result_value
+            FROM indicator_values
+            WHERE (
+                %(period_months)s = 0
+                OR result_date >= CURRENT_DATE - make_interval(months => %(period_months)s)
+            )
+            ORDER BY patient_id, result_date DESC, appointment_id DESC
+        ),
+        iron_prescriptions AS (
+            SELECT
+                a.patient_id,
+                TRUE AS has_iron_prescription,
+                STRING_AGG(DISTINCT pr.medication, ', ') AS iron_medications
+            FROM prescriptions pr
+            JOIN appointments a ON a.id = pr.appointment_id
+            WHERE pr.medication IS NOT NULL
+              AND pr.medication ILIKE ANY (ARRAY[
+                    '%%желез%%', '%%феррум%%', '%%ferrum%%', '%%феринжект%%',
+                    '%%венофер%%', '%%мальтофер%%', '%%сорбифер%%', '%%тардиферон%%'
+              ])
+            GROUP BY a.patient_id
+        )
+        SELECT
+            COUNT(*) OVER() AS total_count,
+            p.id AS patient_id,
+            TRIM(p.last_name || ' ' || p.first_name || ' ' || COALESCE(p.patronymic, '')) AS patient_fio,
+            p.birth_date,
+            EXTRACT(YEAR FROM AGE(last_visit.appointment_date, p.birth_date))::int AS age,
+            CASE WHEN p.gender THEN 'М' ELSE 'Ж' END AS gender,
+            obs.first_appointment_date,
+            (CURRENT_DATE - obs.first_appointment_date::date) AS observation_days,
+            first_visit.result_value AS first_visit_value,
+            first_visit.result_date AS first_visit_value_date,
+            latest.result_value AS latest_value,
+            latest.result_date AS latest_value_date,
+            ROUND((latest.result_value - first_visit.result_value)::numeric, 2) AS value_change,
+            CASE WHEN %(indicator)s = 'egfr' THEN {category_sql} ELSE NULL END AS egfr_category,
+            last_visit.appointment_date AS last_appointment_date,
+            last_visit.doctor_name AS last_doctor_name,
+            COALESCE(iron.has_iron_prescription, FALSE) AS has_iron_prescription,
+            iron.iron_medications
+        FROM patients p
+        JOIN latest_value latest ON latest.patient_id = p.id
+        LEFT JOIN first_visit_value first_visit ON first_visit.patient_id = p.id
+        LEFT JOIN observation obs ON obs.patient_id = p.id
+        LEFT JOIN latest_appointment last_visit ON last_visit.patient_id = p.id
+        LEFT JOIN iron_prescriptions iron ON iron.patient_id = p.id
+        WHERE {condition}
+        ORDER BY latest.result_value {sort_direction}, p.last_name, p.first_name, p.id
+        LIMIT %(limit)s OFFSET %(offset)s
+    """
+
+
+def _query_params(filters: RegistryFilters) -> dict[str, Any]:
+    category = EGFR_CATEGORIES[filters.egfr_category]
+    return {
+        "indicator": filters.indicator,
+        "period_months": filters.period_months,
+        "value_from": filters.value_from,
+        "value_to": filters.value_to,
+        "category_min": category["minimum"],
+        "category_max": category["maximum"],
+        "limit": filters.page_size,
+        "offset": (filters.page - 1) * filters.page_size,
+    }
+
+
+def _format_observation(days: Any) -> str:
+    try:
+        total_days = max(int(days), 0)
+    except (TypeError, ValueError):
+        return "—"
+    years, remainder = divmod(total_days, 365)
+    months = remainder // 30
+    parts: list[str] = []
+    if years:
+        parts.append(f"{years} г.")
+    if months:
+        parts.append(f"{months} мес.")
+    return " ".join(parts) if parts else "менее месяца"
+
+
+def describe_filters(filters: RegistryFilters) -> str:
+    spec = filters.indicator_spec
+    period = PERIOD_LABELS[filters.period_months]
+    if filters.indicator == "egfr" and filters.mode == "category":
+        category = EGFR_CATEGORIES[filters.egfr_category]["label"]
+        return f"Последняя {spec['label']} в категории {category} {period}"
+    if filters.operator == "between":
+        condition = f"от {_plain_number(filters.value_from)} до {_plain_number(filters.value_to)}"
+    else:
+        condition = f"{OPERATOR_LABELS[filters.operator]} {_plain_number(filters.value_from)}"
+    return f"Последний показатель «{spec['label']}» {condition} {spec['unit']} {period}"
+
+
+def get_patient_registry(filters: RegistryFilters) -> dict[str, Any]:
+    """Возвращает одну страницу динамического списка пациентов."""
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(CKD_REGISTRY_SQL)
-            row = cur.fetchone()
+            cur.execute(_registry_sql(filters), _query_params(filters))
+            raw_rows = cur.fetchall()
 
-    if not row or not row.get("dashboard"):
-        return {
-            "summary": {},
-            "queues": {},
-            "doctor_high_risk": [],
-            "location_incomplete": [],
-        }
+    rows: list[dict[str, Any]] = []
+    for raw in raw_rows:
+        row = dict(raw)
+        row["observation_duration"] = _format_observation(row.get("observation_days"))
+        rows.append(row)
 
-    return row["dashboard"]
+    total = int(rows[0]["total_count"]) if rows else 0
+    pages = max((total + filters.page_size - 1) // filters.page_size, 1)
+    return {
+        "rows": rows,
+        "total": total,
+        "pages": pages,
+        "page": filters.page,
+        "page_size": filters.page_size,
+        "description": describe_filters(filters),
+        "query_without_page": filters.without_page_query(),
+    }
+
+
+def build_registry_csv(filters: RegistryFilters) -> tuple[str, str]:
+    """Формирует CSV текущей выборки; структура БД при этом не меняется."""
+    export_filters = replace(filters, page=1, page_size=10000)
+    result = get_patient_registry(export_filters)
+    spec = filters.indicator_spec
+
+    output = io.StringIO(newline="")
+    writer = csv.writer(output, delimiter=";")
+    writer.writerow(["Сформировано", datetime.now().strftime("%d.%m.%Y %H:%M")])
+    writer.writerow(["Условие", _csv_text(result["description"])])
+    writer.writerow([])
+    headers = [
+        "ФИО",
+        "Дата рождения",
+        "Пол",
+        "Наблюдается",
+        f"Значение на первом приёме, {spec['unit']}",
+        "Дата первого приёма",
+        f"Последнее значение, {spec['unit']}",
+        "Дата последнего значения",
+        "Изменение",
+    ]
+    if filters.indicator == "egfr":
+        headers.append("Категория СКФ")
+    if filters.indicator == "hemoglobin":
+        headers.extend(["Назначения железа", "Найденные препараты"])
+    headers.extend(["Последний приём", "Последний врач"])
+    writer.writerow(headers)
+
+    for row in result["rows"]:
+        values = [
+            _csv_text(row.get("patient_fio")),
+            _format_date(row.get("birth_date")),
+            row.get("gender") or "",
+            row.get("observation_duration") or "",
+            _csv_number(row.get("first_visit_value")),
+            _format_date(row.get("first_appointment_date")),
+            _csv_number(row.get("latest_value")),
+            _format_date(row.get("latest_value_date")),
+            _csv_number(row.get("value_change")),
+        ]
+        if filters.indicator == "egfr":
+            values.append(row.get("egfr_category") or "")
+        if filters.indicator == "hemoglobin":
+            values.extend([
+                "есть" if row.get("has_iron_prescription") else "нет",
+                _csv_text(row.get("iron_medications")),
+            ])
+        values.extend([
+            _format_date(row.get("last_appointment_date")),
+            _csv_text(row.get("last_doctor_name")),
+        ])
+        writer.writerow(values)
+
+    filename = f"patient_lists_{date.today().isoformat()}.csv"
+    return "\ufeff" + output.getvalue(), filename
+
+
+def _format_date(value: Any) -> str:
+    if value is None:
+        return ""
+    if isinstance(value, datetime):
+        return value.strftime("%d.%m.%Y %H:%M")
+    if isinstance(value, date):
+        return value.strftime("%d.%m.%Y")
+    return str(value)
+
+
+def _csv_number(value: Any) -> str:
+    if value is None:
+        return ""
+    return str(value).replace(".", ",")
+
+
+def _csv_text(value: Any) -> str:
+    """Не позволяет табличному редактору выполнить формулу из текстового поля."""
+    if value is None:
+        return ""
+    text = str(value)
+    return "'" + text if text.startswith(("=", "+", "-", "@")) else text
