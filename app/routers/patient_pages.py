@@ -33,8 +33,9 @@ def patients_list(
     """Страница списка пациентов."""
     patients = get_all_patients(search=search, limit=limit, offset=offset)
     return templates.TemplateResponse(
-        "patients_list.html",
-        {
+        request=request,
+        name="patients_list.html",
+        context={
             "request": request,
             "patients": patients,
             "search": search or "",
@@ -84,4 +85,4 @@ def patient_card(request: Request, patient_id: int):
             "show_form": show_form,
         }
     )
-    return templates.TemplateResponse("patient_card.html", context)
+    return templates.TemplateResponse(request=request, name="patient_card.html", context=context)

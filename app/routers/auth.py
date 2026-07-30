@@ -329,8 +329,9 @@ def login_form(request: Request, next: str = "/"):
 
     request.session.clear()
     return templates.TemplateResponse(
-        "login.html",
-        {
+        request=request,
+        name="login.html",
+        context={
             "request": request,
             "next": next_url,
             "error": None,
@@ -361,8 +362,9 @@ async def login_submit(
             status_code=401,
         )
         return templates.TemplateResponse(
-            "login.html",
-            {
+            request=request,
+            name="login.html",
+            context={
                 "request": request,
                 "next": next_url,
                 "error": "Неверный логин или пароль",

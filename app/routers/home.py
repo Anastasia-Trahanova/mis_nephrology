@@ -25,8 +25,9 @@ def home(request: Request):
     branches = get_branches()
     doctors = get_doctors()
     return templates.TemplateResponse(
-        "index.html",
-        {
+        request=request,
+        name="index.html",
+        context={
             "request": request,
             "branches": branches,
             "doctors": doctors,

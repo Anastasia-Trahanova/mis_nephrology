@@ -144,8 +144,9 @@ def schedule_page(request: Request, doctor_id: int | None = None, week: str | No
     locations = get_schedule_locations_for_doctor(selected_doctor_id) if selected_doctor_id else []
 
     return templates.TemplateResponse(
-        "schedule/index.html",
-        {
+        request=request,
+        name="schedule/index.html",
+        context={
             "request": request,
             "doctors": doctors,
             "locations": locations,

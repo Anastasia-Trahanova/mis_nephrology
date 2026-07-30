@@ -11,8 +11,9 @@ templates = Jinja2Templates(directory="app/templates")
 @router.get("/clinical-reference", response_class=HTMLResponse)
 def clinical_reference_page(request: Request):
     return templates.TemplateResponse(
-        "clinical_reference.html",
-        {
+        request=request,
+        name="clinical_reference.html",
+        context={
             "request": request,
             "page_title": "Клинический справочник",
         },

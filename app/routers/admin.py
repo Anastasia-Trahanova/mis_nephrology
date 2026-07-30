@@ -133,8 +133,9 @@ def admin_audit_page(
     log_audit_event(request, "open_admin_audit", details="Открыт журнал аудита", entity_type="audit")
 
     return templates.TemplateResponse(
-        "admin/audit.html",
-        {
+        request=request,
+        name="admin/audit.html",
+        context={
             "request": request,
             "events": events,
             "summary": summary,
@@ -257,8 +258,9 @@ def admin_appointment_audit_page(request: Request, appointment_id: int):
     )
 
     return templates.TemplateResponse(
-        "admin/audit_appointment_protocol.html",
-        {
+        request=request,
+        name="admin/audit_appointment_protocol.html",
+        context={
             "request": request,
             "protocol": view_model,
         },
@@ -294,8 +296,9 @@ def admin_audit_detail_page(request: Request, event_id: int):
     )
 
     return templates.TemplateResponse(
-        "admin/audit_event_detail.html",
-        {
+        request=request,
+        name="admin/audit_event_detail.html",
+        context={
             "request": request,
             **view_model,
         },

@@ -48,7 +48,7 @@ def new_patient_form(request: Request, schedule_entry_id: int | None = None):
                 "schedule_entry": None,
             }
         )
-        return templates.TemplateResponse("new_patient.html", context)
+        return templates.TemplateResponse(request=request, name="new_patient.html", context=context)
 
     schedule_entry = get_schedule_entry_for_appointment_form(schedule_entry_id)
     if schedule_entry.get("appointment_type") != "primary":
@@ -76,7 +76,7 @@ def new_patient_form(request: Request, schedule_entry_id: int | None = None):
             "schedule_entry": schedule_entry,
         }
     )
-    return templates.TemplateResponse("new_patient.html", context)
+    return templates.TemplateResponse(request=request, name="new_patient.html", context=context)
 
 
 @router.get("/new-appointment/{patient_id}", response_class=HTMLResponse)
@@ -110,4 +110,4 @@ def new_appointment_form(
             "schedule_entry": schedule_entry,
         }
     )
-    return templates.TemplateResponse("new_appointment.html", context)
+    return templates.TemplateResponse(request=request, name="new_appointment.html", context=context)

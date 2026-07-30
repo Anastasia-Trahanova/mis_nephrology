@@ -26,8 +26,9 @@ def ckd_registry_dashboard(request: Request):
     require_admin(request)
     dashboard = get_ckd_registry_dashboard()
     return templates.TemplateResponse(
-        "ckd_registry.html",
-        {
+        request=request,
+        name="ckd_registry.html",
+        context={
             "request": request,
             "dashboard": dashboard,
             "summary": dashboard.get("summary", {}),
