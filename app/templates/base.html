@@ -63,6 +63,7 @@
     {% set is_appointment_form = is_new_appointment or is_new_patient %}
     {% set is_main_page = current_path == '/' %}
     {% set is_registry_page = current_path.startswith('/ckd-registry') %}
+    {% set is_audit_page = current_path == '/admin/audit' %}
     <div
         class="modal fade hotkeys-modal"
         id="hotkeysHelpModal"
@@ -80,6 +81,7 @@
                             {% elif is_appointment_form %}Форма приёма
                             {% elif is_patient_card %}Карточка пациента
                             {% elif is_registry_page %}Списки пациентов
+                            {% elif is_audit_page %}Журнал аудита
                             {% elif is_main_page %}Список приёмов
                             {% else %}Текущая страница{% endif %}
                         </div>
@@ -117,6 +119,14 @@
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>C</kbd></span><span class="hotkey-action">Скачать CSV</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>↑</kbd>/<kbd>↓</kbd></span><span class="hotkey-action">Выбрать пациента в таблице</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>O</kbd></span><span class="hotkey-action">Открыть ЭМК выбранного пациента</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>←</kbd>/<kbd>→</kbd></span><span class="hotkey-action">Предыдущая/следующая страница</span></div>
+                            {% elif is_audit_page %}
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Enter</kbd></span><span class="hotkey-action">В фильтрах: применить фильтры</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>S</kbd></span><span class="hotkey-action">Применить фильтры</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>R</kbd></span><span class="hotkey-action">Сбросить фильтры</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>C</kbd></span><span class="hotkey-action">Скачать CSV</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>↑</kbd>/<kbd>↓</kbd></span><span class="hotkey-action">Выбрать событие</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>O</kbd></span><span class="hotkey-action">Открыть выбранное событие</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>←</kbd>/<kbd>→</kbd></span><span class="hotkey-action">Предыдущая/следующая страница</span></div>
                             {% elif is_main_page %}
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>/</kbd></span><span class="hotkey-action">Перейти в поиск пациента</span></div>

@@ -30,7 +30,9 @@ ACTION_LABELS = {
     "create_patient": "Создал нового пациента",
     "create_appointment": "Создал повторный приём",
     "download_word_report": "Скачал Word-заключение",
-    "open_ckd_registry": "Открыл регистр ХБП",
+    "open_ckd_registry": "Открыл списки пациентов",
+    "filter_patient_lists": "Сформировал список пациентов",
+    "export_patient_lists": "Выгрузил список пациентов",
     "open_admin_audit": "Открыл журнал работы МИС",
     "open_admin_audit_event": "Открыл протокол события аудита",
     "open_admin_appointment_audit": "Открыл протокол аудита приёма",
@@ -73,6 +75,8 @@ ACTION_CATEGORIES = {
     "open_new_patient_form": "view",
     "open_new_appointment_form": "view",
     "open_ckd_registry": "view",
+    "filter_patient_lists": "view",
+    "export_patient_lists": "export",
     "create_patient": "patient",
     "create_appointment": "appointment",
     "download_word_report": "export",
@@ -754,7 +758,7 @@ def get_audit_summary(
                     COUNT(*) FILTER (WHERE result = 'success') AS success_events,
                     COUNT(*) FILTER (WHERE result = 'error') AS error_events,
                     COUNT(*) FILTER (WHERE result = 'denied') AS denied_events,
-                    COUNT(*) FILTER (WHERE action IN ('download_word_report', 'export_audit_log')) AS export_events,
+                    COUNT(*) FILTER (WHERE action IN ('download_word_report', 'export_audit_log', 'export_patient_lists')) AS export_events,
                     COUNT(*) FILTER (WHERE action IN ('login_failed', 'access_denied')) AS security_events,
                     COUNT(DISTINCT user_id) FILTER (WHERE user_id IS NOT NULL) AS active_users
                 FROM audit_events

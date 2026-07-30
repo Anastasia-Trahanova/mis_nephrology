@@ -21,6 +21,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 
 from fastapi import Request
 from starlette.middleware.base import BaseHTTPMiddleware
@@ -67,6 +68,76 @@ def _query_int(request: Request, name: str) -> int | None:
     except (TypeError, ValueError):
         return None
     return parsed if parsed > 0 else None
+
+
+_PATIENT_LIST_INDICATORS = {
+    "hemoglobin": "гемоглобин",
+    "potassium": "калий",
+    "ptg": "ПТГ",
+    "egfr": "СКФ",
+}
+_PATIENT_LIST_OPERATORS = {"lt": "ниже", "gt": "выше", "between": "от–до"}
+_PATIENT_LIST_PERIODS = {
+    "0": "за всё время",
+    "1": "за 1 месяц",
+    "3": "за 3 месяца",
+    "6": "за 6 месяцев",
+    "12": "за 1 год",
+}
+_PATIENT_LIST_CATEGORIES = {"С1", "С2", "С3а", "С3б", "С4", "С5"}
+
+
+def _safe_query_number(request: Request, name: str) -> str | None:
+    """Возвращает только безопасное неотрицательное число из фильтра."""
+    raw = str(request.query_params.get(name) or "").strip().replace(",", ".")
+    if not raw or len(raw) > 20:
+        return None
+    try:
+        value = Decimal(raw)
+    except InvalidOperation:
+        return None
+    if not value.is_finite() or value < 0 or value > 1_000_000:
+        return None
+    return format(value.normalize(), "f")
+
+
+def _patient_list_details(request: Request, *, export: bool = False) -> str:
+    """Формирует краткое описание выборки без ФИО и медицинских текстов."""
+    indicator_key = str(request.query_params.get("indicator") or "hemoglobin")
+    indicator = _PATIENT_LIST_INDICATORS.get(indicator_key, "гемоглобин")
+    parts = [
+        "выгружен список" if export else "сформирован список",
+        f"показатель: {indicator}",
+    ]
+
+    mode = str(request.query_params.get("mode") or "manual")
+    category = str(request.query_params.get("egfr_category") or "")
+    if (
+        indicator_key == "egfr"
+        and mode == "category"
+        and category in _PATIENT_LIST_CATEGORIES
+    ):
+        parts.append(f"категория: {category}")
+    else:
+        operator = _PATIENT_LIST_OPERATORS.get(
+            str(request.query_params.get("operator") or "lt"),
+            "ниже",
+        )
+        value_from = _safe_query_number(request, "value_from")
+        value_to = _safe_query_number(request, "value_to")
+        condition = operator
+        if value_from is not None:
+            condition += f" {value_from}"
+        if operator == "от–до" and value_to is not None:
+            condition += f"–{value_to}"
+        parts.append(f"условие: {condition}")
+
+    period = _PATIENT_LIST_PERIODS.get(
+        str(request.query_params.get("period_months") or "6")
+    )
+    if period:
+        parts.append(period)
+    return "; ".join(parts)
 
 
 def classify_request(request: Request, status_code: int) -> AuditAction | None:
@@ -134,7 +205,21 @@ def classify_request(request: Request, status_code: int) -> AuditAction | None:
             return AuditAction(action="download_word_report", appointment_id=appointment_id)
 
     if method == "GET" and path == "/ckd-registry":
-        return AuditAction(action="open_ckd_registry")
+        if request.query_params:
+            return AuditAction(
+                action="filter_patient_lists",
+                details=_patient_list_details(request),
+            )
+        return AuditAction(
+            action="open_ckd_registry",
+            details="открыта страница списков пациентов",
+        )
+
+    if method == "GET" and path == "/ckd-registry/export.csv":
+        return AuditAction(
+            action="export_patient_lists",
+            details=_patient_list_details(request, export=True),
+        )
 
     if method == "GET" and path == "/schedule":
         return AuditAction(action="open_schedule", details="открыто расписание")

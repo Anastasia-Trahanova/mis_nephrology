@@ -1,13 +1,11 @@
-{# Протокол одного события аудита: паспорт, резюме, счётчики, разделы, technical block. #}
+{# Протокол одного события аудита: паспорт, резюме, разделы, technical block. #}
 {% extends "base.html" %}
-
 {% macro result_badge(result, label) -%}
   {% if result == 'success' %}<span class="badge text-bg-success">{{ label }}</span>
   {% elif result == 'error' %}<span class="badge text-bg-danger">{{ label }}</span>
   {% elif result == 'denied' %}<span class="badge text-bg-warning">{{ label }}</span>
   {% else %}<span class="badge text-bg-secondary">{{ label or result }}</span>{% endif %}
 {%- endmacro %}
-
 {% macro change_badge(change) -%}
   <span class="audit-change-badge audit-change-badge-{{ change.group_key }}">{{ change.change_type_label }}</span>
 {%- endmacro %}
@@ -16,7 +14,6 @@
 <li class="audit-protocol-row {% if change.is_risk %}audit-protocol-row-risk{% endif %}">
   <div class="audit-protocol-main">
     <div class="audit-protocol-field">{{ change.field_label or change.field_name or 'Изменение' }}</div>
-
     {% if change.old_value and change.new_value and change.old_value != change.new_value %}
       <div class="audit-protocol-value">Было: {{ change.old_value }}</div>
       <div class="audit-protocol-value audit-protocol-value-new">Стало: {{ change.new_value }}</div>
@@ -27,7 +24,6 @@
     {% elif change.change_type == 'field_not_filled' %}
       <div class="audit-protocol-value audit-protocol-value-muted">Поле не заполнено</div>
     {% endif %}
-
     {% if change.details %}<div class="audit-protocol-details">{{ change.details }}</div>{% endif %}
 
     <div class="audit-protocol-source small text-muted">
@@ -40,7 +36,6 @@
   </div>
 </li>
 {%- endmacro %}
-
 {% block content %}
 <div class="admin-audit-page admin-audit-protocol-page">
   <div class="mb-3 d-flex gap-2 flex-wrap">
@@ -49,7 +44,6 @@
       <a href="/admin/audit/appointment/{{ event.appointment_id }}" class="btn btn-outline-primary btn-sm">Открыть протокол всего приёма</a>
     {% endif %}
   </div>
-
   <section class="audit-event-card">
     <div class="audit-event-card-header">
       <div>
@@ -67,7 +61,6 @@
       </div>
       <div class="audit-event-result">{{ result_badge(event.result, event.result_label) }}</div>
     </div>
-
     <div class="audit-passport-grid">
       {% for item in passport_items %}
         <div class="audit-meta-item">
@@ -86,7 +79,6 @@
         </div>
       {% endfor %}
     </div>
-
     {% if event.details or event.error_message %}
       <div class="audit-event-note">
         {% if event.details %}<div><strong>Детали:</strong> {{ event.details }}</div>{% endif %}
@@ -94,7 +86,6 @@
       </div>
     {% endif %}
   </section>
-
   {% if attention_flags %}
   <section class="audit-alerts">
     {% for flag in attention_flags %}
@@ -104,17 +95,6 @@
     {% endfor %}
   </section>
   {% endif %}
-
-  <section class="audit-counters-grid mb-4">
-    {% for card in stats_cards %}
-      <div class="audit-counter-card audit-counter-{{ card.key }}">
-        <div class="audit-counter-label">{{ card.label }}</div>
-        <div class="audit-counter-value">{{ card.count }}</div>
-        <div class="audit-counter-description">{{ card.description }}</div>
-      </div>
-    {% endfor %}
-  </section>
-
   {% if protocol_summary %}
   <section class="audit-changes-card audit-summary-card">
     <div class="audit-section-heading">
@@ -134,13 +114,11 @@
     </div>
   </section>
   {% endif %}
-
   <section class="audit-changes-card">
     <div class="audit-section-heading">
       <h2>Разбор по клиническим разделам</h2>
       <p>Каждый раздел показывает, что именно было сохранено, откуда взялось значение и чем завершилось действие.</p>
     </div>
-
     {% if grouped_changes %}
       <div class="accordion audit-change-groups" id="auditChangeAccordion">
         {% for section in grouped_changes %}
@@ -170,7 +148,6 @@
       </div>
     {% endif %}
   </section>
-
   {% if related_events %}
   <section class="audit-changes-card">
     <div class="audit-section-heading">
@@ -195,7 +172,6 @@
     </div>
   </section>
   {% endif %}
-
   <section class="audit-changes-card audit-technical-card">
     <div class="audit-section-heading">
       <h2>Технические сведения</h2>
