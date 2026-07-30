@@ -910,10 +910,10 @@ def create_walk_in_schedule_entry(
                                 status_code=409,
                                 detail="Запланированную запись уже нельзя отменить",
                             )
-                        if scheduled["ends_at"] <= current or scheduled["starts_at"] > current + timedelta(days=30):
+                        if scheduled["ends_at"] <= current:
                             raise HTTPException(
                                 status_code=409,
-                                detail="Запланированная запись находится вне проверяемого периода",
+                                detail="Запланированная запись уже завершилась",
                             )
                         preferred_location_id = int(scheduled["location_id"])
                         # Для выбранного сценария старая запись должна исчезнуть из расписания.

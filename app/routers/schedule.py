@@ -13,6 +13,7 @@ from app.repositories.schedule import (
     create_walk_in_schedule_entry,
     get_schedule_doctors,
     get_schedule_entries,
+    get_schedule_entry,
     get_schedule_locations_for_doctor,
     get_patient_upcoming_schedule_entry,
     search_schedule_patients,
@@ -217,6 +218,23 @@ def schedule_create_entry(payload: ScheduleEntryPayload, request: Request):
         created_by_user_id=request.session.get("user_id"),
     )
     return {"item": item}
+
+
+@router.get("/schedule/api/entries/{entry_id}")
+def schedule_entry_details(entry_id: int, request: Request):
+    """Возвращает данные записи для выбора действия по ФИО пациента."""
+    _require_schedule_access(request)
+    item = get_schedule_entry(entry_id)
+    return {
+        "item": {
+            "id": item["id"],
+            "patient_id": item["patient_id"],
+            "patient_fio": item.get("patient_fio"),
+            "date_iso": item["date_iso"],
+            "starts_at": item["starts_at"],
+            "appointment_id": item.get("appointment_id"),
+        }
+    }
 
 
 @router.put("/schedule/api/entries/{entry_id}")
