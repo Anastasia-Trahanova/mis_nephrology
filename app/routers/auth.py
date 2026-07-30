@@ -1,26 +1,9 @@
 """
-Назначение файла: вход в систему, выход и базовая защита внутренних страниц.
+Вход, выход и проверка активной сессии.
 
-Как работает:
-- /login доступен без входа;
-- /static/* пропускается как технический путь для CSS/JS;
-- все остальные страницы требуют active session;
-- /logout не является публичной страницей: без сессии отправляет на /login,
-  с сессией очищает её и завершает вход;
-- /auth/session/keepalive продлевает сессию, когда врач реально работает на странице;
-- /auth/session/status помогает JS проверить сессию перед отправкой формы;
-- пароли проверяются только по password_hash, открытые пароли не хранятся.
-
-Что редактировать здесь:
-- список публичных путей;
-- правила idle-timeout;
-- логику login/logout;
-- формат хэша пароля.
-
-Что не редактировать здесь:
-- ролевые права doctor/admin — они вынесены в app/security/permissions.py;
-- медицинские маршруты;
-- шаблоны карточки пациента и формы приёма.
+/login остаётся публичным. Рабочие routers защищаются через
+Depends(require_authenticated_user), а не через глобальный список путей.
+Проверка не ограничивает врача конкретными пациентами.
 """
 
 from __future__ import annotations
@@ -33,11 +16,9 @@ import time
 from typing import Optional
 from urllib.parse import quote
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
-from starlette.middleware.base import BaseHTTPMiddleware
-
 from app.db.connection import get_db_connection
 from app.repositories.audit_log import log_audit_event
 from app.settings import settings
@@ -47,8 +28,6 @@ router = APIRouter(tags=["auth"])
 templates = Jinja2Templates(directory="app/templates")
 
 
-LOGIN_PATH = "/login"
-STATIC_PREFIX = "/static/"
 SESSION_KEEPALIVE_PATH = "/auth/session/keepalive"
 SESSION_STATUS_PATH = "/auth/session/status"
 
@@ -64,17 +43,6 @@ def now_ts() -> int:
     return int(time.time())
 
 
-def is_public_path(path: str) -> bool:
-    """
-    Проверяет, можно ли открыть путь без авторизации.
-
-    По требованиям проекта публична только страница входа /login.
-    /static/* открыт технически, потому что браузеру нужны CSS/JS для страницы входа.
-    /logout, /docs, /redoc, /openapi.json не публичные.
-    """
-    return path == LOGIN_PATH or path.startswith(STATIC_PREFIX)
-
-
 def is_async_or_api_request(request: Request) -> bool:
     """
     Отличает API/JS-запросы от обычных HTML-переходов.
@@ -83,7 +51,7 @@ def is_async_or_api_request(request: Request) -> bool:
     Для API/JS без сессии возвращаем 401 JSON, чтобы скрипт мог показать предупреждение
     и не отправлять форму с введёнными данными в пустоту.
     """
-    path = request.url.path
+    path = str(request.scope.get("path") or "")
     accept = request.headers.get("accept", "")
     requested_with = request.headers.get("x-requested-with", "")
 
@@ -120,7 +88,7 @@ def safe_next_url(next_url: Optional[str]) -> str:
 
 def current_next_url(request: Request) -> str:
     """Собирает текущий путь с query string для возврата после логина."""
-    next_url = request.url.path
+    next_url = str(request.scope.get("path") or "/")
     if request.url.query:
         next_url += "?" + request.url.query
     return safe_next_url(next_url)
@@ -162,6 +130,23 @@ def session_is_active(request: Request) -> tuple[bool, str | None]:
     return True, None
 
 
+class AuthenticationRequired(Exception):
+    """Сигнал обработчику FastAPI, что активной сессии нет."""
+
+    def __init__(self, reason: str | None = None) -> None:
+        self.reason = reason
+        super().__init__(reason or "not_authenticated")
+
+
+def require_authenticated_user(request: Request) -> None:
+    """Dependency для всех рабочих маршрутов приложения."""
+    active, reason = session_is_active(request)
+    if not active:
+        raise AuthenticationRequired(reason)
+
+    mark_session_activity(request)
+
+
 def unauthorized_response(request: Request, reason: str | None = None):
     """
     Возвращает правильный ответ для неавторизованного запроса.
@@ -185,31 +170,6 @@ def unauthorized_response(request: Request, reason: str | None = None):
 
     next_url = quote(current_next_url(request), safe="")
     return RedirectResponse(url=f"/login?next={next_url}", status_code=303)
-
-
-class AuthRequiredMiddleware(BaseHTTPMiddleware):
-    """
-    Центральная защита приложения.
-
-    Здесь закрываются внутренние страницы, а не отдельные пункты меню.
-    Поэтому прямой переход в адресной строке на /patient/1 или /export/1/docx
-    без active session тоже будет заблокирован.
-    """
-
-    async def dispatch(self, request: Request, call_next):
-        path = request.url.path
-
-        if is_public_path(path):
-            return await call_next(request)
-
-        active, reason = session_is_active(request)
-        if not active:
-            return unauthorized_response(request, reason)
-
-        # Запрос дошёл до защищённой части приложения — пользователь активен.
-        # Дополнительно JS keepalive будет поддерживать last_seen_at во время заполнения форм.
-        mark_session_activity(request)
-        return await call_next(request)
 
 
 def make_password_hash(password: str, iterations: int = 260000) -> str:
@@ -383,7 +343,10 @@ async def login_submit(
     return RedirectResponse(url=next_url, status_code=303)
 
 
-@router.get("/logout")
+@router.get(
+    "/logout",
+    dependencies=[Depends(require_authenticated_user)],
+)
 def logout(request: Request):
     """
     Служебный выход из системы.
@@ -401,7 +364,10 @@ def logout(request: Request):
     return RedirectResponse(url="/login", status_code=303)
 
 
-@router.post(SESSION_KEEPALIVE_PATH)
+@router.post(
+    SESSION_KEEPALIVE_PATH,
+    dependencies=[Depends(require_authenticated_user)],
+)
 def session_keepalive(request: Request):
     """
     Продлевает сессию во время реальной работы врача.
@@ -416,7 +382,10 @@ def session_keepalive(request: Request):
     }
 
 
-@router.get(SESSION_STATUS_PATH)
+@router.get(
+    SESSION_STATUS_PATH,
+    dependencies=[Depends(require_authenticated_user)],
+)
 def session_status(request: Request):
     """
     Проверяет сессию перед отправкой формы.
