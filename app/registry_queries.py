@@ -404,6 +404,66 @@ def get_patient_registry(filters: RegistryFilters) -> dict[str, Any]:
     }
 
 
+def get_patient_indicator_history(patient_id: int, indicator: str) -> dict[str, Any] | None:
+    """Возвращает все значения выбранного показателя за срок наблюдения пациента."""
+    if indicator not in INDICATORS:
+        raise ValueError("Неизвестный показатель")
+
+    spec = INDICATORS[indicator]
+    source_table = spec["table"]
+    source_column = spec["column"]
+    source_date = spec["date_sql"]
+
+    history_sql = f"""
+        SELECT
+            {source_date} AS result_date,
+            r.{source_column}::numeric AS result_value
+        FROM {source_table} r
+        JOIN appointments a ON a.id = r.appointment_id
+        WHERE a.patient_id = %(patient_id)s
+          AND r.{source_column} IS NOT NULL
+          AND {source_date} IS NOT NULL
+        ORDER BY result_date ASC, a.id ASC
+    """
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                    SELECT
+                        p.id AS patient_id,
+                        TRIM(p.last_name || ' ' || p.first_name || ' ' || COALESCE(p.patronymic, '')) AS patient_fio,
+                        p.birth_date
+                    FROM patients p
+                    WHERE p.id = %(patient_id)s
+                """,
+                {"patient_id": patient_id},
+            )
+            patient_raw = cur.fetchone()
+            if patient_raw is None:
+                return None
+
+            cur.execute(history_sql, {"patient_id": patient_id})
+            history_rows = cur.fetchall()
+
+    patient = dict(patient_raw)
+    patient.update(
+        {
+            "indicator": indicator,
+            "indicator_label": spec["label"],
+            "unit": spec["unit"],
+            "points": [
+                {
+                    "date": row["result_date"],
+                    "value": row["result_value"],
+                }
+                for row in map(dict, history_rows)
+            ],
+        }
+    )
+    return patient
+
+
 def build_registry_csv(filters: RegistryFilters) -> tuple[str, str]:
     """Формирует CSV текущей выборки; структура БД при этом не меняется."""
     export_filters = replace(filters, page=1, page_size=10000)

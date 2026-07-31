@@ -289,3 +289,85 @@
     display: none;
   }
 }
+
+.registry-dynamics-button {
+  min-width: 5.2rem;
+}
+
+.registry-dynamics-dialog {
+  max-width: 980px;
+}
+
+.registry-dynamics-patient {
+  margin-top: 0.2rem;
+  font-weight: 600;
+}
+
+.registry-dynamics-status {
+  padding: 3rem 1rem;
+  color: var(--registry-muted);
+  text-align: center;
+}
+
+.registry-dynamics-chart {
+  overflow-x: auto;
+  padding-top: 0.25rem;
+}
+
+.registry-dynamics-svg {
+  display: block;
+  width: 100%;
+  min-width: 860px;
+  height: auto;
+}
+
+.registry-chart-grid {
+  stroke: #e3e8ef;
+  stroke-width: 1;
+}
+
+.registry-chart-axis {
+  stroke: #98a2b3;
+  stroke-width: 1;
+}
+
+.registry-chart-line {
+  fill: none;
+  stroke: var(--registry-blue);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.5;
+}
+
+.registry-chart-point {
+  fill: #fff;
+  stroke: var(--registry-blue);
+  stroke-width: 2.5;
+}
+
+.registry-chart-point:focus {
+  outline: none;
+  stroke-width: 4;
+}
+
+.registry-chart-label,
+.registry-chart-axis-title {
+  fill: #667085;
+  font-family: inherit;
+  font-size: 12px;
+}
+
+.registry-chart-axis-title {
+  fill: #344054;
+  font-weight: 600;
+}
+
+.registry-chart-label--x {
+  font-size: 10px;
+}
+
+@media (max-width: 767.98px) {
+  .registry-dynamics-dialog {
+    margin: 0.75rem;
+  }
+}

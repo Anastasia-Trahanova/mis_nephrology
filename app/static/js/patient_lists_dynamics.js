@@ -158,7 +158,14 @@
     return node;
   }
 
-  function renderDynamicsChart(rawPoints, unit, indicatorLabel) {
+  function buildAxisTitle(indicatorKey, indicatorLabel, unit) {
+    if (indicatorKey === "egfr") {
+      return `СКФ по CKD-EPI 2021, ${unit}`;
+    }
+    return unit ? `${indicatorLabel}, ${unit}` : indicatorLabel;
+  }
+
+  function renderDynamicsChart(rawPoints, unit, indicatorLabel, indicatorKey) {
     const points = rawPoints
       .map((point) => ({
         date: point.date,
@@ -178,8 +185,8 @@
     if (!points.length) return false;
 
     const width = 760;
-    const height = 340;
-    const margin = { top: 22, right: 24, bottom: 64, left: 72 };
+    const height = 360;
+    const margin = { top: 24, right: 24, bottom: 88, left: 96 };
     const plotWidth = width - margin.left - margin.right;
     const plotHeight = height - margin.top - margin.bottom;
     const values = points.map((point) => point.value);
@@ -190,12 +197,11 @@
       : (maxValue - minValue) * 0.1;
     minValue -= padding;
     maxValue += padding;
-    const minTime = points[0].time;
-    const maxTime = points[points.length - 1].time;
+    const xStep = points.length > 1 ? plotWidth / (points.length - 1) : 0;
 
-    const xPosition = (time) => {
-      if (minTime === maxTime) return margin.left + plotWidth / 2;
-      return margin.left + ((time - minTime) / (maxTime - minTime)) * plotWidth;
+    const xPosition = (_, index) => {
+      if (points.length === 1) return margin.left + plotWidth / 2;
+      return margin.left + (index * xStep);
     };
     const yPosition = (value) => (
       margin.top + ((maxValue - value) / (maxValue - minValue)) * plotHeight
@@ -226,34 +232,35 @@
     dynamicsSvg.append(
       svgNode("line", {
         x1: margin.left,
+        y1: margin.top,
+        x2: margin.left,
+        y2: margin.top + plotHeight,
+        class: "registry-chart-axis",
+      }),
+      svgNode("line", {
+        x1: margin.left,
         y1: margin.top + plotHeight,
         x2: width - margin.right,
         y2: margin.top + plotHeight,
         class: "registry-chart-axis",
       }),
       svgNode("text", {
-        x: 18,
+        x: 20,
         y: margin.top + plotHeight / 2,
         class: "registry-chart-axis-title",
-        transform: `rotate(-90 18 ${margin.top + plotHeight / 2})`,
+        transform: `rotate(-90 20 ${margin.top + plotHeight / 2})`,
         "text-anchor": "middle",
-      }, unit),
+      }, buildAxisTitle(indicatorKey, indicatorLabel, unit)),
       svgNode("text", {
         x: margin.left + plotWidth / 2,
-        y: height - 8,
+        y: height - 10,
         class: "registry-chart-axis-title",
         "text-anchor": "middle",
       }, "Дата")
     );
 
-    const tickCount = Math.min(points.length, 6);
-    const tickIndexes = new Set();
-    for (let index = 0; index < tickCount; index += 1) {
-      tickIndexes.add(Math.round((index * (points.length - 1)) / Math.max(tickCount - 1, 1)));
-    }
-    tickIndexes.forEach((pointIndex) => {
-      const point = points[pointIndex];
-      const x = xPosition(point.time);
+    points.forEach((point, index) => {
+      const x = xPosition(point.time, index);
       dynamicsSvg.append(
         svgNode("line", {
           x1: x,
@@ -261,26 +268,28 @@
           x2: x,
           y2: margin.top + plotHeight + 6,
           class: "registry-chart-axis",
-        }),
-        svgNode("text", {
-          x,
-          y: margin.top + plotHeight + 22,
-          class: "registry-chart-label registry-chart-label--x",
-          "text-anchor": "middle",
-        }, formatDate(point.date))
+        })
       );
+      const label = svgNode("text", {
+        x,
+        y: margin.top + plotHeight + 20,
+        class: "registry-chart-label registry-chart-label--x",
+        transform: `rotate(-35 ${x} ${margin.top + plotHeight + 20})`,
+        "text-anchor": "end",
+      }, formatDate(point.date));
+      dynamicsSvg.append(label);
     });
 
     if (points.length > 1) {
       const pathData = points
-        .map((point, index) => `${index === 0 ? "M" : "L"} ${xPosition(point.time)} ${yPosition(point.value)}`)
+        .map((point, index) => `${index === 0 ? "M" : "L"} ${xPosition(point.time, index)} ${yPosition(point.value)}`)
         .join(" ");
       dynamicsSvg.append(svgNode("path", { d: pathData, class: "registry-chart-line" }));
     }
 
-    points.forEach((point) => {
+    points.forEach((point, index) => {
       const circle = svgNode("circle", {
-        cx: xPosition(point.time),
+        cx: xPosition(point.time, index),
         cy: yPosition(point.value),
         r: 4.5,
         class: "registry-chart-point",
@@ -324,7 +333,12 @@
       dynamicsTitle.textContent = `Динамика: ${data.indicator_label}`;
       dynamicsPatient.textContent = data.patient_fio;
       dynamicsBirthDate.textContent = `Дата рождения: ${formatDate(data.birth_date)}`;
-      const rendered = renderDynamicsChart(data.points || [], data.unit || "", data.indicator_label || "Показатель");
+      const rendered = renderDynamicsChart(
+        data.points || [],
+        data.unit || "",
+        data.indicator_label || "Показатель",
+        indicatorKey
+      );
       setDynamicsState(rendered ? "chart" : "empty");
     } catch (error) {
       if (requestId !== dynamicsRequestId) return;

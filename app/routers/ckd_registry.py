@@ -15,6 +15,7 @@ from ..registry_queries import (
     PERIOD_LABELS,
     RegistryFilters,
     build_registry_csv,
+    get_patient_indicator_history,
     get_patient_registry,
 )
 
@@ -48,6 +49,18 @@ def patient_lists_page(request: Request):
             "operator_labels": OPERATOR_LABELS,
         },
     )
+
+
+@router.get("/ckd-registry/patient/{patient_id}/dynamics")
+def patient_indicator_dynamics(request: Request, patient_id: int, indicator: str):
+    require_registry_access(request)
+    if indicator not in INDICATORS:
+        raise HTTPException(status_code=400, detail="Неизвестный показатель")
+
+    result = get_patient_indicator_history(patient_id, indicator)
+    if result is None:
+        raise HTTPException(status_code=404, detail="Пациент не найден")
+    return result
 
 
 @router.get("/ckd-registry/export.csv")

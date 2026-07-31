@@ -103,7 +103,7 @@
             <th>Наблюдается</th>
             <th>На первом приёме</th>
             <th>Последнее значение</th>
-            <th>Изменение</th>
+            <th>Динамика</th>
             {% if filters.indicator == 'egfr' %}<th>Категория СКФ</th>{% endif %}
             {% if filters.indicator == 'hemoglobin' %}<th>Назначения железа</th>{% endif %}
             <th>Последний приём</th>
@@ -132,10 +132,18 @@
               <div class="registry-subvalue">{{ row.latest_value_date.strftime('%d.%m.%Y') if row.latest_value_date else '—' }}</div>
             </td>
             <td>
-              {% if row.value_change is not none %}
-                {% if row.value_change > 0 %}+{% endif %}{{ row.value_change }}
-              {% else %}—{% endif %}
-              <div class="registry-subvalue">последнее − первое</div>
+              <button
+                class="btn btn-sm btn-outline-secondary registry-dynamics-button"
+                type="button"
+                data-registry-dynamics
+                data-patient-id="{{ row.patient_id }}"
+                data-patient-name="{{ row.patient_fio }}"
+                data-birth-date="{{ row.birth_date.isoformat() if row.birth_date else '' }}"
+                data-indicator="{{ filters.indicator }}"
+                data-indicator-label="{{ indicators[filters.indicator].label }}"
+                data-bs-toggle="modal"
+                data-bs-target="#registryDynamicsModal"
+              >График</button>
             </td>
             {% if filters.indicator == 'egfr' %}
             <td><span class="registry-stage-badge">{{ row.egfr_category or '—' }}</span></td>
@@ -179,11 +187,36 @@
   </section>
 
   <div class="alert alert-light border registry-note mt-3" role="note">
-    Для отбора используется последний результат пациента за выбранный период. Значение «На первом приёме» берётся только из первого приёма пациента; если показатель тогда не заполняли, показывается «Нет данных». Изменение показано справочно и требует врачебной интерпретации.
+    Для отбора используется последний результат пациента за выбранный период. Значение «На первом приёме» берётся только из первого приёма пациента; если показатель тогда не заполняли, показывается «Нет данных». Кнопка «График» показывает динамику выбранного показателя за весь срок наблюдения.
+  </div>
+
+  <div class="modal fade" id="registryDynamicsModal" tabindex="-1" aria-labelledby="registryDynamicsTitle" aria-hidden="true">
+    <div class="modal-dialog modal-dialog-centered registry-dynamics-dialog">
+      <div class="modal-content">
+        <div class="modal-header">
+          <div>
+            <h5 class="modal-title" id="registryDynamicsTitle">Динамика показателя</h5>
+            <div class="registry-dynamics-patient" id="registryDynamicsPatient"></div>
+            <div class="registry-subvalue" id="registryDynamicsBirthDate"></div>
+          </div>
+          <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Закрыть"></button>
+        </div>
+        <div class="modal-body">
+          <div class="registry-dynamics-status" id="registryDynamicsLoading">Загрузка данных…</div>
+          <div class="alert alert-danger mb-0" id="registryDynamicsError" role="alert" hidden></div>
+          <div class="registry-dynamics-status" id="registryDynamicsEmpty" hidden>Для этого показателя пока нет данных.</div>
+          <div class="registry-dynamics-chart" id="registryDynamicsChart" hidden>
+            <svg id="registryDynamicsSvg" class="registry-dynamics-svg" viewBox="0 0 760 340" role="img" aria-labelledby="registryDynamicsChartTitle">
+              <title id="registryDynamicsChartTitle">График динамики показателя</title>
+            </svg>
+          </div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 {% endblock %}
 
 {% block extra_scripts %}
-<script src="{{ url_for('static', path='js/patient_lists.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/patient_lists_dynamics.js') }}" defer></script>
 {% endblock %}
