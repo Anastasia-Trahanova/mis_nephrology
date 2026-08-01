@@ -12,50 +12,131 @@
     <link rel="stylesheet" href="{{ url_for('static', path='css/05_admin_audit.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/06_hotkeys.css') }}">
     <link rel="stylesheet" href="{{ url_for('static', path='css/07_user_guide.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', path='css/10_sidebar.css') }}">
     {% block extra_head %}{% endblock %}
 </head>
-<body class="app-layout">
-    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
-        <div class="container">
-            <a class="navbar-brand" href="/">МИС Нефролога</a>
-            {% set current_role = request.session.get('role') %}
-            {% set clinical_roles = ('doctor', 'chief_physician', 'department_head') %}
-            {% set role_labels = {
-                'admin': 'администратор',
-                'doctor': 'врач',
-                'chief_physician': 'главный врач',
-                'department_head': 'заведующий отделением',
-                'patient': 'пациент'
-            } %}
-            <div class="navbar-nav me-auto">
-                <a class="nav-link" href="/patients">Пациенты</a>
-                {% if current_role == 'admin' or current_role in clinical_roles %}
-                <a class="nav-link" href="/schedule">Расписание</a>
-                <a class="nav-link{% if request.url.path.startswith('/patient-lists') %} active{% endif %}" href="/patient-lists">Списки пациентов</a>
-                {% endif %}
-                {% if current_role == 'admin' or current_role in ('chief_physician', 'department_head') %}
-                <a class="nav-link{% if request.url.path.startswith('/ckd-registry') %} active{% endif %}" href="/ckd-registry">Регистр ХБП</a>
-                <a class="nav-link{% if request.url.path.startswith('/analytics') %} active{% endif %}" href="/analytics">Аналитика</a>
-                {% endif %}
-                <a class="nav-link{% if request.url.path.startswith('/clinical-reference') %} active{% endif %}" href="/clinical-reference">Клинический справочник</a>
-                {% if request.session.get('role') == 'admin' %}
-                <a class="nav-link" href="/admin/audit">Журнал аудита</a>
-                {% endif %}
-            </div>
+<body class="app-layout{% if request.session.get('user_id') %} has-app-sidebar{% endif %}">
+    {% set current_role = request.session.get('role') %}
+    {% set clinical_roles = ('doctor', 'chief_physician', 'department_head') %}
+    {% set management_roles = ('admin', 'chief_physician', 'department_head') %}
+    {% set role_labels = {
+        'admin': 'администратор',
+        'doctor': 'врач',
+        'chief_physician': 'главный врач',
+        'department_head': 'заведующий отделением',
+        'patient': 'пациент'
+    } %}
+    {% set navigation_path = request.url.path %}
+
+    <header class="app-topbar">
+        <div class="app-topbar__left">
             {% if request.session.get('user_id') %}
-            <div class="navbar-nav ms-auto align-items-center">
-                <span class="navbar-text text-white me-3">
-                    {{ request.session.get('display_name') or request.session.get('login') }}
-                    <small class="text-white-50">({{ role_labels.get(current_role, current_role) }})</small>
-                </span>
-                <a class="nav-link" href="/logout">Выйти</a>
-            </div>
+            <button
+                type="button"
+                id="sidebarToggle"
+                class="app-sidebar-toggle"
+                aria-controls="appSidebar"
+                aria-expanded="true"
+                title="Свернуть или открыть меню"
+            >
+                <span class="app-sidebar-toggle__line"></span>
+                <span class="app-sidebar-toggle__line"></span>
+                <span class="app-sidebar-toggle__line"></span>
+                <span class="visually-hidden">Свернуть или открыть меню</span>
+            </button>
             {% endif %}
+            <span class="app-brand" aria-label="МИС Нефролога">МИС Нефролога</span>
         </div>
-    </nav>
-    <div class="container mt-4 app-content">
-        {% block content %}{% endblock %}
-    </div>
+
+        {% if request.session.get('user_id') %}
+        <div class="app-topbar__user">
+            <span class="app-topbar__user-icon" aria-hidden="true">
+                <svg viewBox="0 0 24 24" focusable="false"><path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Zm-7 8a7 7 0 0 1 14 0"/></svg>
+            </span>
+            <span class="app-topbar__identity">
+                <span class="app-topbar__name">{{ request.session.get('display_name') or request.session.get('login') }}</span>
+                <small>{{ role_labels.get(current_role, current_role) }}</small>
+            </span>
+            <a class="app-topbar__logout" href="/logout">
+                <svg viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M10 5H5v14h5M14 8l4 4-4 4M8 12h10"/></svg>
+                <span>Выйти</span>
+            </a>
+        </div>
+        {% endif %}
+    </header>
+
+    {% if request.session.get('user_id') %}
+    <aside class="app-sidebar" id="appSidebar" aria-label="Основная навигация">
+        <nav class="app-sidebar__nav">
+            <a class="app-sidebar__link{% if navigation_path == '/' %} active{% endif %}" href="/" title="Главная">
+                <svg class="app-sidebar__icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="m3 11 9-7 9 7M5 10v10h14V10M9 20v-6h6v6"/></svg>
+                <span class="app-sidebar__label">Главная</span>
+            </a>
+
+            <a class="app-sidebar__link{% if navigation_path.startswith('/patients') or navigation_path.startswith('/patient/') or navigation_path == '/new-patient' %} active{% endif %}" href="/patients" title="Пациенты">
+                <svg class="app-sidebar__icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M8 11a3 3 0 1 0 0-6 3 3 0 0 0 0 6Zm8-1a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5ZM2.5 20a5.5 5.5 0 0 1 11 0M13 20a4.5 4.5 0 0 1 9 0"/></svg>
+                <span class="app-sidebar__label">Пациенты</span>
+            </a>
+
+            {% if current_role == 'admin' or current_role in clinical_roles %}
+            <a class="app-sidebar__link{% if navigation_path.startswith('/schedule') %} active{% endif %}" href="/schedule" title="Расписание">
+                <svg class="app-sidebar__icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M5 4v3M19 4v3M3 9h18M4 6h16v15H4zM8 13h2M14 13h2M8 17h2M14 17h2"/></svg>
+                <span class="app-sidebar__label">Расписание</span>
+            </a>
+
+            <a class="app-sidebar__link{% if navigation_path.startswith('/patient-lists') %} active{% endif %}" href="/patient-lists" title="Списки пациентов">
+                <svg class="app-sidebar__icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/></svg>
+                <span class="app-sidebar__label">Списки пациентов</span>
+            </a>
+            {% endif %}
+
+            {% if current_role in management_roles %}
+            <a class="app-sidebar__link{% if navigation_path.startswith('/ckd-registry') %} active{% endif %}" href="/ckd-registry" title="Регистр ХБП">
+                <svg class="app-sidebar__icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M9.5 4C6 4 4 7 4 10.5 4 15 7 20 10 20c2 0 2-3 2-5V8c0-2-1-4-2.5-4Zm5 0C18 4 20 7 20 10.5 20 15 17 20 14 20c-2 0-2-3-2-5V8c0-2 1-4 2.5-4Z"/></svg>
+                <span class="app-sidebar__label">Регистр ХБП</span>
+            </a>
+            {% endif %}
+
+            <a class="app-sidebar__link{% if navigation_path.startswith('/clinical-reference') %} active{% endif %}" href="/clinical-reference" title="Клинический справочник">
+                <svg class="app-sidebar__icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2H11v18H7.5A3.5 3.5 0 0 0 4 23V5.5ZM20 5.5A3.5 3.5 0 0 0 16.5 2H13v18h3.5A3.5 3.5 0 0 1 20 23V5.5Z"/></svg>
+                <span class="app-sidebar__label">Клинический справочник</span>
+            </a>
+
+            {% if current_role in management_roles %}
+            <div class="app-sidebar__section" aria-hidden="true"><span>Управление</span></div>
+
+            <a class="app-sidebar__link{% if navigation_path.startswith('/analytics') %} active{% endif %}" href="/analytics" title="Аналитика">
+                <svg class="app-sidebar__icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M4 20V10M10 20V4M16 20v-7M22 20H2"/></svg>
+                <span class="app-sidebar__label">Аналитика</span>
+            </a>
+            {% endif %}
+
+            {% if current_role == 'admin' %}
+            <a class="app-sidebar__link{% if navigation_path.startswith('/admin/audit') %} active{% endif %}" href="/admin/audit" title="Журнал аудита">
+                <svg class="app-sidebar__icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 3 4 6v5c0 5 3.4 8.5 8 10 4.6-1.5 8-5 8-10V6l-8-3Zm0 5v5l3 2"/></svg>
+                <span class="app-sidebar__label">Журнал аудита</span>
+            </a>
+            {% endif %}
+        </nav>
+
+        <div class="app-sidebar__bottom">
+            <a class="app-sidebar__link" href="/static/docs/user_guide.html" title="Руководство пользователя">
+                <svg class="app-sidebar__icon" viewBox="0 0 24 24" focusable="false" aria-hidden="true"><path d="M12 22a10 10 0 1 0 0-20 10 10 0 0 0 0 20Zm-2.2-13a2.4 2.4 0 1 1 3.6 2.1c-.9.5-1.4 1-1.4 2.4M12 17h.01"/></svg>
+                <span class="app-sidebar__label">Руководство пользователя</span>
+            </a>
+            <div class="app-sidebar__meta" aria-label="Версия приложения">
+                <span class="app-sidebar__meta-version">Версия 1.0.0</span>
+            </div>
+        </div>
+    </aside>
+    <button type="button" id="sidebarBackdrop" class="app-sidebar-backdrop" aria-label="Закрыть меню" hidden></button>
+    {% endif %}
+
+    <main class="app-shell-content">
+        <div class="container mt-4 app-content">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
     {% if request.session.get('user_id') %}
     <button
         type="button"
@@ -196,6 +277,7 @@
     <script src="{{ url_for('static', path='js/albuminuria_daily_fix.js') }}" defer></script>
     <script src="{{ url_for('static', path='js/hotkeys.js') }}" defer></script>
     <script src="{{ url_for('static', path='js/filter_form_hotkeys.js') }}" defer></script>
+    <script src="{{ url_for('static', path='js/sidebar.js') }}" defer></script>
     <script src="{{ url_for('static', path='js/schedule_hotkeys.js') }}" defer></script>
     {% block extra_scripts %}{% endblock %}
 </body>
