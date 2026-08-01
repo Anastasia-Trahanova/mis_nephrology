@@ -107,8 +107,14 @@ def test_ckd_stage_label_is_updated_without_changing_metric_fields():
 def test_medication_partial_is_not_replaced_by_this_contract():
     card = read("app/templates/patient_card.html")
     form_conclusion = read("app/templates/appointment_form/_conclusion.html")
+    medications_partial = read(
+        "app/templates/appointment_form/_medications.html"
+    )
 
-    assert 'patient_card/_prescriptions.html' in card
-    assert 'name="medication"' in form_conclusion
-    assert 'name="dosage"' in form_conclusion
-    assert 'name="schedule"' in form_conclusion
+    assert "patient_card/_prescriptions.html" in card
+    assert "_medications.html" in form_conclusion
+
+    assert 'name="medication"' in medications_partial
+    assert 'name="dosage"' in medications_partial
+    assert 'name="schedule"' in medications_partial
+    assert 'name="therapy_group"' in medications_partial
