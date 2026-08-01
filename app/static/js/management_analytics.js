@@ -2,11 +2,17 @@
   "use strict";
 
   const form = document.getElementById("analyticsFilterForm");
+  if (!form || window.__managementAnalyticsInitialized) return;
+  window.__managementAnalyticsInitialized = true;
+
   const locationSelect = document.getElementById("analyticsLocation");
   const doctorSelect = document.getElementById("analyticsDoctor");
   const dateFrom = document.getElementById("analyticsDateFrom");
   const dateTo = document.getElementById("analyticsDateTo");
   const errorBox = document.getElementById("analyticsFilterError");
+  const resetLink = form.querySelector('a[href="/analytics"]');
+  const exportButton = form.querySelector('.analytics-export-dropdown [data-bs-toggle="dropdown"]');
+  const fullExportLink = form.querySelector('.analytics-export-dropdown a[href*="report=all"]');
 
   function filterDoctors() {
     if (!locationSelect || !doctorSelect) return;
@@ -41,10 +47,10 @@
   }
 
   function applyLocation(locationId) {
-    if (!form || !locationSelect) return;
+    if (!locationSelect) return;
     locationSelect.value = String(locationId || "");
     filterDoctors();
-    form.submit();
+    form.requestSubmit();
   }
 
   function setupLocationLinks() {
@@ -80,11 +86,78 @@
     });
   }
 
+  function isHelpModalOpen() {
+    return document.getElementById("hotkeysHelpModal")?.classList.contains("show") === true;
+  }
+
+  function stopEvent(event) {
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  function focusFilter(control) {
+    if (!control || control.disabled) return;
+    control.scrollIntoView({ behavior: "smooth", block: "center" });
+    window.setTimeout(() => control.focus({ preventScroll: true }), 150);
+  }
+
+  function toggleExportMenu() {
+    if (!exportButton) return;
+    if (window.bootstrap?.Dropdown) {
+      window.bootstrap.Dropdown.getOrCreateInstance(exportButton).toggle();
+      return;
+    }
+    exportButton.click();
+  }
+
+  function installHotkeysHelp() {
+    const title = document.getElementById("pageHotkeysTitle");
+    const list = title?.parentElement?.querySelector(".hotkeys-list");
+    if (!list) return;
+    list.innerHTML = `
+      <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>S</kbd></span><span class="hotkey-action">Применить фильтры</span></div>
+      <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>R</kbd></span><span class="hotkey-action">Сбросить фильтры</span></div>
+      <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>O</kbd></span><span class="hotkey-action">Перейти к выбору отделения</span></div>
+      <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>V</kbd></span><span class="hotkey-action">Перейти к выбору врача</span></div>
+      <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>E</kbd></span><span class="hotkey-action">Открыть меню выгрузок</span></div>
+      <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>C</kbd></span><span class="hotkey-action">Скачать общий аналитический отчёт</span></div>
+    `;
+  }
+
+  function handleHotkeys(event) {
+    if (event.defaultPrevented || event.isComposing || isHelpModalOpen()) return;
+    const code = event.code;
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return;
+
+    if (code === "KeyS") {
+      stopEvent(event);
+      form.requestSubmit();
+    } else if (code === "KeyR") {
+      stopEvent(event);
+      resetLink?.click();
+    } else if (code === "KeyO") {
+      stopEvent(event);
+      focusFilter(locationSelect);
+    } else if (code === "KeyV") {
+      stopEvent(event);
+      focusFilter(doctorSelect);
+    } else if (code === "KeyE") {
+      stopEvent(event);
+      toggleExportMenu();
+    } else if (code === "KeyC") {
+      stopEvent(event);
+      fullExportLink?.click();
+    }
+  }
+
   locationSelect?.addEventListener("change", filterDoctors);
-  form?.addEventListener("submit", validateDates);
+  form.addEventListener("submit", validateDates);
   dateFrom?.addEventListener("change", () => validateDates());
   dateTo?.addEventListener("change", () => validateDates());
+  window.addEventListener("keydown", handleHotkeys, true);
+
   filterDoctors();
   setupLocationLinks();
   setupSorting(document.getElementById("analyticsDoctorsTable"));
+  installHotkeysHelp();
 })();

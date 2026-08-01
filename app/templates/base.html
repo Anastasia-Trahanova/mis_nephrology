@@ -131,7 +131,6 @@
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>W</kbd></span><span class="hotkey-action">Скачать Word выбранного приёма</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>N</kbd></span><span class="hotkey-action">Добавить приём текущему пациенту</span></div>
                             {% elif is_patient_lists_page %}
-                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Enter</kbd></span><span class="hotkey-action">В фильтрах: показать пациентов</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>S</kbd></span><span class="hotkey-action">Показать пациентов</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>R</kbd></span><span class="hotkey-action">Сбросить фильтры</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>C</kbd></span><span class="hotkey-action">Скачать CSV</span></div>
@@ -139,7 +138,6 @@
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>O</kbd></span><span class="hotkey-action">Открыть ЭМК выбранного пациента</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>←</kbd>/<kbd>→</kbd></span><span class="hotkey-action">Предыдущая/следующая страница</span></div>
                             {% elif is_ckd_registry_page %}
-                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Enter</kbd></span><span class="hotkey-action">В фильтрах: применить фильтры</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>S</kbd></span><span class="hotkey-action">Применить фильтры</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>R</kbd></span><span class="hotkey-action">Сбросить фильтры</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>C</kbd></span><span class="hotkey-action">Скачать Excel</span></div>
@@ -147,7 +145,6 @@
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>O</kbd></span><span class="hotkey-action">Открыть ЭМК выбранного пациента</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>←</kbd>/<kbd>→</kbd></span><span class="hotkey-action">Предыдущая/следующая страница</span></div>
                             {% elif is_audit_page %}
-                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Enter</kbd></span><span class="hotkey-action">В фильтрах: применить фильтры</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>S</kbd></span><span class="hotkey-action">Применить фильтры</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>R</kbd></span><span class="hotkey-action">Сбросить фильтры</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>C</kbd></span><span class="hotkey-action">Скачать CSV</span></div>
@@ -164,6 +161,7 @@
                     <section class="hotkeys-common" aria-labelledby="commonHotkeysTitle">
                         <h6 class="hotkeys-section-title" id="commonHotkeysTitle">Везде в программе</h6>
                         <div class="hotkeys-list">
+                            <div class="hotkey-row"><span class="hotkey-keys"><kbd>Enter</kbd></span><span class="hotkey-action">В формах фильтров: применить фильтры</span></div>
                             <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>↑</kbd>/<kbd>↓</kbd></span><span class="hotkey-action">Плавная прокрутка страницы</span></div>
                             <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>M</kbd></span><span class="hotkey-action">Вернуться к списку приёмов</span></div>
                         </div>
@@ -197,6 +195,7 @@
     <script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}" defer></script>
     <script src="{{ url_for('static', path='js/albuminuria_daily_fix.js') }}" defer></script>
     <script src="{{ url_for('static', path='js/hotkeys.js') }}" defer></script>
+    <script src="{{ url_for('static', path='js/filter_form_hotkeys.js') }}" defer></script>
     <script src="{{ url_for('static', path='js/schedule_hotkeys.js') }}" defer></script>
     {% block extra_scripts %}{% endblock %}
 </body>
