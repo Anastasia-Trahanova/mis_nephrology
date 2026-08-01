@@ -42,42 +42,42 @@
 
 {% if not registry_entry %}
 <dialog class="ckd-registry-dialog" id="registryIncludeDialog" aria-labelledby="registryIncludeTitle">
-  <form method="post" action="/ckd-registry/patient/{{ patient.id }}/include" data-ckd-include-form novalidate>
+  <form method="post" action="/ckd-registry/patient/{{ patient.id }}/include" data-ckd-include-form data-custom-form-validation="ckd-registry" novalidate>
     <header class="ckd-registry-dialog__header">
       <h3 id="registryIncludeTitle">Добавление пациента в регистр пациентов с ХБП</h3>
       <button type="button" class="ckd-registry-dialog__close" data-registry-dialog-close aria-label="Закрыть">×</button>
     </header>
     <div class="ckd-registry-dialog__body">
       <div class="alert alert-danger d-none ckd-registry-validation-summary" data-ckd-validation-summary role="alert" tabindex="-1"></div>
-      <p class="small text-muted mb-3">Все поля обязательны для заполнения.</p>
+      <p class="small text-muted mb-3">Все поля, кроме комментария, обязательны для заполнения.</p>
       <div class="mb-3">
         <label class="form-label">ФИО</label>
         <div class="row g-2">
-          <div class="col-md-4"><input class="form-control" name="last_name" value="{{ registry_snapshot.last_name }}" required aria-required="true" aria-label="Фамилия"></div>
-          <div class="col-md-4"><input class="form-control" name="first_name" value="{{ registry_snapshot.first_name }}" required aria-required="true" aria-label="Имя"></div>
-          <div class="col-md-4"><input class="form-control" name="patronymic" value="{{ registry_snapshot.patronymic or '' }}" required aria-required="true" aria-label="Отчество"></div>
+          <div class="col-md-4"><input class="form-control" name="last_name" value="{{ registry_snapshot.last_name }}" data-ckd-required aria-required="true" aria-label="Фамилия"></div>
+          <div class="col-md-4"><input class="form-control" name="first_name" value="{{ registry_snapshot.first_name }}" data-ckd-required aria-required="true" aria-label="Имя"></div>
+          <div class="col-md-4"><input class="form-control" name="patronymic" value="{{ registry_snapshot.patronymic or '' }}" data-ckd-required aria-required="true" aria-label="Отчество"></div>
         </div>
       </div>
       <div class="row g-3">
         <div class="col-md-6">
           <label class="form-label" for="registryBirthDate">Дата рождения</label>
-          <input class="form-control" id="registryBirthDate" type="date" name="birth_date" value="{{ registry_snapshot.birth_date.isoformat() if registry_snapshot.birth_date else '' }}" required aria-required="true">
+          <input class="form-control" id="registryBirthDate" type="date" name="birth_date" value="{{ registry_snapshot.birth_date.isoformat() if registry_snapshot.birth_date else '' }}" data-ckd-required aria-required="true">
         </div>
         <div class="col-md-6">
           <label class="form-label" for="registryPhone">Номер телефона</label>
-          <input class="form-control" id="registryPhone" name="phone" value="{{ registry_snapshot.phone or '' }}" required aria-required="true">
+          <input class="form-control" id="registryPhone" name="phone" value="{{ registry_snapshot.phone or '' }}" data-ckd-required aria-required="true">
         </div>
         <div class="col-12">
           <label class="form-label" for="registryDiagnosis">Основной диагноз</label>
-          <textarea class="form-control" id="registryDiagnosis" name="diagnosis" rows="3" required aria-required="true">{{ registry_snapshot.main_diagnosis or '' }}</textarea>
+          <textarea class="form-control" id="registryDiagnosis" name="diagnosis" rows="3" data-ckd-required aria-required="true">{{ registry_snapshot.main_diagnosis or '' }}</textarea>
         </div>
         <div class="col-md-6">
           <label class="form-label" for="registryEgfr">СКФ по последнему приёму</label>
-          <input class="form-control" id="registryEgfr" name="egfr" type="text" inputmode="decimal" data-ckd-egfr value="{{ registry_snapshot.egfr if registry_snapshot.egfr is not none else '' }}" required aria-required="true">
+          <input class="form-control" id="registryEgfr" name="egfr" type="text" inputmode="decimal" data-ckd-egfr value="{{ registry_snapshot.egfr if registry_snapshot.egfr is not none else '' }}" data-ckd-required aria-required="true">
         </div>
         <div class="col-md-6">
           <label class="form-label" for="registryStage">Стадия ХБП по последнему приёму</label>
-          <select class="form-select" id="registryStage" name="stage" required aria-required="true">
+          <select class="form-select" id="registryStage" name="stage" data-ckd-required aria-required="true">
             <option value="">Не указана</option>
             {% for stage in ckd_registry.stages %}
             <option value="{{ stage }}" {% if registry_snapshot.ckd_stage == stage %}selected{% endif %}>{{ stage }}</option>
@@ -86,7 +86,7 @@
         </div>
         <div class="col-12">
           <label class="form-label" for="registryInitialOutcome">Исход</label>
-          <select class="form-select" id="registryInitialOutcome" name="outcome" required aria-required="true">
+          <select class="form-select" id="registryInitialOutcome" name="outcome" data-ckd-required aria-required="true">
             <option value="observed" selected>Наблюдается</option>
             {% for key, label in ckd_registry.outcomes.items() %}
             <option value="{{ key }}">{{ label }}</option>
@@ -94,8 +94,8 @@
           </select>
         </div>
         <div class="col-12">
-          <label class="form-label" for="registryComment">Комментарий</label>
-          <textarea class="form-control" id="registryComment" name="comment" rows="3" required aria-required="true"></textarea>
+          <label class="form-label" for="registryComment">Комментарий <span class="text-muted">(необязательно)</span></label>
+          <textarea class="form-control" id="registryComment" name="comment" rows="3"></textarea>
         </div>
       </div>
       <p class="text-muted ckd-registry-modal-note mt-3 mb-0">

@@ -297,7 +297,7 @@ def add_patient_to_registry(
     outcome = None if outcome_value in {"", "observed"} else outcome_value
     if outcome is not None and outcome not in OUTCOME_LABELS:
         raise RegistryValidationError("Выберите корректный исход")
-    comment = _required_text(comment, "Комментарий")
+    comment = str(comment or "").strip() or None
     today = date.today()
 
     with get_db_connection() as conn:
