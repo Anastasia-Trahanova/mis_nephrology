@@ -20,44 +20,74 @@
   </header>
 
   <section class="card shadow-sm mb-3" aria-labelledby="ckdRegistryFiltersTitle">
-    <div class="card-body">
+    <div class="card-body ckd-registry-filter-card">
       <h3 class="h5 mb-3" id="ckdRegistryFiltersTitle">Фильтры</h3>
       <form method="get" action="/ckd-registry" id="ckdRegistryFilterForm">
-        <div class="row g-3 align-items-end">
-          <div class="col-lg-4">
-            <label class="form-label" for="ckdRegistrySearch">ФИО или телефон</label>
-            <input class="form-control" id="ckdRegistrySearch" name="search" value="{{ filters.search }}" autocomplete="off">
+        <div class="ckd-registry-filter-layout">
+          <div class="ckd-registry-filter-row ckd-registry-filter-row--primary">
+            <div class="ckd-registry-filter ckd-registry-filter--search">
+              <label class="form-label" for="ckdRegistrySearch">ФИО или телефон</label>
+              <input class="form-control" id="ckdRegistrySearch" name="search" value="{{ filters.search }}" autocomplete="off">
+            </div>
+
+            <div class="ckd-registry-filter ckd-registry-filter--included-dates">
+              <span class="form-label">Дата включения в регистр</span>
+              <div class="ckd-registry-date-range">
+                <label class="ckd-registry-inline-label" for="ckdRegistryDateFrom">с</label>
+                <input class="form-control" type="date" id="ckdRegistryDateFrom" name="included_from" value="{{ filters.included_from.isoformat() if filters.included_from else '' }}">
+                <label class="ckd-registry-inline-label" for="ckdRegistryDateTo">по</label>
+                <input class="form-control" type="date" id="ckdRegistryDateTo" name="included_to" value="{{ filters.included_to.isoformat() if filters.included_to else '' }}">
+              </div>
+            </div>
           </div>
-          <div class="col-md-4 col-lg-2">
-            <label class="form-label" for="ckdRegistryStage">Стадия ХБП</label>
-            <select class="form-select" id="ckdRegistryStage" name="stage">
-              <option value="">Все стадии</option>
-              {% for stage in stages %}
-              <option value="{{ stage }}" {% if filters.stage == stage %}selected{% endif %}>{{ stage }}</option>
-              {% endfor %}
-            </select>
+
+          <div class="ckd-registry-filter-row ckd-registry-filter-row--secondary">
+            <div class="ckd-registry-filter ckd-registry-filter--egfr">
+              <label class="form-label" for="ckdRegistryEgfrOperator">СКФ</label>
+              <div class="ckd-registry-egfr-control">
+                <select class="form-select" id="ckdRegistryEgfrOperator" name="egfr_operator" aria-label="Условие по СКФ">
+                  <option value="">Любая</option>
+                  <option value="lt" {% if filters.egfr_operator == 'lt' %}selected{% endif %}>Ниже</option>
+                  <option value="gt" {% if filters.egfr_operator == 'gt' %}selected{% endif %}>Выше</option>
+                  <option value="between" {% if filters.egfr_operator == 'between' %}selected{% endif %}>От — до</option>
+                </select>
+                <div class="ckd-registry-egfr-value-control" id="ckdRegistryEgfrValueControl">
+                  <span class="ckd-registry-range-label" id="ckdRegistryEgfrFromPrefix" hidden>От</span>
+                  <input class="form-control ckd-registry-number-input" id="ckdRegistryEgfrFrom" name="egfr_from" type="number" min="0" step="any" inputmode="decimal" value="{{ filters.egfr_from if filters.egfr_from is not none else '' }}" aria-label="Значение СКФ">
+                  <span class="ckd-registry-range-end" id="ckdRegistryEgfrToGroup" hidden>
+                    <span class="ckd-registry-range-label">до</span>
+                    <input class="form-control ckd-registry-number-input" id="ckdRegistryEgfrTo" name="egfr_to" type="number" min="0" step="any" inputmode="decimal" value="{{ filters.egfr_to if filters.egfr_to is not none else '' }}" aria-label="Верхняя граница СКФ">
+                  </span>
+                  <span class="ckd-registry-unit">мл/мин/1,73 м²</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="ckd-registry-filter ckd-registry-filter--stage">
+              <label class="form-label" for="ckdRegistryStage">Стадия ХБП</label>
+              <select class="form-select" id="ckdRegistryStage" name="stage">
+                <option value="">Все</option>
+                {% for stage in stages %}
+                <option value="{{ stage }}" {% if filters.stage == stage %}selected{% endif %}>{{ stage }}</option>
+                {% endfor %}
+              </select>
+            </div>
+
+            <div class="ckd-registry-filter ckd-registry-filter--outcome">
+              <label class="form-label" for="ckdRegistryOutcome">Исход</label>
+              <select class="form-select" id="ckdRegistryOutcome" name="outcome">
+                <option value="">Все</option>
+                <option value="none" {% if filters.outcome == 'none' %}selected{% endif %}>Наблюдается</option>
+                {% for key, label in outcomes.items() %}
+                <option value="{{ key }}" {% if filters.outcome == key %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+              </select>
+            </div>
           </div>
-          <div class="col-md-8 col-lg-3">
-            <label class="form-label" for="ckdRegistryOutcome">Исход</label>
-            <select class="form-select" id="ckdRegistryOutcome" name="outcome">
-              <option value="">Все исходы</option>
-              <option value="none" {% if filters.outcome == 'none' %}selected{% endif %}>Наблюдается</option>
-              {% for key, label in outcomes.items() %}
-              <option value="{{ key }}" {% if filters.outcome == key %}selected{% endif %}>{{ label }}</option>
-              {% endfor %}
-            </select>
-          </div>
-          <div class="col-md-4 col-lg-2">
-            <label class="form-label" for="ckdRegistryDateFrom">Включён с</label>
-            <input class="form-control" type="date" id="ckdRegistryDateFrom" name="included_from" value="{{ filters.included_from.isoformat() if filters.included_from else '' }}">
-          </div>
-          <div class="col-md-4 col-lg-2">
-            <label class="form-label" for="ckdRegistryDateTo">по</label>
-            <input class="form-control" type="date" id="ckdRegistryDateTo" name="included_to" value="{{ filters.included_to.isoformat() if filters.included_to else '' }}">
-          </div>
-          <div class="col-12 d-flex flex-wrap gap-2 justify-content-end">
-            <a class="btn btn-outline-secondary" id="ckdRegistryResetButton" href="/ckd-registry">Сбросить</a>
-            <button class="btn btn-primary" id="ckdRegistrySubmitButton" type="submit">Применить фильтры</button>
+
+          <div class="ckd-registry-filter-actions">
+            <a class="btn btn-link text-decoration-none" id="ckdRegistryResetButton" href="/ckd-registry" aria-keyshortcuts="Alt+R">Сбросить фильтры</a>
+            <button class="btn btn-primary" id="ckdRegistrySubmitButton" type="submit" aria-keyshortcuts="Enter Alt+S">Применить фильтр</button>
           </div>
         </div>
       </form>
@@ -71,38 +101,47 @@
     </div>
 
     {% if result.rows %}
-    <div class="table-responsive">
-      <table class="table table-hover align-middle mb-0 ckd-registry-table">
+    <div class="ckd-registry-table-wrap">
+      <table class="table align-middle mb-0 ckd-registry-table">
+        <colgroup>
+          <col class="ckd-col-fio">
+          <col class="ckd-col-birth-date">
+          <col class="ckd-col-included-date">
+          <col class="ckd-col-phone">
+          <col class="ckd-col-diagnosis">
+          <col class="ckd-col-egfr">
+          <col class="ckd-col-stage">
+          <col class="ckd-col-outcome">
+          <col class="ckd-col-action">
+        </colgroup>
         <thead class="table-light">
           <tr>
             <th>ФИО</th>
-            <th>Дата рождения</th>
-            <th>Дата включения</th>
-            <th>Номер телефона</th>
-            <th>Основной диагноз</th>
+            <th>Дата<br>рождения</th>
+            <th>Дата включения<br>в регистр</th>
+            <th>Телефон</th>
+            <th>Основной<br>диагноз</th>
             <th>СКФ</th>
-            <th>Стадия ХБП</th>
+            <th>Стадия<br>ХБП</th>
             <th>Исход</th>
-            <th></th>
+            <th class="text-center">ЭМК</th>
           </tr>
         </thead>
         <tbody id="ckdRegistryRows">
           {% for row in result.rows %}
-          <tr data-ckd-registry-row tabindex="-1" aria-selected="false">
-            <td class="text-nowrap"><strong>{{ row.patient_fio }}</strong></td>
-            <td class="text-nowrap">{{ row.birth_date.strftime('%d.%m.%Y') if row.birth_date else '—' }}</td>
-            <td class="text-nowrap">{{ row.included_at.strftime('%d.%m.%Y') if row.included_at else '—' }}</td>
-            <td class="text-nowrap">{{ row.phone or '—' }}</td>
-            <td class="ckd-registry-diagnosis">{{ row.main_diagnosis or '—' }}</td>
-            <td class="text-nowrap">
-              {% if row.egfr is not none %}<strong>{{ row.egfr }}</strong>{% else %}—{% endif %}
-            </td>
-            <td><span class="badge text-bg-light border">{{ row.ckd_stage or '—' }}</span></td>
-            <td>
+          <tr>
+            <td class="ckd-registry-fio"><strong>{{ row.patient_fio }}</strong></td>
+            <td class="ckd-registry-date-cell">{{ row.birth_date.strftime('%d.%m.%Y') if row.birth_date else '—' }}</td>
+            <td class="ckd-registry-date-cell">{{ row.included_at.strftime('%d.%m.%Y') if row.included_at else '—' }}</td>
+            <td class="ckd-registry-phone">{{ row.phone or '—' }}</td>
+            <td class="ckd-registry-diagnosis" title="{{ row.main_diagnosis or '' }}">{{ row.main_diagnosis or '—' }}</td>
+            <td class="ckd-registry-egfr-value">{% if row.egfr is not none %}<strong>{{ row.egfr }}</strong>{% else %}—{% endif %}</td>
+            <td class="ckd-registry-stage"><span class="ckd-stage-badge" data-stage="{{ row.ckd_stage or '' }}">{{ row.ckd_stage or '—' }}</span></td>
+            <td class="ckd-registry-outcome-cell">
               <span class="ckd-outcome ckd-outcome--{{ row.outcome_type or 'none' }}">{{ row.outcome_label }}</span>
-              {% if row.outcome_date %}<div class="text-muted small mt-1">с {{ row.outcome_date.strftime('%d.%m.%Y') }}</div>{% endif %}
+              {% if row.outcome_date %}<div class="text-muted ckd-registry-outcome-date">с {{ row.outcome_date.strftime('%d.%m.%Y') }}</div>{% endif %}
             </td>
-            <td><a class="btn btn-sm btn-outline-primary text-nowrap" data-ckd-open-patient href="/patient/{{ row.patient_id }}">Открыть ЭМК</a></td>
+            <td class="ckd-registry-action-cell"><a class="btn btn-sm btn-outline-primary ckd-registry-open-button" data-ckd-open-patient href="/patient/{{ row.patient_id }}" title="Открыть электронную медицинскую карту">ЭМК</a></td>
           </tr>
           {% endfor %}
         </tbody>

@@ -22,6 +22,7 @@ from app.repositories.ckd_registry import (
     get_ckd_registry,
 )
 from app.security.permissions import (
+    ROLE_ADMIN,
     ROLE_CHIEF_PHYSICIAN,
     ROLE_DEPARTMENT_HEAD,
     require_doctor_with_id,
@@ -33,8 +34,8 @@ templates = Jinja2Templates(directory="app/templates")
 
 
 def require_ckd_registry_access(request: Request) -> None:
-    """Общую страницу видят только главный врач и заведующий отделением."""
-    require_roles(request, ROLE_CHIEF_PHYSICIAN, ROLE_DEPARTMENT_HEAD)
+    """Страница доступна администратору, главному врачу и заведующему."""
+    require_roles(request, ROLE_ADMIN, ROLE_CHIEF_PHYSICIAN, ROLE_DEPARTMENT_HEAD)
 
 
 def _session_user_id(request: Request) -> int:

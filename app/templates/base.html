@@ -31,12 +31,10 @@
                 {% if current_role == 'admin' or current_role in clinical_roles %}
                 <a class="nav-link" href="/schedule">Расписание</a>
                 <a class="nav-link{% if request.url.path.startswith('/patient-lists') %} active{% endif %}" href="/patient-lists">Списки пациентов</a>
-                {% endif %}
-                {% if current_role in ('chief_physician', 'department_head') %}
                 <a class="nav-link{% if request.url.path.startswith('/ckd-registry') %} active{% endif %}" href="/ckd-registry">Регистр ХБП</a>
                 {% endif %}
                 <a class="nav-link{% if request.url.path.startswith('/clinical-reference') %} active{% endif %}" href="/clinical-reference">Клинический справочник</a>
-                {% if request.session.get('role') == 'admin' %}
+                {% if current_role == 'admin' %}
                 <a class="nav-link" href="/admin/audit">Журнал аудита</a>
                 {% endif %}
             </div>
@@ -139,8 +137,6 @@
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>S</kbd></span><span class="hotkey-action">Применить фильтры</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>R</kbd></span><span class="hotkey-action">Сбросить фильтры</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>C</kbd></span><span class="hotkey-action">Скачать Excel</span></div>
-                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>↑</kbd>/<kbd>↓</kbd></span><span class="hotkey-action">Выбрать пациента в таблице</span></div>
-                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>O</kbd></span><span class="hotkey-action">Открыть ЭМК выбранного пациента</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>←</kbd>/<kbd>→</kbd></span><span class="hotkey-action">Предыдущая/следующая страница</span></div>
                             {% elif is_audit_page %}
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Enter</kbd></span><span class="hotkey-action">В фильтрах: применить фильтры</span></div>

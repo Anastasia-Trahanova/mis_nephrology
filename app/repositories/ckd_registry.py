@@ -51,10 +51,26 @@ def _positive_int(value: Any, default: int, maximum: int) -> int:
     return min(max(parsed, 1), maximum)
 
 
+def _filter_decimal(value: Any) -> Decimal | None:
+    """Безопасно разбирает неотрицательное число из GET-параметра."""
+    if value in (None, ""):
+        return None
+    try:
+        parsed = Decimal(str(value).strip().replace(",", "."))
+    except (InvalidOperation, ValueError):
+        return None
+    if not parsed.is_finite() or parsed < 0:
+        return None
+    return parsed
+
+
 @dataclass(frozen=True)
 class CkdRegistryFilters:
     search: str = ""
     stage: str = ""
+    egfr_operator: str = ""
+    egfr_from: Decimal | None = None
+    egfr_to: Decimal | None = None
     outcome: str = ""
     included_from: date | None = None
     included_to: date | None = None
@@ -67,6 +83,23 @@ class CkdRegistryFilters:
         stage = str(values.get("stage") or "").strip()
         if stage not in STAGES:
             stage = ""
+        egfr_operator = str(values.get("egfr_operator") or "").strip()
+        if egfr_operator not in {"lt", "gt", "between"}:
+            egfr_operator = ""
+        egfr_from = _filter_decimal(values.get("egfr_from"))
+        egfr_to = _filter_decimal(values.get("egfr_to"))
+        if not egfr_operator or egfr_from is None:
+            egfr_operator = ""
+            egfr_from = None
+            egfr_to = None
+        elif egfr_operator == "between":
+            if egfr_to is None:
+                egfr_operator = ""
+                egfr_from = None
+            elif egfr_from > egfr_to:
+                egfr_from, egfr_to = egfr_to, egfr_from
+        else:
+            egfr_to = None
         outcome = str(values.get("outcome") or "").strip()
         if outcome not in {*OUTCOME_LABELS, "none"}:
             outcome = ""
@@ -77,6 +110,9 @@ class CkdRegistryFilters:
         return cls(
             search=search,
             stage=stage,
+            egfr_operator=egfr_operator,
+            egfr_from=egfr_from,
+            egfr_to=egfr_to,
             outcome=outcome,
             included_from=included_from,
             included_to=included_to,
@@ -90,6 +126,11 @@ class CkdRegistryFilters:
             values["search"] = self.search
         if self.stage:
             values["stage"] = self.stage
+        if self.egfr_operator and self.egfr_from is not None:
+            values["egfr_operator"] = self.egfr_operator
+            values["egfr_from"] = str(self.egfr_from)
+            if self.egfr_operator == "between" and self.egfr_to is not None:
+                values["egfr_to"] = str(self.egfr_to)
         if self.outcome:
             values["outcome"] = self.outcome
         if self.included_from:
@@ -179,6 +220,8 @@ def _fetch_registry_entry(cur: Any, patient_id: int) -> dict[str, Any] | None:
         return None
     item = dict(row)
     item["outcome_label"] = OUTCOME_LABELS.get(item.get("outcome_type"), DEFAULT_OUTCOME_LABEL)
+    if not item.get("outcome_type") and not item.get("outcome_date"):
+        item["outcome_date"] = item.get("included_at")
     return item
 
 
@@ -375,6 +418,23 @@ def _registry_sql(filters: CkdRegistryFilters) -> tuple[str, dict[str, Any]]:
             "COALESCE(metrics.ckd_stage, e.ckd_stage_at_inclusion) = %(stage)s"
         )
         params["stage"] = filters.stage
+    egfr_expression = "COALESCE(metrics.egfr_ckdepi, e.egfr_at_inclusion)"
+    if filters.egfr_operator == "lt" and filters.egfr_from is not None:
+        conditions.append(f"{egfr_expression} < %(egfr_from)s")
+        params["egfr_from"] = filters.egfr_from
+    elif filters.egfr_operator == "gt" and filters.egfr_from is not None:
+        conditions.append(f"{egfr_expression} > %(egfr_from)s")
+        params["egfr_from"] = filters.egfr_from
+    elif (
+        filters.egfr_operator == "between"
+        and filters.egfr_from is not None
+        and filters.egfr_to is not None
+    ):
+        conditions.append(
+            f"{egfr_expression} BETWEEN %(egfr_from)s AND %(egfr_to)s"
+        )
+        params["egfr_from"] = filters.egfr_from
+        params["egfr_to"] = filters.egfr_to
     if filters.outcome == "none":
         conditions.append("latest_outcome.outcome_type IS NULL")
     elif filters.outcome:
@@ -455,6 +515,8 @@ def get_ckd_registry(filters: CkdRegistryFilters) -> dict[str, Any]:
             rows = [dict(row) for row in cur.fetchall()]
     for row in rows:
         row["outcome_label"] = OUTCOME_LABELS.get(row.get("outcome_type"), DEFAULT_OUTCOME_LABEL)
+        if not row.get("outcome_type") and not row.get("outcome_date"):
+            row["outcome_date"] = row.get("included_at")
     total = int(rows[0]["total_count"]) if rows else 0
     pages = max((total + filters.page_size - 1) // filters.page_size, 1)
     return {
