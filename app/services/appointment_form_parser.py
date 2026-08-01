@@ -14,7 +14,6 @@ from __future__ import annotations
 
 from datetime import datetime
 from typing import Any
-
 from fastapi import HTTPException
 
 from .appointment_diagnosis_service import parse_icd10_diagnoses_from_form
@@ -36,7 +35,6 @@ def parse_required_appointment_fields(form: Any) -> dict[str, Any]:
 
     if not location_id or not appointment_date or not appointment_time:
         raise HTTPException(status_code=400, detail="Не заполнены обязательные данные приёма")
-
     try:
         appointment_datetime = datetime.strptime(
             f"{appointment_date} {appointment_time}",
@@ -61,7 +59,6 @@ def parse_new_patient_form(form: Any) -> dict[str, Any]:
     birth_date = empty_to_none(form.get("birth_date"))
     gender = parse_bool(form.get("gender", "true"))
     phone = empty_to_none(form.get("phone"))
-
     if not last_name or not first_name or not birth_date:
         raise HTTPException(status_code=400, detail="Не заполнены обязательные данные пациента")
 
@@ -69,7 +66,6 @@ def parse_new_patient_form(form: Any) -> dict[str, Any]:
         birth_date_obj = datetime.strptime(birth_date, "%Y-%m-%d").date()
     except ValueError:
         raise HTTPException(status_code=400, detail="Некорректная дата рождения")
-
     return {
         "last_name": last_name,
         "first_name": first_name,
@@ -92,14 +88,12 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
         if bed_position == "forced"
         else None
     )
-
     kidney_palpation = empty_to_none(form.get("kidney_palpation"))
     kidney_palpation_details = (
         empty_to_none(form.get("kidney_palpation_details"))
         if kidney_palpation == "palpable"
         else None
     )
-
     return {
         "survey": {
             "complaints": empty_to_none(form.get("complaints")),
@@ -214,6 +208,7 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
             "recommendations": empty_to_none(form.get("recommendations")),
         },
         "prescriptions": {
+            "therapy_groups": form.getlist("therapy_group"),
             "medications": form.getlist("medication"),
             "dosages": form.getlist("dosage"),
             "schedules": form.getlist("schedule"),

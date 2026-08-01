@@ -22,6 +22,7 @@ from ..calculations import (
     calculate_all_metrics,
 )
 from ..medical_algorithms.albuminuria import get_daily_albumin_excretion_category
+from app.medication_therapy import normalize_therapy_group
 from app.repositories.ckd_prognosis import save_ckd_prognosis_for_appointment
 from ..repositories.additional_studies import upsert_appointment_additional_studies
 from ..repositories.examinations import insert_examination
@@ -76,11 +77,9 @@ def save_cbc_results(
         cbc_data.get("hematocrit", []),
     ]
     max_count = max_list_length(cbc_data.get("dates", []), *value_lists)
-
     for index in range(max_count):
         if not has_any_indexed_value(value_lists, index):
             continue
-
         insert_cbc_result(
             cur=cur,
             appointment_id=appointment_id,
@@ -103,7 +102,6 @@ def save_biochemistry_results(
 ) -> list[dict[str, Any]]:
     """
     Сохраняет все заполненные столбцы биохимии.
-
     Возвращает список биохимических исследований с креатинином, по которым затем
     нужно посчитать eGFR / Cockcroft-Gault / стадию ХБП.
     """
@@ -122,7 +120,6 @@ def save_biochemistry_results(
     ]
     max_count = max_list_length(biochemistry_data.get("dates", []), *value_lists)
     metric_sources: list[dict[str, Any]] = []
-
     for index in range(max_count):
         if not has_any_indexed_value(value_lists, index):
             continue
@@ -133,7 +130,6 @@ def save_biochemistry_results(
             appointment_date_default,
         )
         current_creatinine = value_at(biochemistry_data.get("creatinine"), index)
-
         insert_biochemistry_result(
             cur=cur,
             appointment_id=appointment_id,
@@ -150,7 +146,6 @@ def save_biochemistry_results(
             ferritin=value_at(biochemistry_data.get("ferritin"), index),
             ptg=value_at(biochemistry_data.get("ptg"), index),
         )
-
         if current_creatinine:
             metric_sources.append(
                 {
@@ -185,14 +180,12 @@ def save_calculated_metrics(
             gender=gender,
             weight_kg=weight,
         )
-
         if not (
             metrics.get("egfr_ckdepi") is not None
             or metrics.get("crcl_cockcroft_gault") is not None
             or metrics.get("ckd_stage") is not None
         ):
             continue
-
         insert_calculated_metric(
             cur=cur,
             appointment_id=appointment_id,
@@ -222,11 +215,9 @@ def save_urinalysis_results(
         urinalysis_data.get("bacteria", []),
     ]
     max_count = max_list_length(urinalysis_data.get("dates", []), *value_lists)
-
     for index in range(max_count):
         if not has_any_indexed_value(value_lists, index):
             continue
-
         insert_urinalysis_result(
             cur=cur,
             appointment_id=appointment_id,
@@ -250,7 +241,6 @@ def save_albuminuria_results(
     Приоритет итоговой категории:
     1. категория по ACR, если заполнены альбумин и креатинин мочи;
     2. категория по суточной экскреции, если ACR рассчитать нельзя.
-
     Это сохраняет прежнюю логику ACR и добавляет второй предусмотренный схемой
     способ классификации без изменения KDIGO.
     """
@@ -267,11 +257,9 @@ def save_albuminuria_results(
         albuminuria_data.get("urine_creatinine_unit", []),
         albuminuria_data.get("daily_albumin_excretion", []),
     )
-
     for index in range(max_count):
         if not has_any_indexed_value(value_lists, index):
             continue
-
         current_albumin = value_at(albuminuria_data.get("urine_albumin"), index)
         current_albumin_unit = (
             value_at(albuminuria_data.get("urine_albumin_unit"), index) or "mg_l"
@@ -288,7 +276,6 @@ def save_albuminuria_results(
             albuminuria_data.get("daily_albumin_excretion"),
             index,
         )
-
         albuminuria_metrics = {
             "albumin_creatinine_ratio": None,
             "albuminuria_category": None,
@@ -300,13 +287,11 @@ def save_albuminuria_results(
                 urine_creatinine=current_creatinine,
                 urine_creatinine_unit=current_creatinine_unit,
             )
-
         category = albuminuria_metrics.get("albuminuria_category")
         if category is None:
             category = get_daily_albumin_excretion_category(
                 daily_albumin_excretion
             )
-
         insert_albuminuria_result(
             cur=cur,
             appointment_id=appointment_id,
@@ -342,11 +327,9 @@ def save_ultrasound_results(
         ultrasound_data.get("ultrasound_desc", []),
     ]
     max_count = max_list_length(ultrasound_data.get("dates", []), *value_lists)
-
     for index in range(max_count):
         if not has_any_indexed_value(value_lists, index):
             continue
-
         insert_ultrasound_result(
             cur=cur,
             appointment_id=appointment_id,
@@ -378,12 +361,12 @@ def save_diet_and_recommendations(cur: Any, appointment_id: int, diet_data: dict
 
 
 def save_prescriptions(cur: Any, appointment_id: int, prescriptions_data: dict[str, list[Any]]) -> None:
-    """Сохраняет лекарственные назначения."""
+    """Сохраняет лекарственные назначения вместе с группой терапии."""
+    therapy_groups = prescriptions_data.get("therapy_groups", [])
     medications = prescriptions_data.get("medications", [])
     dosages = prescriptions_data.get("dosages", [])
     schedules = prescriptions_data.get("schedules", [])
-    max_count = max_list_length(medications, dosages, schedules)
-
+    max_count = max_list_length(therapy_groups, medications, dosages, schedules)
     for index in range(max_count):
         medication = empty_to_none(value_at(medications, index))
         dosage = empty_to_none(value_at(dosages, index))
@@ -395,6 +378,7 @@ def save_prescriptions(cur: Any, appointment_id: int, prescriptions_data: dict[s
         insert_prescription(
             cur=cur,
             appointment_id=appointment_id,
+            therapy_group=normalize_therapy_group(value_at(therapy_groups, index)),
             medication=medication,
             dosage=dosage,
             schedule=schedule,
@@ -411,11 +395,9 @@ def save_appointment_details(
     """Главная функция сохранения содержимого приёма."""
     appointment_date_default = appointment_data["appointment_date_default"]
     examination_data = appointment_data["examination"]
-
     save_survey(cur, appointment_id, appointment_data["survey"])
     save_examination(cur, appointment_id, examination_data)
     save_cbc_results(cur, appointment_id, appointment_date_default, appointment_data["cbc"])
-
     metric_sources = save_biochemistry_results(
         cur,
         appointment_id,
@@ -431,7 +413,6 @@ def save_appointment_details(
         metric_sources=metric_sources,
         appointment_date_default=appointment_date_default,
     )
-
     save_urinalysis_results(
         cur,
         appointment_id,
@@ -455,12 +436,10 @@ def save_appointment_details(
         appointment_id,
         appointment_data["additional_studies"],
     )
-
     # Единственный источник диагнозов — структурированный МКБ-10 блок.
     save_appointment_icd10_diagnoses(cur, appointment_id, appointment_data["icd10"])
     save_diet_and_recommendations(cur, appointment_id, appointment_data["diet"])
     save_prescriptions(cur, appointment_id, appointment_data["prescriptions"])
-
     # Пересчитываем прогноз после сохранения метрик и альбуминурии.
     save_ckd_prognosis_for_appointment(
         appointment_id,

@@ -3,7 +3,6 @@
 
 Этот сервис не содержит SQL напрямую. Он вызывает repository-функции и собирает
 единый словарь для шаблона patient_card.html.
-
 Что выполняет файл:
 - загружает пациента;
 - загружает список приёмов пациента;
@@ -12,7 +11,6 @@
 - загружает истории анализов до даты выбранного приёма;
 - загружает сохранённые оценки риска KDIGO и строит матрицу для карточки;
 - возвращает совместимый context для существующего шаблона.
-
 Что редактировать здесь:
 - какие блоки данных показываются в карточке пациента;
 - какие истории загружаются для карточки;
@@ -27,10 +25,10 @@
 from __future__ import annotations
 
 from app.db.connection import get_db_connection
+from app.medication_therapy import build_medication_therapy_groups
 from app.repositories.appointments import (
     _fetch_appointment_diet,
     _fetch_appointment_full_data,
-    _fetch_appointment_medications,
     _fetch_patient_appointments,
 )
 from app.repositories.ckd_prognosis import (
@@ -47,6 +45,7 @@ from app.repositories.lab_history import (
     _fetch_patient_urinalysis_history,
 )
 from app.repositories.patients import _fetch_patient_by_id
+from app.repositories.prescriptions import _fetch_appointment_medications
 from app.repositories.reference_data import _fetch_appointment_icd10_diagnoses
 from app.services.kdigo_risk_matrix_service import build_kdigo_risk_matrix
 
@@ -65,7 +64,6 @@ def get_patient_card_context(
                 return None
 
             appointments = _fetch_patient_appointments(cur, patient_id)
-
             appointment_data = None
             if show_previous_labs and appointments and len(appointments) > 1:
                 prev_appointment_id = appointments[1]["appointment_id"]
@@ -73,28 +71,23 @@ def get_patient_card_context(
                 if appointment_data:
                     appointment_data["is_previous_labs"] = True
                     appointment_data["previous_labs_date"] = appointment_data.get("appointment_date")
-
             if not selected_appointment_id and appointments and not show_form:
                 selected_appointment_id = appointments[0]["appointment_id"]
 
             medications = []
             diet_info = None
             icd10_diagnoses = []
-
             if selected_appointment_id and not appointment_data:
                 appointment_data = _fetch_appointment_full_data(cur, int(selected_appointment_id))
                 if appointment_data and appointment_data.get("patient_id") != patient_id:
                     return {"patient": patient, "forbidden": True}
-
             if appointment_data and selected_appointment_id:
                 medications = _fetch_appointment_medications(cur, int(selected_appointment_id))
                 diet_info = _fetch_appointment_diet(cur, int(selected_appointment_id))
                 icd10_diagnoses = _fetch_appointment_icd10_diagnoses(cur, int(selected_appointment_id))
-
             until_date = None
             if not show_form and appointment_data and appointment_data.get("appointment_date"):
                 until_date = appointment_data["appointment_date"].date()
-
             ckd_prognosis_history = _fetch_patient_ckd_prognosis_history(cur, patient_id, until_date)
             ckd_prognosis_matrix = build_kdigo_risk_matrix(ckd_prognosis_history)
             ckd_prognosis_current_results = (
@@ -102,12 +95,14 @@ def get_patient_card_context(
                 if selected_appointment_id
                 else []
             )
-
             return {
                 "patient": patient,
                 "appointments": appointments,
                 "selected_appointment": appointment_data,
                 "medications": medications,
+                "medication_therapy_groups": build_medication_therapy_groups(
+                    prescriptions=medications
+                ),
                 "diet_info": diet_info,
                 "icd10_diagnoses": icd10_diagnoses,
                 "biochemistry_history": _fetch_patient_biochemistry_history(cur, patient_id, until_date),

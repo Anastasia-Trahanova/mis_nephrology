@@ -1,0 +1,80 @@
+{# Пять групп медикаментозной терапии. Подсказки ограничены своей группой, ручной ввод разрешён. #}
+{% macro medication_row(group, med=None) -%}
+<div class="row g-2 mb-2 medication-row">
+    <input type="hidden" name="therapy_group" value="{{ group.value }}">
+    <div class="col-md-4">
+        <input
+            type="text"
+            name="medication"
+            class="form-control"
+            value="{{ med.medication if med and med.medication else '' }}"
+            list="medications-{{ group.code }}"
+            autocomplete="off"
+            placeholder="Название препарата"
+        >
+    </div>
+    <div class="col-md-3">
+        <input
+            type="text"
+            name="dosage"
+            class="form-control"
+            value="{{ med.dosage if med and med.dosage else '' }}"
+            placeholder="Дозировка"
+        >
+    </div>
+    <div class="col-md-4">
+        <input
+            type="text"
+            name="schedule"
+            class="form-control"
+            value="{{ med.schedule if med and med.schedule else '' }}"
+            placeholder="Режим приёма"
+        >
+    </div>
+    <div class="col-md-1 d-flex align-items-center justify-content-center">
+        <button
+            type="button"
+            class="btn btn-sm btn-outline-danger remove-medication-row-btn"
+            title="Удалить строку"
+            aria-label="Удалить строку"
+        >✖</button>
+    </div>
+</div>
+{%- endmacro %}
+
+<div class="col-12 mt-3" data-medication-therapy>
+    <label class="form-label fw-bold mb-2">Медикаментозная терапия</label>
+
+    {% for group in medication_therapy_groups or [] %}
+    <datalist id="medications-{{ group.code }}">
+        {% for medication_name in group.suggestions %}
+        <option value="{{ medication_name }}"></option>
+        {% endfor %}
+    </datalist>
+
+    <div class="card mb-3 medication-therapy-group" data-medication-group="{{ group.value }}">
+        <div class="card-header bg-light fw-semibold">{{ group.title }}</div>
+        <div class="card-body">
+            <div class="medication-rows">
+                {% if group.prescriptions %}
+                    {% for med in group.prescriptions %}
+                        {{ medication_row(group, med) }}
+                    {% endfor %}
+                {% else %}
+                    {{ medication_row(group) }}
+                {% endif %}
+            </div>
+
+            <template class="medication-row-template">
+                {{ medication_row(group) }}
+            </template>
+
+            <button type="button" class="btn btn-sm btn-outline-secondary py-0 px-2 add-medication-row-btn">
+                ➕ Добавить ещё лекарство
+            </button>
+        </div>
+    </div>
+    {% endfor %}
+</div>
+
+<script src="/static/js/medication_therapy.js" defer></script>

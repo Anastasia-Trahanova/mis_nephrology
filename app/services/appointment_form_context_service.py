@@ -15,11 +15,10 @@ from datetime import date, datetime
 from typing import Any
 
 from fastapi import HTTPException
-
 from app.db.connection import get_db_connection
+from app.medication_therapy import build_medication_therapy_groups
 from app.repositories.appointments import (
     _fetch_appointment_diet,
-    _fetch_appointment_medications,
     _fetch_last_appointment_data,
     _fetch_patient_appointments,
 )
@@ -33,6 +32,7 @@ from app.repositories.lab_history import (
     _fetch_patient_urinalysis_history,
 )
 from app.repositories.patients import _fetch_patient_by_id
+from app.repositories.prescriptions import _fetch_appointment_medications
 from app.repositories.reference_data import (
     _fetch_appointment_icd10_diagnoses,
     _fetch_branches,
@@ -87,7 +87,6 @@ def _prepare_kdigo_previous_gfr_data(metrics_history) -> list[dict[str, str]]:
     """Готовит историю СКФ для fallback-расчёта KDIGO в форме повторного приёма."""
     result: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
-
     for item in metrics_history or []:
         current_date = _date_to_iso(_row_get(item, "investigation_date"))
         category = _row_get(item, "ckd_stage")
@@ -106,7 +105,6 @@ def _prepare_kdigo_previous_albuminuria_data(albuminuria_history) -> list[dict[s
     """Готовит историю альбуминурии для fallback-расчёта KDIGO в форме повторного приёма."""
     result: list[dict[str, str]] = []
     seen: set[tuple[str, str]] = set()
-
     for item in albuminuria_history or []:
         current_date = _date_to_iso(_row_get(item, "investigation_date"))
         category = _row_get(item, "albuminuria_category")
@@ -129,14 +127,12 @@ def _current_doctor_context(cur: Any, current_doctor_id: int) -> dict[str, Any]:
             status_code=403,
             detail="Пользователь-врач не найден в справочнике врачей",
         )
-
     doctor_locations = _fetch_doctor_locations(cur, current_doctor_id)
     if not doctor_locations:
         raise HTTPException(
             status_code=403,
             detail="Для текущего врача не настроены отделения",
         )
-
     return {
         "current_doctor": current_doctor,
         "doctor_locations": doctor_locations,
@@ -154,11 +150,9 @@ def get_new_appointment_context(patient_id: int, current_doctor_id: int):
             patient = _fetch_patient_by_id(cur, patient_id)
             if not patient:
                 return None
-
             appointments = _fetch_patient_appointments(cur, patient_id)
             last_appointment = _fetch_last_appointment_data(cur, patient_id)
             last_appointment_id = appointments[0]["appointment_id"] if appointments else None
-
             last_icd10_diagnoses = []
             last_icd10_diagnoses_grouped = {
                 "main": None,
@@ -168,11 +162,15 @@ def get_new_appointment_context(patient_id: int, current_doctor_id: int):
             if last_appointment_id:
                 last_icd10_diagnoses = _fetch_appointment_icd10_diagnoses(cur, last_appointment_id)
                 last_icd10_diagnoses_grouped = _group_icd10_diagnoses_for_form(last_icd10_diagnoses)
-
             metrics_history = _fetch_patient_metrics_history(cur, patient_id)
             albuminuria_history = _fetch_patient_albuminuria_history(cur, patient_id)
             kdigo_previous_history = _fetch_patient_ckd_prognosis_history(cur, patient_id)
-
+            last_medications = (
+                _fetch_appointment_medications(cur, last_appointment_id)
+                if last_appointment_id
+                else []
+            )
+            medications_dictionary = _fetch_medications_dictionary(cur)
             context = {
                 "patient": patient,
                 "appointments": appointments,
@@ -180,9 +178,11 @@ def get_new_appointment_context(patient_id: int, current_doctor_id: int):
                 "last_appointment": last_appointment,
                 "last_icd10_diagnoses": last_icd10_diagnoses,
                 "last_icd10_diagnoses_grouped": last_icd10_diagnoses_grouped,
-                "last_medications": _fetch_appointment_medications(cur, last_appointment_id)
-                if last_appointment_id
-                else [],
+                "last_medications": last_medications,
+                "medication_therapy_groups": build_medication_therapy_groups(
+                    medications_dictionary,
+                    last_medications,
+                ),
                 "last_diet_info": _fetch_appointment_diet(cur, last_appointment_id)
                 if last_appointment_id
                 else None,
@@ -193,7 +193,7 @@ def get_new_appointment_context(patient_id: int, current_doctor_id: int):
                 "ultrasound_history": _fetch_patient_ultrasound_history(cur, patient_id),
                 "metrics_history": metrics_history,
                 "icd10_diagnoses": _fetch_icd10_diagnoses(cur),
-                "medications_dictionary": _fetch_medications_dictionary(cur),
+                "medications_dictionary": medications_dictionary,
                 "kdigo_previous_gfr_data": _prepare_kdigo_previous_gfr_data(metrics_history),
                 "kdigo_previous_albuminuria_data": _prepare_kdigo_previous_albuminuria_data(
                     albuminuria_history
@@ -208,10 +208,15 @@ def get_new_patient_context(current_doctor_id: int):
     """Собирает данные для формы нового пациента одним соединением к БД."""
     with get_db_connection() as conn:
         with conn.cursor() as cur:
+            medications_dictionary = _fetch_medications_dictionary(cur)
             context = {
                 "branches": _fetch_branches(cur),
                 "icd10_diagnoses": _fetch_icd10_diagnoses(cur),
-                "medications_dictionary": _fetch_medications_dictionary(cur),
+                "medications_dictionary": medications_dictionary,
+                "medication_therapy_groups": build_medication_therapy_groups(
+                    medications_dictionary,
+                    [],
+                ),
                 "kdigo_previous_gfr_data": [],
                 "kdigo_previous_albuminuria_data": [],
                 "kdigo_previous_history_matrix": build_kdigo_risk_matrix([]),

@@ -1,9 +1,9 @@
 {#
 Назначение файла:
 Блок назначений.
-
 Что делает:
 - выводит диету, рекомендации, лекарства и дату следующего контроля;
+- группирует лекарства по сохранённому типу назначения;
 - сохраняет исходное место блока: после заключения и перед кнопкой Word-экспорта.
 #}
 <!-- Назначения -->
@@ -11,19 +11,30 @@
 <p><strong>Диета:</strong> {{ diet_info.diet if diet_info and diet_info.diet else '—' }}</p>
 <p><strong>Рекомендации:</strong> {{ diet_info.recommendations if diet_info and diet_info.recommendations else '—' }}</p>
 <p><strong>Медикаментозная терапия:</strong></p>
-{% if medications %}
-  <ul>
-    {% for med in medications %}
-      <li>
-        <strong>{{ med.medication or '—' }}</strong>
-        {% if med.dosage %} — {{ med.dosage }}{% endif %}
-        {% if med.schedule %} ({{ med.schedule }}){% endif %}
-      </li>
-    {% endfor %}
-  </ul>
-{% else %}
+
+{% set medication_state = namespace(has_items=false) %}
+{% for group in medication_therapy_groups or [] %}
+  {% if group.prescriptions %}
+    {% set medication_state.has_items = true %}
+    <div class="mb-3">
+      <div class="fw-semibold mb-1">{{ group.title }}</div>
+      <ul class="mb-0">
+        {% for med in group.prescriptions %}
+          <li>
+            <strong>{{ med.medication or '—' }}</strong>
+            {% if med.dosage %} — {{ med.dosage }}{% endif %}
+            {% if med.schedule %} ({{ med.schedule }}){% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+{% endfor %}
+
+{% if not medication_state.has_items %}
   <p>—</p>
 {% endif %}
+
 <p><strong>Дата следующего контроля:</strong>
   {% if diet_info and diet_info.next_control_date %}
     {{ diet_info.next_control_date.strftime('%d.%m.%Y') }}
