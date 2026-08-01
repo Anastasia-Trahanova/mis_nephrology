@@ -6,6 +6,12 @@
 
 {% block content %}
 <div class="ckd-registry-page">
+  {% if request.query_params.get('registry_status') == 'removed' %}
+  <div class="alert alert-success" role="status">Пациент удалён из активного регистра ХБП. Его ЭМК и приёмы не удалены.</div>
+  {% endif %}
+  {% if request.query_params.get('registry_error') %}
+  <div class="alert alert-danger" role="alert">{{ request.query_params.get('registry_error') }}</div>
+  {% endif %}
   <header class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
     <div>
       <h2 class="mb-1">Регистр пациентов с ХБП</h2>
@@ -141,7 +147,10 @@
               <span class="ckd-outcome ckd-outcome--{{ row.outcome_type or 'none' }}">{{ row.outcome_label }}</span>
               {% if row.outcome_date %}<div class="text-muted ckd-registry-outcome-date">с {{ row.outcome_date.strftime('%d.%m.%Y') }}</div>{% endif %}
             </td>
-            <td class="ckd-registry-action-cell"><a class="btn btn-sm btn-outline-primary ckd-registry-open-button" data-ckd-open-patient href="/patient/{{ row.patient_id }}" title="Открыть электронную медицинскую карту">ЭМК</a></td>
+            <td class="ckd-registry-action-cell">
+              <a class="btn btn-sm btn-outline-primary ckd-registry-open-button" data-ckd-open-patient href="/patient/{{ row.patient_id }}" title="Открыть электронную медицинскую карту">ЭМК</a>
+              
+            </td>
           </tr>
           {% endfor %}
         </tbody>

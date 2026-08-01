@@ -6,6 +6,7 @@
 
 {% block extra_head %}
 <link rel="stylesheet" href="{{ url_for('static', path='css/08_ckd_registry.css') }}">
+<link rel="stylesheet" href="{{ url_for('static', path='css/09_ckd_registry_validation.css') }}">
 {% endblock %}
 
 {% block content %}
@@ -15,7 +16,6 @@
 </style>
 
 {% include "patient_card/_header.html" %}
-
 <div class="row g-4 align-items-start">
   <div class="col-md-3 patient-card-sidebar align-self-start">
     {% include "patient_card/_ckd_registry_panel.html" %}
@@ -28,7 +28,6 @@
 
         <div class="card-body" id="printContent">
           {% include "patient_card/_visit_summary.html" %}
-
           <hr>
           {% include "patient_card/_patient_brief.html" %}
 
@@ -44,7 +43,6 @@
 
           <hr>
           {% include "patient_card/_urinalysis_history.html" %}
-
           <hr>
           {% include "patient_card/_biochemistry_history.html" %}
 
@@ -57,7 +55,6 @@
           <hr>
           {% include "patient_card/_ultrasound_history.html" %}
           {% include "patient_card/_other_instrumental_studies.html" %}
-
           <hr>
           <h4 class="mt-3 mb-3">Заключение</h4>
 
@@ -78,7 +75,7 @@
 </div>
 
 {% endblock %}
-
 {% block extra_scripts %}
 <script src="{{ url_for('static', path='js/ckd_registry_patient_card.js') }}" defer></script>
+<script src="{{ url_for('static', path='js/ckd_registry_include_validation.js') }}" defer></script>
 {% endblock %}

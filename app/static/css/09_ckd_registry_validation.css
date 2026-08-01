@@ -1,0 +1,30 @@
+/* Проверка обязательных полей формы включения пациента в регистр ХБП. */
+[data-ckd-include-form] .form-control.is-invalid,
+[data-ckd-include-form] .form-select.is-invalid {
+  border-color: #dc3545 !important;
+  background-color: #fff8f8;
+  box-shadow: 0 0 0 .12rem rgba(220, 53, 69, .12);
+}
+
+[data-ckd-include-form] .form-control.is-invalid:focus,
+[data-ckd-include-form] .form-select.is-invalid:focus {
+  border-color: #b02a37 !important;
+  box-shadow: 0 0 0 .2rem rgba(220, 53, 69, .22);
+}
+
+.ckd-registry-validation-summary {
+  margin-bottom: .75rem;
+  padding: .65rem .8rem;
+  font-size: .92rem;
+}
+
+.ckd-registry-invalid-feedback {
+  margin-top: .25rem;
+  color: #b02a37;
+  font-size: .8rem;
+  line-height: 1.25;
+}
+
+.ckd-registry-invalid-feedback[hidden] {
+  display: none !important;
+}

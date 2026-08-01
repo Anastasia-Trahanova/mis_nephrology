@@ -210,7 +210,7 @@ def _fetch_registry_entry(cur: Any, patient_id: int) -> dict[str, Any] | None:
             ORDER BY o.outcome_date DESC, o.created_at DESC, o.id DESC
             LIMIT 1
         ) latest_outcome ON TRUE
-        WHERE e.patient_id = %s
+        WHERE e.patient_id = %s AND e.is_active = TRUE
         LIMIT 1
         """,
         (patient_id,),
@@ -240,19 +240,25 @@ def get_patient_registry_context(patient_id: int) -> dict[str, Any] | None:
             }
 
 
+def _required_text(value: Any, label: str) -> str:
+    """Возвращает непустое строковое значение обязательного поля."""
+    normalized = str(value or "").strip()
+    if not normalized:
+        raise RegistryValidationError(f"Заполните поле «{label}»")
+    return normalized
+
+
 def _validate_identity(last_name: str, first_name: str, birth_date: date) -> tuple[str, str]:
-    last_name = str(last_name or "").strip()
-    first_name = str(first_name or "").strip()
-    if not last_name or not first_name:
-        raise RegistryValidationError("Фамилия и имя обязательны")
+    last_name = _required_text(last_name, "Фамилия")
+    first_name = _required_text(first_name, "Имя")
     if birth_date > date.today() or birth_date < date(1900, 1, 1):
         raise RegistryValidationError("Проверьте дату рождения")
     return last_name, first_name
 
 
-def _normalize_egfr(value: Any) -> Decimal | None:
-    if value in (None, ""):
-        return None
+def _normalize_egfr(value: Any) -> Decimal:
+    if value in (None, "") or not str(value).strip():
+        raise RegistryValidationError("Заполните поле «СКФ»")
     try:
         parsed = Decimal(str(value).strip().replace(",", "."))
     except (InvalidOperation, ValueError):
@@ -279,19 +285,19 @@ def add_patient_to_registry(
 ) -> int:
     """Обновляет проверенные данные пациента и включает его в регистр."""
     last_name, first_name = _validate_identity(last_name, first_name, birth_date)
-    patronymic = str(patronymic or "").strip() or None
-    phone = str(phone or "").strip() or None
-    diagnosis = str(diagnosis or "").strip()
-    if not diagnosis:
-        raise RegistryValidationError("Основной диагноз обязателен")
+    patronymic = _required_text(patronymic, "Отчество")
+    phone = _required_text(phone, "Телефон")
+    diagnosis = _required_text(diagnosis, "Основной диагноз")
     egfr_value = _normalize_egfr(egfr)
-    stage = str(stage or "").strip() or None
-    if stage is not None and stage not in STAGES:
+    stage = _required_text(stage, "Стадия ХБП")
+    if stage not in STAGES:
         raise RegistryValidationError("Выберите корректную стадию ХБП")
-    outcome = str(outcome or "").strip() or None
+    # «Наблюдается» — обязательный выбранный статус, но отдельная строка исхода для него не создаётся.
+    outcome_value = str(outcome or "").strip()
+    outcome = None if outcome_value in {"", "observed"} else outcome_value
     if outcome is not None and outcome not in OUTCOME_LABELS:
         raise RegistryValidationError("Выберите корректный исход")
-    comment = str(comment or "").strip() or None
+    comment = _required_text(comment, "Комментарий")
     today = date.today()
 
     with get_db_connection() as conn:
@@ -300,10 +306,16 @@ def add_patient_to_registry(
             if not cur.fetchone():
                 raise RegistryValidationError("Пациент не найден")
             cur.execute(
-                "SELECT id FROM ckd_registry_entries WHERE patient_id = %s",
+                """
+                SELECT id, is_active
+                FROM ckd_registry_entries
+                WHERE patient_id = %s
+                FOR UPDATE
+                """,
                 (patient_id,),
             )
-            if cur.fetchone():
+            existing_entry = cur.fetchone()
+            if existing_entry and existing_entry["is_active"]:
                 raise RegistryConflictError("Пациент уже добавлен в регистр ХБП")
 
             cur.execute(
@@ -318,27 +330,53 @@ def add_patient_to_registry(
                 """,
                 (last_name, first_name, patronymic, birth_date, phone, patient_id),
             )
-            cur.execute(
-                """
-                INSERT INTO ckd_registry_entries (
-                    patient_id, included_at, included_by_user_id,
-                    diagnosis_at_inclusion, egfr_at_inclusion,
-                    ckd_stage_at_inclusion, comment_at_inclusion
+            if existing_entry:
+                registry_entry_id = int(existing_entry["id"])
+                cur.execute(
+                    """
+                    UPDATE ckd_registry_entries
+                    SET included_at = %s,
+                        included_by_user_id = %s,
+                        diagnosis_at_inclusion = %s,
+                        egfr_at_inclusion = %s,
+                        ckd_stage_at_inclusion = %s,
+                        comment_at_inclusion = %s,
+                        is_active = TRUE,
+                        updated_at = now()
+                    WHERE id = %s
+                    """,
+                    (
+                        today,
+                        user_id,
+                        diagnosis,
+                        egfr_value,
+                        stage,
+                        comment,
+                        registry_entry_id,
+                    ),
                 )
-                VALUES (%s, %s, %s, %s, %s, %s, %s)
-                RETURNING id
-                """,
-                (
-                    patient_id,
-                    today,
-                    user_id,
-                    diagnosis,
-                    egfr_value,
-                    stage,
-                    comment,
-                ),
-            )
-            registry_entry_id = int(cur.fetchone()["id"])
+            else:
+                cur.execute(
+                    """
+                    INSERT INTO ckd_registry_entries (
+                        patient_id, included_at, included_by_user_id,
+                        diagnosis_at_inclusion, egfr_at_inclusion,
+                        ckd_stage_at_inclusion, comment_at_inclusion
+                    )
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
+                    RETURNING id
+                    """,
+                    (
+                        patient_id,
+                        today,
+                        user_id,
+                        diagnosis,
+                        egfr_value,
+                        stage,
+                        comment,
+                    ),
+                )
+                registry_entry_id = int(cur.fetchone()["id"])
             if outcome:
                 cur.execute(
                     """
@@ -351,6 +389,30 @@ def add_patient_to_registry(
                     (registry_entry_id, outcome, today, comment, user_id),
                 )
             return registry_entry_id
+
+
+
+def remove_patient_from_registry(*, patient_id: int, user_id: int) -> int:
+    """Скрывает ошибочно включённого пациента, не удаляя его ЭМК."""
+    if patient_id <= 0 or user_id <= 0:
+        raise RegistryValidationError("Не удалось определить пациента или пользователя")
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                UPDATE ckd_registry_entries
+                SET is_active = FALSE,
+                    updated_at = now()
+                WHERE patient_id = %s AND is_active = TRUE
+                RETURNING id
+                """,
+                (patient_id,),
+            )
+            row = cur.fetchone()
+            if not row:
+                raise RegistryValidationError("Пациент не состоит в активном регистре ХБП")
+            return int(row["id"])
 
 
 def add_registry_outcome(

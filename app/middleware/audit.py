@@ -242,6 +242,14 @@ def classify_request(request: Request, status_code: int) -> AuditAction | None:
                 details="пациент включён в локальный регистр ХБП",
             )
 
+        patient_id = _match_int(r"/ckd-registry/patient/(\d+)/remove", path)
+        if patient_id is not None:
+            return AuditAction(
+                action="remove_local_ckd_registry_patient",
+                patient_id=patient_id,
+                details="пациент удалён из активного локального регистра ХБП",
+            )
+
         patient_id = _match_int(r"/ckd-registry/patient/(\d+)/outcome", path)
         if patient_id is not None:
             return AuditAction(

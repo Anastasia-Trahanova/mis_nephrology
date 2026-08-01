@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import date
 from io import BytesIO
-from urllib.parse import urlencode
+from urllib.parse import parse_qsl, urlencode
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
@@ -20,6 +20,7 @@ from app.repositories.ckd_registry import (
     add_registry_outcome,
     build_ckd_registry_xlsx,
     get_ckd_registry,
+    remove_patient_from_registry,
 )
 from app.security.permissions import (
     ROLE_ADMIN,
@@ -57,6 +58,25 @@ def _patient_redirect(patient_id: int, *, status: str | None = None, error: str 
         params["registry_error"] = error[:300]
     suffix = f"?{urlencode(params)}" if params else ""
     return RedirectResponse(url=f"/patient/{patient_id}{suffix}", status_code=303)
+
+
+def _registry_redirect(*, return_query: str = "", status: str | None = None, error: str | None = None):
+    """Возвращает на регистр, сохраняя только известные параметры фильтра."""
+    allowed = {
+        "search", "stage", "egfr_operator", "egfr_from", "egfr_to", "outcome",
+        "included_from", "included_to", "page", "page_size",
+    }
+    params = {
+        key: value
+        for key, value in parse_qsl(str(return_query or "")[:2000], keep_blank_values=False)
+        if key in allowed
+    }
+    if status:
+        params["registry_status"] = status
+    if error:
+        params["registry_error"] = error[:300]
+    suffix = f"?{urlencode(params)}" if params else ""
+    return RedirectResponse(url=f"/ckd-registry{suffix}", status_code=303)
 
 
 @router.get("/ckd-registry", response_class=HTMLResponse)
@@ -101,7 +121,7 @@ def include_patient_in_registry(
     diagnosis: str = Form(...),
     egfr: str = Form(""),
     stage: str = Form(""),
-    outcome: str = Form(""),
+    outcome: str = Form("observed"),
     comment: str = Form(""),
 ):
     try:
@@ -123,6 +143,25 @@ def include_patient_in_registry(
     except (RegistryValidationError, RegistryConflictError) as exc:
         return _patient_redirect(patient_id, error=str(exc))
     return _patient_redirect(patient_id, status="included")
+
+
+
+@router.post("/ckd-registry/patient/{patient_id}/remove")
+def remove_patient_from_ckd_registry(
+    request: Request,
+    patient_id: int,
+    return_query: str = Form(""),
+):
+    try:
+        require_ckd_registry_access(request)
+        try:
+            user_id = int(request.session.get("user_id"))
+        except (TypeError, ValueError) as exc:
+            raise RegistryValidationError("Не удалось определить пользователя") from exc
+        remove_patient_from_registry(patient_id=patient_id, user_id=user_id)
+    except RegistryValidationError as exc:
+        return _registry_redirect(return_query=return_query, error=str(exc))
+    return _registry_redirect(return_query=return_query, status="removed")
 
 
 @router.post("/ckd-registry/patient/{patient_id}/outcome")

@@ -74,4 +74,14 @@
       nextPage.click();
     }
   });
+  document.querySelectorAll("[data-ckd-remove-form]").forEach((removeForm) => {
+    removeForm.addEventListener("submit", (event) => {
+      const patientName = removeForm.dataset.patientFio || "этого пациента";
+      const confirmed = window.confirm(
+        `Удалить ${patientName} из активного регистра ХБП? ЭМК и приёмы останутся без изменений.`
+      );
+      if (!confirmed) event.preventDefault();
+    });
+  });
+
 })();
