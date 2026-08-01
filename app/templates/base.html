@@ -35,6 +35,7 @@
                 {% endif %}
                 {% if current_role == 'admin' or current_role in ('chief_physician', 'department_head') %}
                 <a class="nav-link{% if request.url.path.startswith('/ckd-registry') %} active{% endif %}" href="/ckd-registry">Регистр ХБП</a>
+                <a class="nav-link{% if request.url.path.startswith('/analytics') %} active{% endif %}" href="/analytics">Аналитика</a>
                 {% endif %}
                 <a class="nav-link{% if request.url.path.startswith('/clinical-reference') %} active{% endif %}" href="/clinical-reference">Клинический справочник</a>
                 {% if request.session.get('role') == 'admin' %}
@@ -78,6 +79,7 @@
     {% set is_patient_lists_page = current_path.startswith('/patient-lists') %}
     {% set is_ckd_registry_page = current_path.startswith('/ckd-registry') %}
     {% set is_audit_page = current_path == '/admin/audit' %}
+    {% set is_analytics_page = current_path.startswith('/analytics') %}
     <div
         class="modal fade hotkeys-modal"
         id="hotkeysHelpModal"
@@ -97,6 +99,7 @@
                             {% elif is_patient_lists_page %}Списки пациентов
                             {% elif is_ckd_registry_page %}Регистр ХБП
                             {% elif is_audit_page %}Журнал аудита
+                            {% elif is_analytics_page %}Аналитика
                             {% elif is_main_page %}Список приёмов
                             {% else %}Текущая страница{% endif %}
                         </div>

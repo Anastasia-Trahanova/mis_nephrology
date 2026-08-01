@@ -10,7 +10,6 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.middleware.sessions import SessionMiddleware
 from starlette.middleware.trustedhost import TrustedHostMiddleware
-
 from .middleware.audit import AuditMiddleware
 from .routers import (
     admin,
@@ -23,6 +22,7 @@ from .routers import (
     exports,
     home,
     lab_api,
+    management_analytics,
     patient_lists,
     patient_pages,
     patients,
@@ -149,5 +149,6 @@ app.include_router(appointments.router, dependencies=protected_dependencies)
 app.include_router(clinical_reference.router, dependencies=protected_dependencies)
 app.include_router(patient_lists.router, dependencies=protected_dependencies)
 app.include_router(ckd_registry.router, dependencies=protected_dependencies)
+app.include_router(management_analytics.router, dependencies=protected_dependencies)
 app.include_router(admin.router, dependencies=protected_dependencies)
 app.include_router(schedule.router, dependencies=protected_dependencies)

@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/09_management_analytics.css') }}">
+{% endblock %}
+
+{% block content %}
+<div class="management-analytics-page">
+  <header class="analytics-header mb-3">
+    <h2 class="mb-1">Аналитика</h2>
+    <p class="text-muted mb-0">Нагрузка по отделениям, расписанию и врачам</p>
+  </header>
+
+  <section class="card shadow-sm analytics-filter-card mb-3" aria-labelledby="analyticsFiltersTitle">
+    <div class="card-body">
+      <h3 class="visually-hidden" id="analyticsFiltersTitle">Фильтры аналитики</h3>
+      <form method="get" action="/analytics" id="analyticsFilterForm" class="analytics-filter-form">
+        <div class="analytics-filter-field analytics-filter-date">
+          <label class="form-label" for="analyticsDateFrom">Период с</label>
+          <input class="form-control" type="date" id="analyticsDateFrom" name="date_from" value="{{ dashboard.filters.date_from.isoformat() }}" required>
+        </div>
+        <div class="analytics-filter-field analytics-filter-date">
+          <label class="form-label" for="analyticsDateTo">по</label>
+          <input class="form-control" type="date" id="analyticsDateTo" name="date_to" value="{{ dashboard.filters.date_to.isoformat() }}" required>
+        </div>
+        <div class="analytics-filter-field analytics-filter-location">
+          <label class="form-label" for="analyticsLocation">Отделение</label>
+          <select class="form-select" id="analyticsLocation" name="analytics_location_id">
+            <option value="">Все отделения</option>
+            {% for location in dashboard.locations %}
+            <option value="{{ location.id }}" {% if dashboard.filters.location_id == location.id %}selected{% endif %}>{{ location.display_name }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="analytics-filter-field analytics-filter-doctor">
+          <label class="form-label" for="analyticsDoctor">Врач</label>
+          <select class="form-select" id="analyticsDoctor" name="analytics_doctor_id">
+            <option value="">Все врачи</option>
+            {% for doctor in dashboard.doctors %}
+            <option
+              value="{{ doctor.id }}"
+              data-location-ids="{{ doctor.location_ids|join(',') }}"
+              {% if dashboard.filters.doctor_id == doctor.id %}selected{% endif %}
+            >{{ doctor.fio }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="analytics-filter-actions">
+          <button class="btn btn-primary" type="submit">Применить</button>
+          <a class="btn btn-outline-secondary" href="/analytics">Сбросить</a>
+        </div>
+        <div class="dropdown analytics-export-dropdown">
+          <button class="btn btn-outline-primary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false">
+            Выгрузить
+          </button>
+          <ul class="dropdown-menu dropdown-menu-end">
+            <li><a class="dropdown-item" href="/analytics/export.xlsx?{{ dashboard.filter_query }}&report=all">Общий аналитический отчёт</a></li>
+            <li><hr class="dropdown-divider"></li>
+            <li><a class="dropdown-item" href="/analytics/export.xlsx?{{ dashboard.filter_query }}&report=doctors">Нагрузка по врачам</a></li>
+            <li><a class="dropdown-item" href="/analytics/export.xlsx?{{ dashboard.filter_query }}&report=departments">Сводка по отделениям</a></li>
+            <li><a class="dropdown-item" href="/analytics/export.xlsx?{{ dashboard.filter_query }}&report=statuses">Расписание и статусы</a></li>
+            <li><a class="dropdown-item" href="/analytics/export.xlsx?{{ dashboard.filter_query }}&report=issues">Неявки и отмены</a></li>
+          </ul>
+        </div>
+      </form>
+      <div class="invalid-feedback d-block analytics-filter-error" id="analyticsFilterError" hidden></div>
+    </div>
+  </section>
+
+  <section class="analytics-kpi-grid mb-3" aria-label="Основные показатели">
+    <article class="analytics-kpi-card analytics-kpi-blue">
+      <div class="analytics-kpi-icon" aria-hidden="true">▦</div>
+      <div><div class="analytics-kpi-value">{{ dashboard.summary.schedule_count }}</div><div class="analytics-kpi-label">Записей в расписании</div></div>
+    </article>
+    <article class="analytics-kpi-card analytics-kpi-green">
+      <div class="analytics-kpi-icon" aria-hidden="true">✓</div>
+      <div><div class="analytics-kpi-value">{{ dashboard.summary.completed_count }}</div><div class="analytics-kpi-label">Проведено приёмов</div></div>
+    </article>
+    <article class="analytics-kpi-card analytics-kpi-purple">
+      <div class="analytics-kpi-icon" aria-hidden="true">♙</div>
+      <div><div class="analytics-kpi-value">{{ dashboard.summary.doctors_count }}</div><div class="analytics-kpi-label">Врачей с приёмами</div></div>
+    </article>
+    <article class="analytics-kpi-card analytics-kpi-red">
+      <div class="analytics-kpi-icon" aria-hidden="true">!</div>
+      <div>
+        <div class="analytics-kpi-value">{{ dashboard.summary.no_show_count }}</div>
+        <div class="analytics-kpi-label">Неявок</div>
+        <div class="analytics-kpi-note">{{ dashboard.summary.no_show_rate }}% от записей</div>
+      </div>
+    </article>
+  </section>
+
+  <section class="analytics-chart-grid mb-3">
+    <article class="card shadow-sm analytics-panel">
+      <div class="card-body">
+        <div class="analytics-panel-title-row">
+          <h3 class="h5 mb-0">Загрузка отделений</h3>
+          <span class="text-muted small">по количеству проведённых приёмов</span>
+        </div>
+        {% if dashboard.departments %}
+        <div class="analytics-bars" role="img" aria-label="Количество приёмов по отделениям">
+          {% for row in dashboard.departments %}
+          <button
+            type="button"
+            class="analytics-bar-item"
+            data-location-id="{{ row.location_id }}"
+            title="{{ row.display_name }}: {{ row.completed_count }}"
+          >
+            <span class="analytics-bar-value">{{ row.completed_count }}</span>
+            <span class="analytics-bar-track"><span class="analytics-bar-fill" style="height: {{ row.chart_percent }}%"></span></span>
+            <span class="analytics-bar-label">{{ row.display_name }}</span>
+          </button>
+          {% endfor %}
+        </div>
+        {% else %}
+        <div class="analytics-empty">За выбранный период приёмов нет.</div>
+        {% endif %}
+      </div>
+    </article>
+
+    <article class="card shadow-sm analytics-panel">
+      <div class="card-body">
+        <h3 class="h5 mb-3">Статусы записей в расписании</h3>
+        <div class="analytics-status-layout">
+          <div
+            class="analytics-donut{% if dashboard.statuses.total == 0 %} empty{% endif %}"
+            style="--completed-end: {{ dashboard.statuses.completed_end }}%; --planned-end: {{ dashboard.statuses.planned_end }}%; --no-show-end: {{ dashboard.statuses.no_show_end }}%;"
+            role="img"
+            aria-label="Распределение статусов записей"
+          >
+            <div class="analytics-donut-center"><strong>{{ dashboard.statuses.total }}</strong><span>записей</span></div>
+          </div>
+          <div class="analytics-status-legend">
+            <div><span class="analytics-legend-dot completed"></span><span>Проведено по записи</span><strong>{{ dashboard.statuses.completed }} ({{ dashboard.statuses.completed_percent }}%)</strong></div>
+            <div><span class="analytics-legend-dot planned"></span><span>Запланировано</span><strong>{{ dashboard.statuses.planned }} ({{ dashboard.statuses.planned_percent }}%)</strong></div>
+            <div><span class="analytics-legend-dot no-show"></span><span>Неявка</span><strong>{{ dashboard.statuses.no_show }} ({{ dashboard.statuses.no_show_percent }}%)</strong></div>
+            <div><span class="analytics-legend-dot cancelled"></span><span>Отменено</span><strong>{{ dashboard.statuses.cancelled }} ({{ dashboard.statuses.cancelled_percent }}%)</strong></div>
+          </div>
+        </div>
+      </div>
+    </article>
+  </section>
+
+  <section class="analytics-table-grid">
+    <article class="card shadow-sm analytics-panel analytics-doctors-panel">
+      <div class="card-body">
+        <h3 class="h5 mb-3">Нагрузка по врачам</h3>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle analytics-table" id="analyticsDoctorsTable">
+            <thead>
+              <tr>
+                <th><button type="button" data-sort-column="0" data-sort-type="text">Врач</button></th>
+                <th><button type="button" data-sort-column="1" data-sort-type="text">Отделение</button></th>
+                <th><button type="button" data-sort-column="2" data-sort-type="number">Приёмов</button></th>
+                <th><button type="button" data-sort-column="3" data-sort-type="number">Рабочих дней</button></th>
+                <th><button type="button" data-sort-column="4" data-sort-type="number">Среднее в день</button></th>
+                <th><button type="button" data-sort-column="5" data-sort-type="number">Первичных</button></th>
+                <th><button type="button" data-sort-column="6" data-sort-type="number">Повторных</button></th>
+                <th><button type="button" data-sort-column="7" data-sort-type="number">Неявок</button></th>
+                <th>Нагрузка</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in dashboard.doctors_stats %}
+              <tr>
+                <td data-sort-value="{{ row.doctor_fio }}">{{ row.doctor_fio }}</td>
+                <td data-sort-value="{{ row.location_display_name }}">{{ row.location_display_name }}</td>
+                <td data-sort-value="{{ row.completed_count }}">{{ row.completed_count }}</td>
+                <td data-sort-value="{{ row.active_days }}">{{ row.active_days }}</td>
+                <td data-sort-value="{{ row.average_per_day }}">{{ row.average_per_day }}</td>
+                <td data-sort-value="{{ row.primary_count }}">{{ row.primary_count }}</td>
+                <td data-sort-value="{{ row.repeat_count }}">{{ row.repeat_count }}</td>
+                <td data-sort-value="{{ row.no_show_count }}">{{ row.no_show_count }}</td>
+                <td><span class="analytics-load-badge {{ row.load_class }}">{{ row.load_label }}</span></td>
+              </tr>
+              {% else %}
+              <tr><td colspan="9" class="analytics-empty-cell">Нет данных за выбранный период.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </article>
+
+    <article class="card shadow-sm analytics-panel analytics-departments-panel">
+      <div class="card-body">
+        <h3 class="h5 mb-3">Сводка по отделениям</h3>
+        <div class="table-responsive">
+          <table class="table table-sm align-middle analytics-table" id="analyticsDepartmentsTable">
+            <thead>
+              <tr>
+                <th>Отделение</th>
+                <th>Врачей</th>
+                <th>Записей</th>
+                <th>Приёмов</th>
+                <th>Неявок</th>
+                <th>Среднее в день</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in dashboard.departments %}
+              <tr>
+                <td><button type="button" class="analytics-location-link" data-location-id="{{ row.location_id }}">{{ row.display_name }}</button></td>
+                <td>{{ row.doctors_count }}</td>
+                <td>{{ row.schedule_count }}</td>
+                <td>{{ row.completed_count }}</td>
+                <td>{{ row.no_show_count }} <span class="text-muted">({{ row.no_show_rate }}%)</span></td>
+                <td>{{ row.average_per_day }}</td>
+              </tr>
+              {% else %}
+              <tr><td colspan="6" class="analytics-empty-cell">Нет данных за выбранный период.</td></tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </article>
+  </section>
+</div>
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', path='js/management_analytics.js') }}" defer></script>
+{% endblock %}
