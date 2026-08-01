@@ -1,6 +1,5 @@
 (() => {
   "use strict";
-
   const form = document.getElementById("patientRegistryForm");
   if (!form || window.__patientListsInitialized) return;
   window.__patientListsInitialized = true;
@@ -42,7 +41,6 @@
     egfr: { operator: "lt", value: "30", category: "С4" },
   };
   let dynamicsRequestId = 0;
-
   function setHidden(element, hidden) {
     element.hidden = hidden;
     element.querySelectorAll("input, select").forEach((control) => {
@@ -82,7 +80,6 @@
     setHidden(valueField, categoryMode);
     updateValueTo();
   }
-
   function isAvailableLink(element) {
     return Boolean(
       element
@@ -128,7 +125,6 @@
     link.click();
     return true;
   }
-
   function isEditableTarget(target) {
     return Boolean(target instanceof HTMLElement && target.closest("input, select, textarea, [contenteditable='true']"));
   }
@@ -140,7 +136,6 @@
     event.preventDefault();
     event.stopPropagation();
   }
-
   function formatDate(value) {
     if (!value) return "—";
     const date = new Date(`${value}T00:00:00`);
@@ -150,7 +145,6 @@
   function formatValue(value) {
     return new Intl.NumberFormat("ru-RU", { maximumFractionDigits: 2 }).format(value);
   }
-
   function svgNode(name, attributes = {}, text = "") {
     const node = document.createElementNS("http://www.w3.org/2000/svg", name);
     Object.entries(attributes).forEach(([key, value]) => node.setAttribute(key, String(value)));
@@ -164,7 +158,6 @@
     }
     return unit ? `${indicatorLabel}, ${unit}` : indicatorLabel;
   }
-
   function renderDynamicsChart(rawPoints, unit, indicatorLabel, indicatorKey) {
     const points = rawPoints
       .map((point) => ({
@@ -174,7 +167,6 @@
       }))
       .filter((point) => Number.isFinite(point.time) && Number.isFinite(point.value))
       .sort((left, right) => left.time - right.time);
-
     dynamicsSvg.replaceChildren();
     const chartTitle = svgNode(
       "title",
@@ -183,7 +175,6 @@
     );
     dynamicsSvg.append(chartTitle);
     if (!points.length) return false;
-
     const width = 760;
     const height = 360;
     const margin = { top: 24, right: 24, bottom: 88, left: 96 };
@@ -198,7 +189,6 @@
     minValue -= padding;
     maxValue += padding;
     const xStep = points.length > 1 ? plotWidth / (points.length - 1) : 0;
-
     const xPosition = (_, index) => {
       if (points.length === 1) return margin.left + plotWidth / 2;
       return margin.left + (index * xStep);
@@ -206,7 +196,6 @@
     const yPosition = (value) => (
       margin.top + ((maxValue - value) / (maxValue - minValue)) * plotHeight
     );
-
     const yTicks = 5;
     for (let index = 0; index < yTicks; index += 1) {
       const ratio = index / (yTicks - 1);
@@ -228,7 +217,6 @@
         }, formatValue(value))
       );
     }
-
     dynamicsSvg.append(
       svgNode("line", {
         x1: margin.left,
@@ -258,7 +246,6 @@
         "text-anchor": "middle",
       }, "Дата")
     );
-
     points.forEach((point, index) => {
       const x = xPosition(point.time, index);
       dynamicsSvg.append(
@@ -279,14 +266,12 @@
       }, formatDate(point.date));
       dynamicsSvg.append(label);
     });
-
     if (points.length > 1) {
       const pathData = points
         .map((point, index) => `${index === 0 ? "M" : "L"} ${xPosition(point.time, index)} ${yPosition(point.value)}`)
         .join(" ");
       dynamicsSvg.append(svgNode("path", { d: pathData, class: "registry-chart-line" }));
     }
-
     points.forEach((point, index) => {
       const circle = svgNode("circle", {
         cx: xPosition(point.time, index),
@@ -300,7 +285,6 @@
     });
     return true;
   }
-
   function setDynamicsState(state, message = "") {
     dynamicsLoading.hidden = state !== "loading";
     dynamicsError.hidden = state !== "error";
@@ -308,7 +292,6 @@
     dynamicsChart.hidden = state !== "chart";
     dynamicsError.textContent = message;
   }
-
   async function showDynamics(button) {
     const patientId = button.dataset.patientId;
     const indicatorKey = button.dataset.indicator;
@@ -320,16 +303,14 @@
       : "Дата рождения: —";
     setDynamicsState("loading");
     dynamicsModal?.show();
-
     try {
       const response = await fetch(
-        `/ckd-registry/patient/${encodeURIComponent(patientId)}/dynamics?indicator=${encodeURIComponent(indicatorKey)}`,
+        `/patient-lists/patient/${encodeURIComponent(patientId)}/dynamics?indicator=${encodeURIComponent(indicatorKey)}`,
         { headers: { Accept: "application/json" }, credentials: "same-origin", cache: "no-store" }
       );
       const data = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(data.detail || "Не удалось загрузить данные");
       if (requestId !== dynamicsRequestId) return;
-
       dynamicsTitle.textContent = `Динамика: ${data.indicator_label}`;
       dynamicsPatient.textContent = data.patient_fio;
       dynamicsBirthDate.textContent = `Дата рождения: ${formatDate(data.birth_date)}`;
@@ -345,7 +326,6 @@
       setDynamicsState("error", error.message || "Не удалось загрузить данные");
     }
   }
-
   document.addEventListener("keydown", (event) => {
     if (event.defaultPrevented || event.isComposing || helpIsOpen()) return;
     const code = event.code;
@@ -401,7 +381,6 @@
       if (moveRow(code === "ArrowDown" ? 1 : -1)) stop(event);
     }
   }, true);
-
   patientRows().forEach((row) => {
     row.addEventListener("click", () => selectRow(row, false));
     row.addEventListener("focusin", () => selectRow(row, false));

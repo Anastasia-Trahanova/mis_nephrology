@@ -30,7 +30,10 @@
                 <a class="nav-link" href="/patients">Пациенты</a>
                 {% if current_role == 'admin' or current_role in clinical_roles %}
                 <a class="nav-link" href="/schedule">Расписание</a>
-                <a class="nav-link{% if request.url.path.startswith('/ckd-registry') %} active{% endif %}" href="/ckd-registry">Списки пациентов</a>
+                <a class="nav-link{% if request.url.path.startswith('/patient-lists') %} active{% endif %}" href="/patient-lists">Списки пациентов</a>
+                {% endif %}
+                {% if current_role in ('chief_physician', 'department_head') %}
+                <a class="nav-link{% if request.url.path.startswith('/ckd-registry') %} active{% endif %}" href="/ckd-registry">Регистр ХБП</a>
                 {% endif %}
                 <a class="nav-link{% if request.url.path.startswith('/clinical-reference') %} active{% endif %}" href="/clinical-reference">Клинический справочник</a>
                 {% if request.session.get('role') == 'admin' %}
@@ -71,7 +74,8 @@
     {% set is_new_patient = current_path == '/new-patient' %}
     {% set is_appointment_form = is_new_appointment or is_new_patient %}
     {% set is_main_page = current_path == '/' %}
-    {% set is_registry_page = current_path.startswith('/ckd-registry') %}
+    {% set is_patient_lists_page = current_path.startswith('/patient-lists') %}
+    {% set is_ckd_registry_page = current_path.startswith('/ckd-registry') %}
     {% set is_audit_page = current_path == '/admin/audit' %}
     <div
         class="modal fade hotkeys-modal"
@@ -89,7 +93,8 @@
                             {% if is_schedule_page %}Расписание
                             {% elif is_appointment_form %}Форма приёма
                             {% elif is_patient_card %}Карточка пациента
-                            {% elif is_registry_page %}Списки пациентов
+                            {% elif is_patient_lists_page %}Списки пациентов
+                            {% elif is_ckd_registry_page %}Регистр ХБП
                             {% elif is_audit_page %}Журнал аудита
                             {% elif is_main_page %}Список приёмов
                             {% else %}Текущая страница{% endif %}
@@ -121,11 +126,19 @@
                             {% elif is_patient_card %}
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>W</kbd></span><span class="hotkey-action">Скачать Word выбранного приёма</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>N</kbd></span><span class="hotkey-action">Добавить приём текущему пациенту</span></div>
-                            {% elif is_registry_page %}
+                            {% elif is_patient_lists_page %}
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Enter</kbd></span><span class="hotkey-action">В фильтрах: показать пациентов</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>S</kbd></span><span class="hotkey-action">Показать пациентов</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>R</kbd></span><span class="hotkey-action">Сбросить фильтры</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>C</kbd></span><span class="hotkey-action">Скачать CSV</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>↑</kbd>/<kbd>↓</kbd></span><span class="hotkey-action">Выбрать пациента в таблице</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>O</kbd></span><span class="hotkey-action">Открыть ЭМК выбранного пациента</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>←</kbd>/<kbd>→</kbd></span><span class="hotkey-action">Предыдущая/следующая страница</span></div>
+                            {% elif is_ckd_registry_page %}
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Enter</kbd></span><span class="hotkey-action">В фильтрах: применить фильтры</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>S</kbd></span><span class="hotkey-action">Применить фильтры</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>R</kbd></span><span class="hotkey-action">Сбросить фильтры</span></div>
+                                <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>C</kbd></span><span class="hotkey-action">Скачать Excel</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>↑</kbd>/<kbd>↓</kbd></span><span class="hotkey-action">Выбрать пациента в таблице</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Alt</kbd><span>+</span><kbd>O</kbd></span><span class="hotkey-action">Открыть ЭМК выбранного пациента</span></div>
                                 <div class="hotkey-row"><span class="hotkey-keys"><kbd>Ctrl</kbd><span>+</span><kbd>←</kbd>/<kbd>→</kbd></span><span class="hotkey-action">Предыдущая/следующая страница</span></div>

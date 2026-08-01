@@ -204,22 +204,51 @@ def classify_request(request: Request, status_code: int) -> AuditAction | None:
         if appointment_id is not None:
             return AuditAction(action="download_word_report", appointment_id=appointment_id)
 
-    if method == "GET" and path == "/ckd-registry":
+    if method == "GET" and path == "/patient-lists":
         if request.query_params:
             return AuditAction(
                 action="filter_patient_lists",
                 details=_patient_list_details(request),
             )
         return AuditAction(
-            action="open_ckd_registry",
+            action="open_patient_lists",
             details="открыта страница списков пациентов",
         )
 
-    if method == "GET" and path == "/ckd-registry/export.csv":
+    if method == "GET" and path == "/patient-lists/export.csv":
         return AuditAction(
             action="export_patient_lists",
             details=_patient_list_details(request, export=True),
         )
+
+    if method == "GET" and path == "/ckd-registry":
+        return AuditAction(
+            action="filter_local_ckd_registry" if request.query_params else "open_local_ckd_registry",
+            details="открыт локальный регистр ХБП с фильтрами" if request.query_params else "открыт локальный регистр ХБП",
+        )
+
+    if method == "GET" and path == "/ckd-registry/export.xlsx":
+        return AuditAction(
+            action="export_local_ckd_registry",
+            details="выгружен локальный регистр ХБП в Excel",
+        )
+
+    if method == "POST":
+        patient_id = _match_int(r"/ckd-registry/patient/(\d+)/include", path)
+        if patient_id is not None:
+            return AuditAction(
+                action="include_local_ckd_registry_patient",
+                patient_id=patient_id,
+                details="пациент включён в локальный регистр ХБП",
+            )
+
+        patient_id = _match_int(r"/ckd-registry/patient/(\d+)/outcome", path)
+        if patient_id is not None:
+            return AuditAction(
+                action="add_local_ckd_registry_outcome",
+                patient_id=patient_id,
+                details="добавлен исход в локальном регистре ХБП",
+            )
 
     if method == "GET" and path == "/schedule":
         return AuditAction(action="open_schedule", details="открыто расписание")

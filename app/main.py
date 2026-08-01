@@ -23,6 +23,7 @@ from .routers import (
     exports,
     home,
     lab_api,
+    patient_lists,
     patient_pages,
     patients,
     schedule,
@@ -97,7 +98,6 @@ app.add_middleware(
     allowed_hosts=settings.allowed_hosts,
     www_redirect=False,
 )
-
 protected_dependencies = [Depends(auth.require_authenticated_user)]
 
 
@@ -147,6 +147,7 @@ app.include_router(appointment_filters.router, dependencies=protected_dependenci
 app.include_router(patients.router, dependencies=protected_dependencies)
 app.include_router(appointments.router, dependencies=protected_dependencies)
 app.include_router(clinical_reference.router, dependencies=protected_dependencies)
+app.include_router(patient_lists.router, dependencies=protected_dependencies)
 app.include_router(ckd_registry.router, dependencies=protected_dependencies)
 app.include_router(admin.router, dependencies=protected_dependencies)
 app.include_router(schedule.router, dependencies=protected_dependencies)

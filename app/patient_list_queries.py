@@ -103,7 +103,7 @@ def _positive_int(value: Any, default: int, maximum: int) -> int:
 
 
 @dataclass(frozen=True)
-class RegistryFilters:
+class PatientListFilters:
     indicator: str = "hemoglobin"
     mode: str = "manual"
     operator: str = "lt"
@@ -115,7 +115,7 @@ class RegistryFilters:
     page_size: int = 25
 
     @classmethod
-    def from_mapping(cls, values: Mapping[str, Any]) -> "RegistryFilters":
+    def from_mapping(cls, values: Mapping[str, Any]) -> "PatientListFilters":
         indicator = str(values.get("indicator") or "hemoglobin")
         if indicator not in INDICATORS:
             indicator = "hemoglobin"
@@ -206,7 +206,7 @@ def _category_sql(value_sql: str = "latest.result_value") -> str:
     """
 
 
-def _condition_sql(filters: RegistryFilters) -> str:
+def _condition_sql(filters: PatientListFilters) -> str:
     if filters.indicator == "egfr" and filters.mode == "category":
         category = EGFR_CATEGORIES[filters.egfr_category]
         minimum = category["minimum"]
@@ -224,7 +224,7 @@ def _condition_sql(filters: RegistryFilters) -> str:
     return "latest.result_value < %(value_from)s"
 
 
-def _registry_sql(filters: RegistryFilters) -> str:
+def _patient_list_sql(filters: PatientListFilters) -> str:
     spec = filters.indicator_spec
     source_table = spec["table"]
     source_column = spec["column"]
@@ -336,7 +336,7 @@ def _registry_sql(filters: RegistryFilters) -> str:
     """
 
 
-def _query_params(filters: RegistryFilters) -> dict[str, Any]:
+def _query_params(filters: PatientListFilters) -> dict[str, Any]:
     category = EGFR_CATEGORIES[filters.egfr_category]
     return {
         "indicator": filters.indicator,
@@ -365,7 +365,7 @@ def _format_observation(days: Any) -> str:
     return " ".join(parts) if parts else "менее месяца"
 
 
-def describe_filters(filters: RegistryFilters) -> str:
+def describe_filters(filters: PatientListFilters) -> str:
     spec = filters.indicator_spec
     period = PERIOD_LABELS[filters.period_months]
     if filters.indicator == "egfr" and filters.mode == "category":
@@ -378,11 +378,11 @@ def describe_filters(filters: RegistryFilters) -> str:
     return f"Последний показатель «{spec['label']}» {condition} {spec['unit']} {period}"
 
 
-def get_patient_registry(filters: RegistryFilters) -> dict[str, Any]:
+def get_patient_list(filters: PatientListFilters) -> dict[str, Any]:
     """Возвращает одну страницу динамического списка пациентов."""
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            cur.execute(_registry_sql(filters), _query_params(filters))
+            cur.execute(_patient_list_sql(filters), _query_params(filters))
             raw_rows = cur.fetchall()
 
     rows: list[dict[str, Any]] = []
@@ -413,7 +413,6 @@ def get_patient_indicator_history(patient_id: int, indicator: str) -> dict[str, 
     source_table = spec["table"]
     source_column = spec["column"]
     source_date = spec["date_sql"]
-
     history_sql = f"""
         SELECT
             {source_date} AS result_date,
@@ -425,7 +424,6 @@ def get_patient_indicator_history(patient_id: int, indicator: str) -> dict[str, 
           AND {source_date} IS NOT NULL
         ORDER BY result_date ASC, a.id ASC
     """
-
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             cur.execute(
@@ -442,10 +440,8 @@ def get_patient_indicator_history(patient_id: int, indicator: str) -> dict[str, 
             patient_raw = cur.fetchone()
             if patient_raw is None:
                 return None
-
             cur.execute(history_sql, {"patient_id": patient_id})
             history_rows = cur.fetchall()
-
     patient = dict(patient_raw)
     patient.update(
         {
@@ -453,10 +449,7 @@ def get_patient_indicator_history(patient_id: int, indicator: str) -> dict[str, 
             "indicator_label": spec["label"],
             "unit": spec["unit"],
             "points": [
-                {
-                    "date": row["result_date"],
-                    "value": row["result_value"],
-                }
+                {"date": row["result_date"], "value": row["result_value"]}
                 for row in map(dict, history_rows)
             ],
         }
@@ -464,10 +457,10 @@ def get_patient_indicator_history(patient_id: int, indicator: str) -> dict[str, 
     return patient
 
 
-def build_registry_csv(filters: RegistryFilters) -> tuple[str, str]:
+def build_patient_list_csv(filters: PatientListFilters) -> tuple[str, str]:
     """Формирует CSV текущей выборки; структура БД при этом не меняется."""
     export_filters = replace(filters, page=1, page_size=10000)
-    result = get_patient_registry(export_filters)
+    result = get_patient_list(export_filters)
     spec = filters.indicator_spec
 
     output = io.StringIO(newline="")

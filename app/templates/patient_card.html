@@ -1,20 +1,12 @@
 {#
 Назначение файла:
 Каркас карточки пациента с сохранением существующей компоновки страницы.
-
-Что выполняет файл:
-- оставляет шапку пациента, список приёмов, кнопки и верхнюю часть карточки без изменения стиля;
-- закрепляет список приёмов слева при прокрутке карточки;
-- отделяет «Результаты проведённых ранее исследований» от «Заключения»;
-- выводит исследования в порядке утверждённой схемы истории болезни;
-- подключает новые свободные поля дополнительных исследований;
-- не изменяет лекарственный блок и всё, что находится внутри его partial-файла.
-
-Важно:
-Этот файл не задаёт новые шрифты, цвета или размеры. Для внешнего вида
-используются существующие классы Bootstrap и текущие стили проекта.
 #}
 {% extends "base.html" %}
+
+{% block extra_head %}
+<link rel="stylesheet" href="{{ url_for('static', path='css/08_ckd_registry.css') }}">
+{% endblock %}
 
 {% block content %}
 
@@ -26,9 +18,9 @@
 
 <div class="row g-4 align-items-start">
   <div class="col-md-3 patient-card-sidebar align-self-start">
+    {% include "patient_card/_ckd_registry_panel.html" %}
     {% include "patient_card/_appointments_sidebar.html" %}
   </div>
-
   <div class="col-md-9">
     {% if selected_appointment %}
       <div class="card">
@@ -45,7 +37,6 @@
 
           <hr>
           {% include "patient_card/_examination.html" %}
-
           <hr>
           <h4 class="mt-3 mb-3">Результаты проведённых ранее исследований</h4>
 
@@ -59,7 +50,6 @@
 
           <hr>
           {% include "patient_card/_metrics_history.html" %}
-
           <hr>
           {% include "patient_card/_albuminuria_history.html" %}
           {% include "patient_card/_other_laboratory_studies.html" %}
@@ -75,7 +65,6 @@
 
           <hr>
           {% include "patient_card/_diagnoses.html" %}
-
           <hr>
           {% include "patient_card/_prescriptions.html" %}
         </div>
@@ -88,4 +77,8 @@
   </div>
 </div>
 
+{% endblock %}
+
+{% block extra_scripts %}
+<script src="{{ url_for('static', path='js/ckd_registry_patient_card.js') }}" defer></script>
 {% endblock %}

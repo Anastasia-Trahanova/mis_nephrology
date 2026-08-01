@@ -1,0 +1,144 @@
+{% set clinical_roles = ('doctor', 'chief_physician', 'department_head') %}
+{% set can_edit_registry = request.session.get('role') in clinical_roles %}
+{% set registry_entry = ckd_registry.entry if ckd_registry else none %}
+{% set registry_snapshot = ckd_registry.snapshot if ckd_registry else none %}
+
+{% if registry_status == 'included' %}
+<div class="alert alert-success py-2" role="status">Пациент добавлен в регистр ХБП.</div>
+{% elif registry_status == 'outcome_added' %}
+<div class="alert alert-success py-2" role="status">Исход сохранён.</div>
+{% endif %}
+{% if registry_error %}
+<div class="alert alert-danger py-2" role="alert">{{ registry_error }}</div>
+{% endif %}
+
+{% if can_edit_registry and ckd_registry %}
+<section class="card ckd-registry-panel mb-3" aria-labelledby="patientRegistryTitle">
+  <div class="card-header">
+    <h5 class="mb-0" id="patientRegistryTitle">Регистр ХБП</h5>
+  </div>
+  <div class="card-body">
+    {% if registry_entry %}
+      <p class="ckd-registry-panel__status mb-2">
+        <strong>Пациент добавлен в регистр пациентов с ХБП</strong><br>
+        {{ registry_entry.included_at.strftime('%d.%m.%Y') if registry_entry.included_at else '—' }}
+      </p>
+      {% if registry_entry.outcome_type %}
+      <p class="small text-muted mb-3">
+        Последний исход: <strong>{{ registry_entry.outcome_label }}</strong>
+        {% if registry_entry.outcome_date %}с {{ registry_entry.outcome_date.strftime('%d.%m.%Y') }}{% endif %}
+      </p>
+      {% endif %}
+      <button class="btn btn-outline-primary w-100" type="button" data-registry-dialog-open="registryOutcomeDialog">
+        Добавить исход
+      </button>
+    {% else %}
+      <button class="btn btn-success w-100" type="button" data-registry-dialog-open="registryIncludeDialog">
+        Добавить в регистр
+      </button>
+    {% endif %}
+  </div>
+</section>
+
+{% if not registry_entry %}
+<dialog class="ckd-registry-dialog" id="registryIncludeDialog" aria-labelledby="registryIncludeTitle">
+  <form method="post" action="/ckd-registry/patient/{{ patient.id }}/include">
+    <header class="ckd-registry-dialog__header">
+      <h3 id="registryIncludeTitle">Добавление пациента в регистр пациентов с ХБП</h3>
+      <button type="button" class="ckd-registry-dialog__close" data-registry-dialog-close aria-label="Закрыть">×</button>
+    </header>
+    <div class="ckd-registry-dialog__body">
+      <div class="mb-3">
+        <label class="form-label">ФИО</label>
+        <div class="row g-2">
+          <div class="col-md-4"><input class="form-control" name="last_name" value="{{ registry_snapshot.last_name }}" required aria-label="Фамилия"></div>
+          <div class="col-md-4"><input class="form-control" name="first_name" value="{{ registry_snapshot.first_name }}" required aria-label="Имя"></div>
+          <div class="col-md-4"><input class="form-control" name="patronymic" value="{{ registry_snapshot.patronymic or '' }}" aria-label="Отчество"></div>
+        </div>
+      </div>
+      <div class="row g-3">
+        <div class="col-md-6">
+          <label class="form-label" for="registryBirthDate">Дата рождения</label>
+          <input class="form-control" id="registryBirthDate" type="date" name="birth_date" value="{{ registry_snapshot.birth_date.isoformat() if registry_snapshot.birth_date else '' }}" required>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="registryPhone">Номер телефона</label>
+          <input class="form-control" id="registryPhone" name="phone" value="{{ registry_snapshot.phone or '' }}">
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="registryDiagnosis">Основной диагноз</label>
+          <textarea class="form-control" id="registryDiagnosis" name="diagnosis" rows="3" required>{{ registry_snapshot.main_diagnosis or '' }}</textarea>
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="registryEgfr">СКФ по последнему приёму</label>
+          <input class="form-control" id="registryEgfr" name="egfr" inputmode="decimal" value="{{ registry_snapshot.egfr if registry_snapshot.egfr is not none else '' }}">
+        </div>
+        <div class="col-md-6">
+          <label class="form-label" for="registryStage">Стадия ХБП по последнему приёму</label>
+          <select class="form-select" id="registryStage" name="stage">
+            <option value="">Не указана</option>
+            {% for stage in ckd_registry.stages %}
+            <option value="{{ stage }}" {% if registry_snapshot.ckd_stage == stage %}selected{% endif %}>{{ stage }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="registryInitialOutcome">Исход</label>
+          <select class="form-select" id="registryInitialOutcome" name="outcome">
+            <option value="" selected>Наблюдается</option>
+            {% for key, label in ckd_registry.outcomes.items() %}
+            <option value="{{ key }}">{{ label }}</option>
+            {% endfor %}
+          </select>
+        </div>
+        <div class="col-12">
+          <label class="form-label" for="registryComment">Комментарий</label>
+          <textarea class="form-control" id="registryComment" name="comment" rows="3"></textarea>
+        </div>
+      </div>
+      <p class="text-muted ckd-registry-modal-note mt-3 mb-0">
+        Нажимая «Подтвердить», врач подтверждает, что проверил сведения и гарантирует их корректность.
+      </p>
+    </div>
+    <footer class="ckd-registry-dialog__footer">
+      <button type="button" class="btn btn-outline-secondary" data-registry-dialog-close>Отменить</button>
+      <button type="submit" class="btn btn-success">Подтвердить</button>
+    </footer>
+  </form>
+</dialog>
+{% else %}
+<dialog class="ckd-registry-dialog ckd-registry-dialog--small" id="registryOutcomeDialog" aria-labelledby="registryOutcomeTitle">
+  <form method="post" action="/ckd-registry/patient/{{ patient.id }}/outcome">
+    <header class="ckd-registry-dialog__header">
+      <h3 id="registryOutcomeTitle">Добавление исхода</h3>
+      <button type="button" class="ckd-registry-dialog__close" data-registry-dialog-close aria-label="Закрыть">×</button>
+    </header>
+    <div class="ckd-registry-dialog__body">
+      <dl class="row mb-3">
+        <dt class="col-sm-4">ФИО</dt>
+        <dd class="col-sm-8">{{ registry_snapshot.patient_fio }}</dd>
+        <dt class="col-sm-4">Дата рождения</dt>
+        <dd class="col-sm-8">{{ registry_snapshot.birth_date.strftime('%d.%m.%Y') if registry_snapshot.birth_date else '—' }}</dd>
+      </dl>
+      <div class="mb-3">
+        <label class="form-label" for="registryOutcome">Исход</label>
+        <select class="form-select" id="registryOutcome" name="outcome" required>
+          <option value="">Выберите исход</option>
+          {% for key, label in ckd_registry.outcomes.items() %}
+          <option value="{{ key }}">{{ label }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div>
+        <label class="form-label" for="registryOutcomeComment">Комментарий врача</label>
+        <textarea class="form-control" id="registryOutcomeComment" name="comment" rows="4"></textarea>
+      </div>
+    </div>
+    <footer class="ckd-registry-dialog__footer">
+      <button type="button" class="btn btn-outline-secondary" data-registry-dialog-close>Отменить</button>
+      <button type="submit" class="btn btn-primary">Сохранить</button>
+    </footer>
+  </form>
+</dialog>
+{% endif %}
+{% endif %}

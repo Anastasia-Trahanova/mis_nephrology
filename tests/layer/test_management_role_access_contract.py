@@ -41,7 +41,7 @@ def test_schedule_accepts_all_clinical_roles():
 
 
 def test_patient_lists_accept_all_clinical_roles():
-    source = (ROOT / "app" / "routers" / "ckd_registry.py").read_text(encoding="utf-8")
+    source = (ROOT / "app" / "routers" / "patient_lists.py").read_text(encoding="utf-8")
     assert "require_roles(request, ROLE_ADMIN, *CLINICAL_ROLES)" in source
 
 

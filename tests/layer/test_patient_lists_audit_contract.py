@@ -28,11 +28,11 @@ def _client(monkeypatch):
         request.session.update({"user_id": 7, "role": "doctor", "display_name": "Врач"})
         return PlainTextResponse("ok")
 
-    @app.get("/ckd-registry")
+    @app.get("/patient-lists")
     def patient_lists():
         return PlainTextResponse("page")
 
-    @app.get("/ckd-registry/export.csv")
+    @app.get("/patient-lists/export.csv")
     def patient_lists_export():
         return PlainTextResponse("csv")
 
@@ -43,10 +43,10 @@ def test_patient_lists_open_is_audited(monkeypatch):
     client, events = _client(monkeypatch)
     with client:
         client.get("/set-doctor")
-        client.get("/ckd-registry")
+        client.get("/patient-lists")
 
     event = events[-1]
-    assert event["action"] == "open_ckd_registry"
+    assert event["action"] == "open_patient_lists"
     assert event["details"] == "открыта страница списков пациентов"
 
 
@@ -55,7 +55,7 @@ def test_patient_lists_filter_is_audited_without_patient_data(monkeypatch):
     with client:
         client.get("/set-doctor")
         client.get(
-            "/ckd-registry",
+            "/patient-lists",
             params={
                 "indicator": "egfr",
                 "mode": "category",
@@ -76,7 +76,7 @@ def test_patient_lists_csv_export_is_audited(monkeypatch):
     with client:
         client.get("/set-doctor")
         client.get(
-            "/ckd-registry/export.csv",
+            "/patient-lists/export.csv",
             params={
                 "indicator": "hemoglobin",
                 "operator": "lt",
@@ -93,7 +93,7 @@ def test_patient_lists_csv_export_is_audited(monkeypatch):
 
 
 def test_patient_lists_actions_have_readable_labels_and_categories():
-    assert audit_log.ACTION_LABELS["open_ckd_registry"] == "Открыл списки пациентов"
+    assert audit_log.ACTION_LABELS["open_patient_lists"] == "Открыл списки пациентов"
     assert audit_log.ACTION_LABELS["filter_patient_lists"] == "Сформировал список пациентов"
     assert audit_log.ACTION_LABELS["export_patient_lists"] == "Выгрузил список пациентов"
     assert audit_log.ACTION_CATEGORIES["filter_patient_lists"] == "view"

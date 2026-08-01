@@ -16,6 +16,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
+from app.repositories.ckd_registry import get_patient_registry_context
 from app.repositories.patients import get_all_patients
 from app.services.patient_card_context_service import get_patient_card_context
 
@@ -51,7 +52,6 @@ def patient_card(request: Request, patient_id: int):
     show_form = request.query_params.get("show_form") == "true"
     show_previous_labs = request.query_params.get("show_previous_labs") == "true"
     selected_appointment_id = request.query_params.get("appointment_id")
-
     if selected_appointment_id:
         try:
             selected_appointment_id = int(selected_appointment_id)
@@ -66,7 +66,6 @@ def patient_card(request: Request, patient_id: int):
         show_previous_labs=show_previous_labs,
         show_form=show_form,
     )
-
     if not context:
         raise HTTPException(status_code=404, detail="Пациент не найден")
 
@@ -76,6 +75,7 @@ def patient_card(request: Request, patient_id: int):
             detail="Этот приём не принадлежит данному пациенту",
         )
 
+    registry_context = get_patient_registry_context(patient_id)
     now = datetime.now()
     context.update(
         {
@@ -83,6 +83,9 @@ def patient_card(request: Request, patient_id: int):
             "now_date": now.strftime("%Y-%m-%d"),
             "now_time": now.strftime("%H:%M"),
             "show_form": show_form,
+            "ckd_registry": registry_context,
+            "registry_status": request.query_params.get("registry_status"),
+            "registry_error": request.query_params.get("registry_error"),
         }
     )
     return templates.TemplateResponse(request=request, name="patient_card.html", context=context)
