@@ -240,10 +240,16 @@ def get_user_by_login(login: str):
                     u.doctor_id,
                     u.patient_id,
                     CASE
-                        WHEN u.role = 'doctor' THEN
-                            d.last_name || ' ' || d.first_name || ' ' || COALESCE(d.patronymic, '')
+                        WHEN u.role IN ('doctor', 'chief_physician', 'department_head') THEN
+                            TRIM(
+                                d.last_name || ' ' || d.first_name || ' ' ||
+                                COALESCE(d.patronymic, '')
+                            )
                         WHEN u.role = 'patient' THEN
-                            p.last_name || ' ' || p.first_name || ' ' || COALESCE(p.patronymic, '')
+                            TRIM(
+                                p.last_name || ' ' || p.first_name || ' ' ||
+                                COALESCE(p.patronymic, '')
+                            )
                         ELSE 'Администратор'
                     END AS display_name
                 FROM users u

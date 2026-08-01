@@ -15,7 +15,17 @@ from fastapi import HTTPException, Request
 
 ROLE_ADMIN = "admin"
 ROLE_DOCTOR = "doctor"
-ALLOWED_ROLES = {ROLE_ADMIN, ROLE_DOCTOR}
+ROLE_CHIEF_PHYSICIAN = "chief_physician"
+ROLE_DEPARTMENT_HEAD = "department_head"
+
+CLINICAL_ROLES = frozenset(
+    {
+        ROLE_DOCTOR,
+        ROLE_CHIEF_PHYSICIAN,
+        ROLE_DEPARTMENT_HEAD,
+    }
+)
+ALLOWED_ROLES = {ROLE_ADMIN, *CLINICAL_ROLES}
 
 
 def current_user(request: Request) -> dict:
@@ -42,8 +52,8 @@ def is_admin(request: Request) -> bool:
 
 
 def is_doctor(request: Request) -> bool:
-    """True, если текущий пользователь — врач."""
-    return current_role(request) == ROLE_DOCTOR
+    """True для обычного врача, главного врача и заведующего отделением."""
+    return current_role(request) in CLINICAL_ROLES
 
 
 def require_roles(request: Request, *allowed_roles: str) -> None:
@@ -60,12 +70,13 @@ def require_admin(request: Request) -> None:
 
 def require_doctor_with_id(request: Request) -> int:
     """
-    Пускает только врача, привязанного к записи doctors.
+    Пускает медицинского сотрудника, привязанного к записи doctors.
 
-    Это используется при создании пациента/приёма: администратор не может создавать
-    медицинские приёмы, а doctor_id берётся только из сессии, не из HTML-формы.
+    Обычный врач, главный врач и заведующий отделением имеют одинаковые
+    клинические права. Администратор не может создавать медицинские приёмы,
+    а doctor_id берётся только из сессии, не из HTML-формы.
     """
-    require_roles(request, ROLE_DOCTOR)
+    require_roles(request, *CLINICAL_ROLES)
 
     doctor_id = request.session.get("doctor_id")
     try:

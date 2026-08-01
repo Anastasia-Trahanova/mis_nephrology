@@ -8,6 +8,7 @@ from fastapi import APIRouter, HTTPException, Request
 from fastapi.responses import HTMLResponse, StreamingResponse
 from fastapi.templating import Jinja2Templates
 
+from app.security.permissions import CLINICAL_ROLES, ROLE_ADMIN, require_roles
 from ..registry_queries import (
     EGFR_CATEGORIES,
     INDICATORS,
@@ -22,13 +23,9 @@ from ..registry_queries import (
 router = APIRouter(tags=["ckd_registry"])
 templates = Jinja2Templates(directory="app/templates")
 
-_ALLOWED_ROLES = {"admin", "doctor"}
-
-
 def require_registry_access(request: Request) -> None:
-    """Разрешает раздел врачам и администратору."""
-    if request.session.get("role") not in _ALLOWED_ROLES:
-        raise HTTPException(status_code=403, detail="Раздел доступен медицинским сотрудникам")
+    """Разрешает раздел администратору и всем клиническим ролям."""
+    require_roles(request, ROLE_ADMIN, *CLINICAL_ROLES)
 
 
 @router.get("/ckd-registry", response_class=HTMLResponse)

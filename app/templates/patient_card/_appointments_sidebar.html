@@ -141,7 +141,7 @@
         <div class="list-group-item text-muted">Нет приёмов</div>
       {% endfor %}
     </div>
-    {% if not hide_add_button and request.session.get('role') == 'doctor' %}
+    {% if not hide_add_button and request.session.get('role') in ('doctor', 'chief_physician', 'department_head') %}
       <div class="card-footer">
         <button
           type="button"
@@ -154,7 +154,7 @@
   </div>
 </aside>
 
-{% if not hide_add_button and request.session.get('role') == 'doctor' %}
+{% if not hide_add_button and request.session.get('role') in ('doctor', 'chief_physician', 'department_head') %}
 <dialog class="walk-in-dialog" id="walkInAppointmentDialog" aria-labelledby="walkInAppointmentTitle">
   <div class="walk-in-dialog__header">
     <h3 id="walkInAppointmentTitle">Добавить внеплановый приём</h3>

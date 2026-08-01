@@ -27,8 +27,8 @@ from app.repositories.schedule import (
     update_schedule_entry,
 )
 from app.security.permissions import (
+    CLINICAL_ROLES,
     ROLE_ADMIN,
-    ROLE_DOCTOR,
     require_doctor_with_id,
     require_roles,
 )
@@ -94,7 +94,7 @@ class WalkInAppointmentPayload(BaseModel):
 
 
 def _require_schedule_access(request: Request) -> None:
-    require_roles(request, ROLE_ADMIN, ROLE_DOCTOR)
+    require_roles(request, ROLE_ADMIN, *CLINICAL_ROLES)
 
 
 def _parse_iso_date(value: str | None, default: date) -> date:
@@ -191,7 +191,7 @@ def schedule_page(request: Request, doctor_id: int | None = None, week: str | No
     selected_week = _monday(_parse_iso_date(week, date.today()))
     doctors = get_schedule_doctors()
     requested_doctor_id = doctor_id
-    if requested_doctor_id is None and request.session.get("role") == ROLE_DOCTOR:
+    if requested_doctor_id is None and request.session.get("role") in CLINICAL_ROLES:
         try:
             requested_doctor_id = int(request.session.get("doctor_id"))
         except (TypeError, ValueError):
@@ -211,7 +211,7 @@ def schedule_page(request: Request, doctor_id: int | None = None, week: str | No
             "week_label": _week_label(selected_week),
             "week_days": _week_days(selected_week),
             "week_options": _week_options(selected_week),
-            "can_start_appointment": request.session.get("role") == ROLE_DOCTOR
+            "can_start_appointment": request.session.get("role") in CLINICAL_ROLES
             and bool(request.session.get("doctor_id")),
         },
     )
