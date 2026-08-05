@@ -1,12 +1,25 @@
 {#
-Назначение файла: структурированный блок диагнозов МКБ-10 в карточке пациента.
+Назначение файла: диагноз выбранного приёма в карточке пациента.
 
 Что выполняет файл:
-- показывает основной диагноз, осложнения и сопутствующие заболевания;
-- не выводит пустые группы;
-- использует одинаковое оформление подзаголовков без отдельного цвета шрифта;
-- не изменяет данные, порядок сохранения или логику МКБ-10.
+- показывает свободный диагноз и комментарий архивного приёма;
+- сохраняет существующий структурированный блок диагнозов МКБ-10;
+- не изменяет данные и логику сохранения диагнозов.
 #}
+
+{% if selected_appointment.diagnosis_text %}
+<div class="mb-3">
+    <div class="fw-semibold mb-2">Диагноз</div>
+    <div style="white-space: pre-wrap;">{{ selected_appointment.diagnosis_text }}</div>
+</div>
+{% endif %}
+
+{% if selected_appointment.diagnosis_comment_text %}
+<div class="mb-3">
+    <div class="fw-semibold mb-2">Комментарий к диагнозу</div>
+    <div style="white-space: pre-wrap;">{{ selected_appointment.diagnosis_comment_text }}</div>
+</div>
+{% endif %}
 
 {% if icd10_diagnoses %}
     {% set has_main = namespace(value=false) %}
@@ -25,7 +38,7 @@
 
     {% if has_main.value %}
     <div class="mb-3">
-        <div class="fw-semibold mb-2">Основной диагноз</div>
+        <div class="fw-semibold mb-2">Основной диагноз по МКБ-10</div>
         <ul class="mb-0">
             {% for item in icd10_diagnoses %}
                 {% if item.diagnosis_type == "main" %}

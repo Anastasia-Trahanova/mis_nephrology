@@ -2,11 +2,12 @@
 
 {% if selected_appointment.complaints %}
 <h5 class="mt-3">Жалобы</h5>
-<p class="mb-3">{{ selected_appointment.complaints }}</p>
+<div class="mb-3" style="white-space: pre-wrap;">{{ selected_appointment.complaints }}</div>
 {% endif %}
 
 {% set has_life_anamnesis =
-  selected_appointment.education_and_professional_history
+  selected_appointment.life_anamnesis_text
+  or selected_appointment.education_and_professional_history
   or selected_appointment.housing_conditions
   or selected_appointment.past_diseases
   or selected_appointment.habitual_intoxications
@@ -22,6 +23,9 @@
 {% if selected_appointment.complaints %}<hr class="my-4">{% endif %}
 <h5 class="mt-3">Анамнез жизни</h5>
 <div class="mb-3">
+  {% if selected_appointment.life_anamnesis_text %}
+  <div class="mb-3" style="white-space: pre-wrap;">{{ selected_appointment.life_anamnesis_text }}</div>
+  {% endif %}
   {% if selected_appointment.education_and_professional_history %}
   <p><strong>Образование и профессиональный анамнез:</strong> {{ selected_appointment.education_and_professional_history }}</p>
   {% endif %}
@@ -55,10 +59,18 @@
 </div>
 {% endif %}
 
-{% if selected_appointment.disease_onset or selected_appointment.disease_course %}
+{% set has_disease_anamnesis =
+  selected_appointment.disease_anamnesis_text
+  or selected_appointment.disease_onset
+  or selected_appointment.disease_course
+%}
+{% if has_disease_anamnesis %}
 {% if selected_appointment.complaints or has_life_anamnesis %}<hr class="my-4">{% endif %}
 <h5 class="mt-3">Анамнез данного заболевания</h5>
 <div class="mb-3">
+  {% if selected_appointment.disease_anamnesis_text %}
+  <div class="mb-3" style="white-space: pre-wrap;">{{ selected_appointment.disease_anamnesis_text }}</div>
+  {% endif %}
   {% if selected_appointment.disease_onset %}
   <p><strong>Начало болезни:</strong> {{ selected_appointment.disease_onset }}</p>
   {% endif %}

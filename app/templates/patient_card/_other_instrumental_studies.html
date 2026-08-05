@@ -1,13 +1,6 @@
-{#
-Назначение файла: отображение других инструментальных исследований в карточке.
-
-Что выполняет файл:
-- показывает раздел только при наличии текста;
-- сохраняет введённый врачом текст цельным блоком;
-- не меняет таблицу УЗИ почек и другие разделы карточки.
-#}
+{# Назначение файла: отображение других инструментальных исследований в карточке. #}
 {% if selected_appointment.other_instrumental_studies %}
 <hr>
 <h5>Другие инструментальные исследования</h5>
-<p class="mb-0">{{ selected_appointment.other_instrumental_studies }}</p>
+<div class="mb-0" style="white-space: pre-wrap;">{{ selected_appointment.other_instrumental_studies }}</div>
 {% endif %}

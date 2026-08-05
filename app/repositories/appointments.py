@@ -80,7 +80,7 @@ def get_all_appointments(filters: dict | None = None):
         FROM appointments a
         JOIN patients p ON a.patient_id = p.id
         JOIN doctors d ON a.doctor_id = d.id
-        JOIN locations l ON a.location_id = l.id
+        LEFT JOIN locations l ON a.location_id = l.id
         LEFT JOIN branches b ON l.branch_id = b.id
         LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
         WHERE 1=1
@@ -116,10 +116,10 @@ def get_all_appointments(filters: dict | None = None):
     sort_order = str(filters.get("sort_order", "desc")).lower()
     sort_order = "ASC" if sort_order == "asc" else "DESC"
     try:
-        limit = int(filters.get("limit") or 200)
+        limit = int(filters.get("limit") or 100)
     except (TypeError, ValueError):
-        limit = 200
-    limit = max(1, min(limit, 500))
+        limit = 100
+    limit = max(1, min(limit, 100))
     try:
         offset = int(filters.get("offset") or 0)
     except (TypeError, ValueError):
@@ -133,6 +133,54 @@ def get_all_appointments(filters: dict | None = None):
         with conn.cursor() as cur:
             cur.execute(query, params)
             return [_with_location_full_name(row) for row in cur.fetchall()]
+
+
+def count_all_appointments(filters: dict | None = None) -> int:
+    """Возвращает общее число приёмов с теми же фильтрами, без LIMIT/OFFSET."""
+    filters = filters or {}
+    query = """
+        SELECT COUNT(*) AS total
+        FROM appointments a
+        JOIN patients p ON a.patient_id = p.id
+        JOIN doctors d ON a.doctor_id = d.id
+        LEFT JOIN locations l ON a.location_id = l.id
+        LEFT JOIN branches b ON l.branch_id = b.id
+        LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
+        WHERE 1=1
+    """
+    params: list[Any] = []
+
+    if filters.get("branch_id"):
+        query += " AND b.id = %s"
+        params.append(filters["branch_id"])
+    if filters.get("location_id"):
+        query += " AND l.id = %s"
+        params.append(filters["location_id"])
+    if filters.get("doctor_id"):
+        query += " AND d.id = %s"
+        params.append(filters["doctor_id"])
+    if filters.get("search"):
+        query += """
+            AND (
+                p.last_name ILIKE %s
+                OR p.first_name ILIKE %s
+                OR COALESCE(p.patronymic, '') ILIKE %s
+            )
+        """
+        search = f"%{filters['search']}%"
+        params.extend([search, search, search])
+    if filters.get("date_from"):
+        query += " AND a.appointment_date >= %s"
+        params.append(filters["date_from"])
+    if filters.get("date_to"):
+        query += " AND a.appointment_date < (%s::date + INTERVAL '1 day')"
+        params.append(filters["date_to"])
+
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(query, params)
+            row = cur.fetchone()
+            return int(row["total"] if row else 0)
 
 
 def _fetch_patient_appointments(cur: Any, patient_id: int):
@@ -149,7 +197,7 @@ def _fetch_patient_appointments(cur: Any, patient_id: int):
             c.name AS company_name
         FROM appointments a
         JOIN doctors d ON a.doctor_id = d.id
-        JOIN locations l ON a.location_id = l.id
+        LEFT JOIN locations l ON a.location_id = l.id
         LEFT JOIN branches b ON l.branch_id = b.id
         LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
         WHERE a.patient_id = %s
@@ -177,6 +225,9 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
             a.patient_id,
             a.location_id,
             a.age_at_appointment,
+            a.diagnosis_text,
+            a.diagnosis_comment_text,
+            a.is_archive_import,
             p.last_name || ' ' || p.first_name || ' ' || COALESCE(p.patronymic, '') AS patient_fio,
             p.birth_date,
             p.phone,
@@ -199,6 +250,8 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
             s.insurance_history,
             s.disease_onset,
             s.disease_course,
+            s.disease_anamnesis_text,
+            s.life_anamnesis_text,
 
             e.general_condition,
             e.consciousness,
@@ -254,7 +307,7 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
         FROM appointments a
         JOIN patients p ON a.patient_id = p.id
         JOIN doctors d ON a.doctor_id = d.id
-        JOIN locations l ON a.location_id = l.id
+        LEFT JOIN locations l ON a.location_id = l.id
         LEFT JOIN branches b ON l.branch_id = b.id
         LEFT JOIN companies c ON c.id = COALESCE(l.company_id, b.company_id)
         LEFT JOIN surveys s ON a.id = s.appointment_id

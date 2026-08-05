@@ -118,7 +118,11 @@ def _fetch_patient_by_id(cur: Any, patient_id: int):
             patronymic,
             birth_date,
             phone,
-            CASE WHEN gender THEN 'Мужской' ELSE 'Женский' END AS gender_str
+            CASE
+                WHEN gender IS TRUE THEN 'Мужской'
+                WHEN gender IS FALSE THEN 'Женский'
+                ELSE 'Не указан'
+            END AS gender_str
         FROM patients
         WHERE id = %s
         """,
