@@ -323,8 +323,7 @@ def test_13_audit_middleware_logs_ckd_registry_open(audit_client, captured_event
     audit_client.get("/set-admin")
     audit_client.get("/ckd-registry")
 
-    assert captured_events[-1]["action"] == "open_ckd_registry"
-
+    assert captured_events[-1]["action"] == "open_local_ckd_registry"
 
 def test_14_audit_middleware_logs_admin_audit_open(audit_client, captured_events):
     audit_client.get("/set-admin")

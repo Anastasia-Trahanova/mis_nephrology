@@ -227,7 +227,18 @@ def _context() -> dict:
             recommendations="Контроль креатинина и ACR",
             next_control_date=date(2026, 10, 4),
         ),
-        "medications": [ns(medication="Лозартан", dosage="50 мг", schedule="1 раз в день")],
+        "medication_therapy_groups": [
+            {
+                "title": "Препараты для коррекции АД, ЧСС",
+                "prescriptions": [
+                    ns(
+                        medication="Лозартан",
+                        dosage="50 мг",
+                        schedule="1 раз в день",
+                    )
+                ],
+            }
+        ],
     }
 
 

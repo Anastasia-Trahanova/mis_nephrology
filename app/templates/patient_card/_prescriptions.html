@@ -12,17 +12,25 @@
 <p>—</p>
 {% endif %}
 <p><strong>Медикаментозная терапия:</strong></p>
-{% if medications %}
-  <ul>
-    {% for med in medications %}
-      <li>
-        <strong>{{ med.medication or '—' }}</strong>
-        {% if med.dosage %} — {{ med.dosage }}{% endif %}
-        {% if med.schedule %} ({{ med.schedule }}){% endif %}
-      </li>
-    {% endfor %}
-  </ul>
-{% else %}
+{% set medication_state = namespace(has_items=false) %}
+{% for group in medication_therapy_groups|default([]) %}
+  {% if group.prescriptions %}
+    {% set medication_state.has_items = true %}
+    <div class="mb-3">
+      <div class="fw-semibold mb-2">{{ group.title }}</div>
+      <ul class="mb-0">
+        {% for med in group.prescriptions %}
+          <li>
+            <strong>{{ med.medication or '—' }}</strong>
+            {% if med.dosage %} — {{ med.dosage }}{% endif %}
+            {% if med.schedule %} ({{ med.schedule }}){% endif %}
+          </li>
+        {% endfor %}
+      </ul>
+    </div>
+  {% endif %}
+{% endfor %}
+{% if not medication_state.has_items %}
   <p>—</p>
 {% endif %}
 <p><strong>Дата следующего контроля:</strong>

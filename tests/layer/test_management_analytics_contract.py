@@ -16,14 +16,13 @@ def read(path: str) -> str:
 def test_analytics_router_is_connected_and_named_in_navbar():
     main = read("app/main.py")
     base = read("app/templates/base.html")
-
     assert "management_analytics" in main
     assert "app.include_router(management_analytics.router" in main
-    assert 'href="/analytics">Аналитика</a>' in base
+    assert 'href="/analytics" title="Аналитика"' in base
+    assert '<span class="app-sidebar__label">Аналитика</span>' in base
     assert "chief_physician" in base
     assert "department_head" in base
     assert "current_role == 'admin'" in base
-
 
 def test_page_contains_only_requested_dashboard_sections():
     template = read("app/templates/management_analytics.html")

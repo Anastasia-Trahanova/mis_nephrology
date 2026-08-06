@@ -30,5 +30,6 @@ def test_analytics_does_not_duplicate_enter_handler():
     script = read("app/static/js/management_analytics.js")
 
     assert 'code === "Enter"' not in script
-    assert "form.requestSubmit();" not in script
+    assert "function applyLocation" in script
+    assert "form.requestSubmit();" in script
     assert 'code === "KeyS"' in script

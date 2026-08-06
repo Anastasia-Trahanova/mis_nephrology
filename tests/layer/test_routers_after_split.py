@@ -132,17 +132,8 @@ def test_create_new_appointment_router_redirects_to_patient_card(monkeypatch):
 
 
 def test_api_appointments_filtered_builds_filters_and_serializes_dates(monkeypatch):
-    """
-    Проверяет API фильтрации приёмов.
+    from fastapi import Response
 
-    Что важно:
-    - branch_id, location_id, doctor_id, search, period, limit, offset
-      собираются в словарь фильтров;
-    - роут вызывает get_all_appointments;
-    - даты datetime/date переводятся в строки, пригодные для JSON.
-
-    БД не используется: get_all_appointments подменяется monkeypatch.
-    """
     captured = {}
 
     def fake_get_all_appointments(filters):
@@ -157,8 +148,11 @@ def test_api_appointments_filtered_builds_filters_and_serializes_dates(monkeypat
         ]
 
     monkeypatch.setattr(filters_router, "get_all_appointments", fake_get_all_appointments)
+    monkeypatch.setattr(filters_router, "count_all_appointments", lambda filters: 1)
 
+    response = Response()
     result = filters_router.api_appointments_filtered(
+        response,
         branch_id=1,
         location_id=2,
         doctor_id=3,
@@ -172,20 +166,16 @@ def test_api_appointments_filtered_builds_filters_and_serializes_dates(monkeypat
     assert captured["filters"]["location_id"] == 2
     assert captured["filters"]["doctor_id"] == 3
     assert captured["filters"]["search"] == "Тестова"
-
-    # period="today" внутри роутера не передаётся в БД как отдельный ключ.
-    # Он преобразуется в date_from/date_to, потому что слой БД фильтрует
-    # приёмы уже по конкретному диапазону дат.
     assert captured["filters"]["date_from"] == date.today()
     assert captured["filters"]["date_to"] == date.today()
-
     assert captured["filters"]["sort_order"] == "desc"
     assert captured["filters"]["limit"] == 10
     assert captured["filters"]["offset"] == 0
-
     assert result[0]["appointment_date"].startswith("2026-07-04")
     assert result[0]["birth_date"] == "1980-01-15"
-
+    assert response.headers["X-Total-Count"] == "1"
+    assert response.headers["X-Page-Limit"] == "10"
+    assert response.headers["X-Page-Offset"] == "0"
 
 def test_filter_dictionaries_delegate_to_database_functions(monkeypatch):
     """

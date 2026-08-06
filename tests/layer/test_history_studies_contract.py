@@ -22,21 +22,16 @@ def read(relative_path: str) -> str:
     return (ROOT / relative_path).read_text(encoding="utf-8")
 
 
-def test_migration_adds_daily_albumin_and_additional_studies_only():
-    content = read("migrations/versions/0011_history_studies_fields.py")
+def test_final_schema_contains_daily_albumin_and_additional_studies():
+    schema = read("database/01 создание таблиц.sql")
+    constraints = read("database/02 настройка связей ключей и ограничений.sql")
 
-    assert 'revision = "0011_history_studies_fields"' in content
-    assert 'down_revision = "0010_remove_heredity_flag"' in content
-    assert '"daily_albumin_excretion"' in content
-    assert '"appointment_additional_studies"' in content
-    assert '"other_laboratory_studies"' in content
-    assert '"other_instrumental_studies"' in content
-
-    assert '"cbc_results"' not in content
-    assert '"urinalysis_results"' not in content
-    assert '"biochemistry_results"' not in content
-    assert '"prescriptions"' not in content
-
+    assert "daily_albumin_excretion NUMERIC(12,2)" in schema
+    assert "CREATE TABLE IF NOT EXISTS appointment_additional_studies" in schema
+    assert "other_laboratory_studies TEXT" in schema
+    assert "other_instrumental_studies TEXT" in schema
+    assert "fk_appointment_additional_studies_appointment" in constraints
+    assert "ck_albuminuria_daily_albumin_excretion_nonnegative" in constraints
 
 def test_primary_and_repeat_forms_follow_history_studies_order():
     expected = [

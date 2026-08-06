@@ -54,8 +54,7 @@ def test_kdigo_partial_does_not_repeat_conclusion_heading():
 
 def test_diagnosis_subheadings_use_same_neutral_text_style():
     template = _read("app/templates/patient_card/_diagnoses.html")
-
-    assert '<div class="fw-semibold mb-2">Основной диагноз</div>' in template
+    assert '<div class="fw-semibold mb-2">Основной диагноз по МКБ-10</div>' in template
     assert '<div class="fw-semibold mb-2">Осложнения основного диагноза</div>' in template
     assert '<div class="fw-semibold mb-2">Сопутствующие заболевания</div>' in template
     assert "<h6" not in template

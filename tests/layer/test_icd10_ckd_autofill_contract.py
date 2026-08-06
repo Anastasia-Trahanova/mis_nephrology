@@ -94,16 +94,13 @@ def test_appointments_repository_does_not_use_dropped_text_diagnoses_table():
     assert "from diagnoses" not in normalized
 
 
-def test_drop_text_diagnoses_alembic_migration_exists_in_versions():
-    content = read("migrations/versions/0004_drop_text_diagnoses.py")
+def test_final_schema_uses_only_structured_icd10_diagnoses():
+    content = read("database/01 создание таблиц.sql")
     normalized = " ".join(content.lower().split())
 
-    assert 'revision = "0004_drop_text_diagnoses"' in content
-    assert 'down_revision = "0003_kdigo_risk_sources"' in content
-    assert "drop table if exists diagnoses cascade" in normalized
-    assert "op.create_table" in content
-    assert '"diagnoses"' in content
-
+    assert "create table if not exists icd10_diagnoses" in normalized
+    assert "create table if not exists appointment_icd10_diagnoses" in normalized
+    assert "create table if not exists diagnoses (" not in normalized
 
 def test_prefilled_diagnosis_is_selected_and_confirmed_on_edit():
     form_js = read("app/static/js/history_studies_form.js")

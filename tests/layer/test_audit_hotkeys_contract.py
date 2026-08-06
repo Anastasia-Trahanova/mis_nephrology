@@ -36,5 +36,5 @@ def test_hotkeys_help_describes_audit_page():
 
     assert "is_audit_page = current_path == '/admin/audit'" in template
     assert "{% elif is_audit_page %}Журнал аудита" in template
-    assert "В фильтрах: применить фильтры" in template
+    assert "В формах фильтров: применить фильтры" in template
     assert "Открыть выбранное событие" in template

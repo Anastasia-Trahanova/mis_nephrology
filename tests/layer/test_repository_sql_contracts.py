@@ -219,7 +219,6 @@ def test_insert_icd10_diagnoses_and_prescriptions_sql_contracts():
     diagnosis_id = find_active_icd10_diagnosis_id(cur, "N18 — ХБП")
     assert diagnosis_id == 501
     assert "from icd10_diagnoses" in _normalized_sql(cur.last_query)
-
     insert_appointment_icd10_diagnosis_row(cur, 202, "main", 501, "note", 1)
     assert "insert into appointment_icd10_diagnoses" in _normalized_sql(cur.last_query)
     assert "insert into diagnoses" not in _normalized_sql(cur.last_query)
@@ -231,9 +230,22 @@ def test_insert_icd10_diagnoses_and_prescriptions_sql_contracts():
     )
     assert "insert into appointment_diets" in _normalized_sql(cur.last_query)
 
-    insert_prescription(cur, 202, "Лозартан", "50 мг", "1 раз")
+    insert_prescription(
+        cur,
+        202,
+        "Коррекция АД, ЧСС",
+        "Лозартан",
+        "50 мг",
+        "1 раз",
+    )
     assert "insert into prescriptions" in _normalized_sql(cur.last_query)
-
+    assert cur.last_params == (
+        202,
+        "Коррекция АД, ЧСС",
+        "Лозартан",
+        "50 мг",
+        "1 раз",
+    )
 
 def test_additional_studies_repository_contract():
     cur = FakeCursor()

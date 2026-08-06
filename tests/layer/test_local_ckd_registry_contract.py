@@ -62,19 +62,19 @@ def test_registry_page_and_patient_card_have_required_fields():
     panel = (
         ROOT / "app" / "templates" / "patient_card" / "_ckd_registry_panel.html"
     ).read_text(encoding="utf-8")
-    for label in (
+    for marker in (
         "ФИО",
-        "Дата рождения",
-        "Дата включения",
-        "Номер телефона",
-        "Основной диагноз",
+        "Дата<br>рождения",
+        "Дата включения<br>в регистр",
+        "Телефон",
+        "Основной<br>диагноз",
         "СКФ",
-        "Стадия ХБП",
+        "Стадия<br>ХБП",
         "Исход",
-        "Открыть ЭМК",
+        'title="Открыть электронную медицинскую карту"',
         "Выгрузить в Excel",
     ):
-        assert label in page
+        assert marker in page
     assert "Добавление пациента в регистр пациентов с ХБП" in panel
     assert "Добавить в регистр" in panel
     assert "Пациент добавлен в регистр пациентов с ХБП" in panel
@@ -88,19 +88,18 @@ def test_registry_page_and_patient_card_have_required_fields():
     assert 'name="comment"' in panel
     assert "СКФ по последнему приёму" in panel
     assert "Стадия ХБП по последнему приёму" in panel
-    assert '<option value="" selected>Наблюдается</option>' in panel
+    assert '<option value="observed" selected>Наблюдается</option>' in panel
     assert ">Наблюдается</option>" in page
-
 
 def test_registry_navigation_and_access_are_separated_from_patient_lists():
     base = (ROOT / "app" / "templates" / "base.html").read_text(encoding="utf-8")
     main = (ROOT / "app" / "main.py").read_text(encoding="utf-8")
     assert 'href="/patient-lists"' in base
     assert 'href="/ckd-registry"' in base
-    assert "current_role in ('chief_physician', 'department_head')" in base
+    assert "{% set management_roles = ('admin', 'chief_physician', 'department_head') %}" in base
+    assert "{% if current_role in management_roles %}" in base
     assert "patient_lists.router" in main
     assert "ckd_registry.router" in main
-
 
 def test_registry_page_is_management_only():
     class FakeRequest:
