@@ -19,9 +19,9 @@ from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from pathlib import Path
 from typing import Any, Iterable, Mapping, Sequence
 
-EXPECTED_REVISION = "0016_archive_import_fields"
-DEFAULT_EXPECTED_COUNT = 1518
-IMPORT_KEY_PREFIX = "nephro-v110:"
+EXPECTED_REVISION = "0018_archive_source_path"
+LEGACY_IMPORT_KEY_PREFIX = "nephro-v110:"
+STABLE_IMPORT_KEY_PREFIX = "nephro-archive-v1:"
 CLEAN_STATUS = "ЧИСТАЯ_ЗАПИСЬ"
 
 
@@ -50,6 +50,7 @@ class LaboratoryFinding:
     unit: str | None
     source_order: int
     note: str | None
+    source_text: str | None = None
 
 
 @dataclass(frozen=True)
@@ -66,6 +67,9 @@ class InstrumentalFinding:
 @dataclass
 class SourceConsultation:
     consultation_id: str
+    source_sha256: str
+    source_ordinal: int
+    source_relative_path: str
     patient_name: str
     birth_date: date
     appointment_date: date
@@ -99,6 +103,10 @@ class ImportReport:
     doctor_mapping: dict[str, str] = field(default_factory=dict)
     consultations_already_present: int = 0
     consultations_to_insert: int = 0
+    import_keys_to_upgrade: int = 0
+    import_keys_upgraded: int = 0
+    source_paths_to_backfill: int = 0
+    source_paths_backfilled: int = 0
     patients_to_create: int = 0
     patients_reused: int = 0
     appointments_inserted: int = 0
@@ -114,7 +122,17 @@ class ImportReport:
     calculated_metrics_rows_inserted: int = 0
     laboratory_values_mapped: int = 0
     laboratory_values_left_as_other: int = 0
+    laboratory_values_ignored_as_artifact: int = 0
+    laboratory_values_not_loaded: int = 0
+    laboratory_units_inferred: int = 0
+    egfr_values_mapped: int = 0
+    laboratory_appointments_to_repair: int = 0
+    laboratory_appointments_repaired: int = 0
+    laboratory_rows_to_delete: int = 0
+    laboratory_rows_deleted: int = 0
+    laboratory_rows_to_insert: int = 0
     instrumental_studies_imported: int = 0
+    instrumental_appointments_cleaned: int = 0
     warnings: list[str] = field(default_factory=list)
 
 
@@ -158,6 +176,15 @@ class NumericSpec:
     scale: int
 
 
+@dataclass
+class LabBuildStats:
+    ignored_as_artifact: int = 0
+    inferred_units: int = 0
+    egfr_mapped: int = 0
+    not_loaded: int = 0
+    issues: list[str] = field(default_factory=list)
+
+
 LAB_RULES: dict[tuple[str, str], LabRule] = {
     ("ОАК", "Гемоглобин"): LabRule("cbc_results", "hemoglobin", ("г/л",)),
     ("ОАК", "Эритроциты"): LabRule("cbc_results", "erythrocytes", ("10^12/л",)),
@@ -182,10 +209,84 @@ LAB_RULES: dict[tuple[str, str], LabRule] = {
     ("ОАМ", "Лейкоциты"): LabRule("urinalysis_results", "leukocytes", ("вп/зр",), True),
     ("ОАМ", "Эритроциты"): LabRule("urinalysis_results", "erythrocytes", ("вп/зр",), True),
     ("ОАМ", "Бактерии"): LabRule("urinalysis_results", "bacteria", (), True, "text"),
-    ("МАУ", "Микроальбуминурия"): LabRule("albuminuria_results", "urine_albumin", ("мг/л", "г/л"), False, "albumin_unit"),
+    ("МАУ", "Микроальбуминурия"): LabRule("albuminuria_results", "urine_albumin", ("мг/л", "г/л"), True, "albumin_unit"),
     ("МАУ", "Креатинин мочи"): LabRule("albuminuria_results", "urine_creatinine", ("ммоль/л", "мкмоль/л"), False, "urine_creatinine_unit"),
+    ("МАУ", "Альбумин-креатининовое соотношение"): LabRule("albuminuria_results", "albumin_creatinine_ratio", ("мг/ммоль",), True),
     ("Расчет", "рСКФ CKD-EPI"): LabRule("calculated_metrics", "egfr_ckdepi", ("мл/мин/1.73м2", "мл/мин")),
 }
+
+# Единицы, подтверждённые по форме МИС. Они подставляются только тогда,
+# когда в исходном заключении единица отсутствует. Явно указанная другая
+# единица никогда не заменяется молча.
+DEFAULT_UNITS: dict[tuple[str, str], str] = {
+    ("Биохимия", "Креатинин"): "мкмоль/л",
+    ("Биохимия", "Мочевина"): "ммоль/л",
+    ("Биохимия", "Мочевая кислота"): "мкмоль/л",
+    ("Биохимия", "Глюкоза крови"): "ммоль/л",
+    ("Биохимия", "Общий белок"): "г/л",
+    ("Биохимия", "Альбумин"): "г/л",
+    ("Биохимия", "Калий"): "ммоль/л",
+    ("Биохимия", "Кальций"): "ммоль/л",
+    ("Биохимия", "Фосфор"): "ммоль/л",
+    ("ОАК", "Гемоглобин"): "г/л",
+    ("ОАК", "СОЭ"): "мм/ч",
+    ("ОАК", "MCV"): "фл",
+    ("ОАМ", "Белок"): "г/л",
+    ("МАУ", "Микроальбуминурия"): "мг/л",
+    ("МАУ", "Альбумин-креатининовое соотношение"): "мг/ммоль",
+    ("Расчет", "рСКФ CKD-EPI"): "мл/мин/1.73м2",
+}
+
+# Нормализация вариантов, реально найденных в архивной выгрузке.
+URINALYSIS_LEUKOCYTE_ALIASES = {
+    "le", "wbc", "л", "лей", "лейк", "лейкоцит", "лейкоциты",
+    "лейкоцитывпзр", "лейкоцитывполезрения",
+}
+
+URINALYSIS_ERYTHROCYTE_ALIASES = {
+    "er", "rbc", "эр", "эрит", "эритр", "эритроцит", "эритроциты",
+    "эритроцитывпзр", "эритроцитывполезрения",
+}
+
+
+BIOCHEMISTRY_ALIASES: dict[str, str] = {
+    "креат": "Креатинин",
+    "контролькреатинина": "Креатинин",
+    "глюк": "Глюкоза крови",
+    "альб": "Альбумин",
+    "альбуин": "Альбумин",
+    "альбумиин": "Альбумин",
+    "мочевая": "Мочевая кислота",
+    "мочкта": "Мочевая кислота",
+    "мочкисл": "Мочевая кислота",
+    "мочкислота": "Мочевая кислота",
+    "наприемекалий": "Калий",
+    "наприемеk": "Калий",
+    "калийммольл": "Калий",
+    "кальцийобщ": "Кальций",
+    "сакоррект": "Кальций",
+    "сакрви": "Кальций",
+    "сакрови": "Кальций",
+    "саммольл": "Кальций",
+    "ферр": "Ферритин",
+    "сословферритин": "Ферритин",
+}
+
+APPROVED_RESIDUAL_UNITS: dict[tuple[str, str], str] = {
+    ("биохимия", "кальцийионизированный"): "ммоль/л",
+    ("биохимия", "аионниз"): "ммоль/л",
+    ("биохимия", "кальцийиониз"): "ммоль/л",
+    ("биохимия", "ттгмкмемлnдо"): "мкМЕ/мл",
+}
+
+LAB_TABLES = (
+    "cbc_results",
+    "biochemistry_results",
+    "urinalysis_results",
+    "albuminuria_results",
+    "calculated_metrics",
+)
+
 
 TABLE_DATE_REQUIRED = {
     "cbc_results": True,
@@ -201,7 +302,7 @@ REQUIRED_TARGET_COLUMNS: dict[str, set[str]] = {
     "appointments": {
         "id", "patient_id", "doctor_id", "location_id", "appointment_date",
         "age_at_appointment", "diagnosis_text", "diagnosis_comment_text",
-        "is_archive_import", "archive_import_key",
+        "is_archive_import", "archive_import_key", "archive_source_relative_path",
     },
     "surveys": {
         "appointment_id", "complaints", "heredity_description",
@@ -227,6 +328,81 @@ DOCTOR_SURNAME_ALIASES = {
     "возва": "возова",
 }
 
+
+def stable_import_key(item: SourceConsultation) -> str:
+    """Устойчивый ключ: контрольная сумма исходного файла + номер приёма в нём."""
+    sha256 = item.source_sha256.strip().lower()
+    if not re.fullmatch(r"[0-9a-f]{64}", sha256):
+        raise ImportValidationError(
+            f"Некорректная SHA-256 исходного файла для {item.consultation_id}: {item.source_sha256!r}"
+        )
+    if item.source_ordinal < 1:
+        raise ImportValidationError(
+            f"Некорректный номер консультации в файле для {item.consultation_id}: "
+            f"{item.source_ordinal}"
+        )
+    return f"{STABLE_IMPORT_KEY_PREFIX}{sha256}:{item.source_ordinal}"
+
+
+def legacy_import_key(item: SourceConsultation) -> str:
+    """Ключ, которым была загружена первая партия из старого импортёра."""
+    return LEGACY_IMPORT_KEY_PREFIX + item.consultation_id
+
+
+def classify_existing_import_keys(
+    consultations: Sequence[SourceConsultation],
+    existing_key_to_appointment_id: Mapping[str, int],
+) -> tuple[set[str], dict[str, str]]:
+    """Находит уже загруженные приёмы и старые ключи, которые надо обновить."""
+    already_present: set[str] = set()
+    upgrades: dict[str, str] = {}
+    conflicts: list[str] = []
+
+    for item in consultations:
+        stable_key = stable_import_key(item)
+        legacy_key = legacy_import_key(item)
+        stable_id = existing_key_to_appointment_id.get(stable_key)
+        legacy_id = existing_key_to_appointment_id.get(legacy_key)
+
+        if stable_id is not None and legacy_id is not None and stable_id != legacy_id:
+            conflicts.append(
+                f"{item.consultation_id}: устойчивый и старый ключи принадлежат "
+                f"разным приёмам МИС ({stable_id} и {legacy_id})"
+            )
+            continue
+        if stable_id is not None:
+            already_present.add(stable_key)
+            continue
+        if legacy_id is not None:
+            already_present.add(stable_key)
+            upgrades[legacy_key] = stable_key
+
+    if conflicts:
+        raise ImportValidationError(
+            "Обнаружены конфликтующие ключи архивного импорта:\n"
+            + "\n".join(conflicts[:30])
+        )
+    return already_present, upgrades
+
+
+
+
+def normalize_source_relative_path(value: Any) -> str:
+    """Нормализует относительный путь из SQLite и запрещает выход из корня архива."""
+    text = str(value or "").strip().replace("\\", "/")
+    text = re.sub(r"/+", "/", text)
+    if not text:
+        raise ImportValidationError("Не указан относительный путь исходного документа")
+    if re.match(r"^[A-Za-z]:", text) or text.startswith("/"):
+        raise ImportValidationError(
+            f"Путь исходного документа должен быть относительным: {value!r}"
+        )
+    parts = [part for part in text.split("/") if part not in {"", "."}]
+    if not parts or any(part == ".." for part in parts):
+        raise ImportValidationError(
+            f"Недопустимый относительный путь исходного документа: {value!r}"
+        )
+    return "/".join(parts)
 
 def clean_text(value: Any) -> str | None:
     if value is None:
@@ -357,6 +533,112 @@ def match_doctor(source_name: str, doctors: Sequence[DoctorRow]) -> DoctorRow:
     return candidates[0]
 
 
+def canonical_lab_key(lab: LaboratoryFinding) -> tuple[str, str]:
+    """Возвращает каноническое исследование и показатель для полей МИС."""
+    study = clean_text(lab.study_type) or ""
+    indicator = clean_text(lab.indicator_normalized) or clean_text(lab.indicator_raw) or ""
+    study_key = normalize_word(study)
+    indicator_key = normalize_word(indicator)
+    raw_key = normalize_word(lab.indicator_raw)
+    combined = f"{indicator_key}{raw_key}"
+
+    if "скф" in combined or "egfr" in combined or "ckdepi" in combined:
+        return "Расчет", "рСКФ CKD-EPI"
+    if "птг" in combined or "паратгормон" in combined:
+        return "ПТГ", "Паратгормон"
+    if study_key in {"оам", "общийанализмочи"}:
+        urine_key = indicator_key or raw_key
+        if (
+            urine_key in URINALYSIS_LEUKOCYTE_ALIASES
+            or (urine_key.startswith("лейкоцит") and "эстераз" not in urine_key)
+        ):
+            return "ОАМ", "Лейкоциты"
+        if (
+            urine_key in URINALYSIS_ERYTHROCYTE_ALIASES
+            or urine_key.startswith("эритроцит")
+        ):
+            return "ОАМ", "Эритроциты"
+    if study_key == "биохимия":
+        if indicator_key == "мау":
+            return "МАУ", "Микроальбуминурия"
+        alias = BIOCHEMISTRY_ALIASES.get(indicator_key)
+        if alias:
+            return "Биохимия", alias
+    return study, indicator
+
+
+def _looks_like_calendar_value(value: str | None) -> bool:
+    text = (value or "").strip()
+    if not text:
+        return False
+    if re.fullmatch(r"(?:19|20)\d{2}-\d{1,2}-\d{1,2}", text):
+        return True
+    if re.fullmatch(r"\d{1,2}[./-]\d{1,2}[./-](?:19|20)?\d{2}", text):
+        return True
+    if re.fullmatch(r"\d{1,2}[./-](?:19|20)\d{2}", text):
+        return True
+    return False
+
+
+def is_obvious_lab_artifact(
+    lab: LaboratoryFinding,
+    canonical_key: tuple[str, str],
+    numeric: Decimal | None,
+) -> bool:
+    """Отсекает даты, заголовки и явные обрывки текста, а не результаты."""
+    raw_value = lab.numeric_value or lab.text_value
+    if _looks_like_calendar_value(raw_value):
+        return True
+
+    indicator_text = clean_text(lab.indicator_normalized) or clean_text(lab.indicator_raw) or ""
+    indicator_key = normalize_word(indicator_text)
+    canonical_known = canonical_key in LAB_RULES
+
+    if numeric is not None and Decimal("30000") <= numeric <= Decimal("60000"):
+        return True  # серийное число даты Excel
+    if canonical_key == ("Расчет", "рСКФ CKD-EPI") and numeric is not None:
+        if numeric <= 0 or numeric > Decimal("500"):
+            return True
+
+    if canonical_known:
+        return False
+
+    if indicator_key in {
+        "биохимия", "общийрезультатоам", "осадок", "действителенвтечение",
+    }:
+        return True
+    suspicious_words = (
+        "действителен", "вконцемарта", "контрольчерез", "гормоныщжнорма",
+        "дата", "анализкрови", "биохимическийанализ",
+    )
+    if any(word in indicator_key for word in suspicious_words):
+        return True
+    if numeric is not None and Decimal("1900") <= numeric <= Decimal("2100"):
+        return True
+    if len(indicator_text) > 80:
+        return True
+    return False
+
+
+def approved_residual_unit(lab: LaboratoryFinding) -> str:
+    study_key = normalize_word(lab.study_type)
+    indicator_key = normalize_word(lab.indicator_normalized or lab.indicator_raw)
+    return APPROVED_RESIDUAL_UNITS.get((study_key, indicator_key), "")
+
+
+def resolved_lab_unit(
+    lab: LaboratoryFinding,
+    canonical_key: tuple[str, str],
+) -> tuple[str, bool]:
+    explicit = normalize_unit(lab.unit)
+    if explicit:
+        return explicit, False
+    default = DEFAULT_UNITS.get(canonical_key)
+    if default:
+        return normalize_unit(default), True
+    return "", False
+
+
 def normalize_unit(value: str | None) -> str:
     if not value:
         return ""
@@ -386,10 +668,11 @@ def decimal_value(value: str | None) -> Decimal | None:
         return None
 
 
-def _source_value(lab: LaboratoryFinding) -> str:
+def _source_value(lab: LaboratoryFinding, display_unit: str | None = None) -> str:
     value = lab.numeric_value if lab.numeric_value is not None else lab.text_value
     value = value or "не указано"
-    unit = f" {lab.unit}" if lab.unit else ""
+    shown_unit = display_unit if display_unit is not None else lab.unit
+    unit = f" {shown_unit}" if shown_unit else ""
     date_text = lab.analysis_date.isoformat() if lab.analysis_date else "дата не указана"
     artificial = " (15-е число установлено искусственно)" if lab.day_is_artificial else ""
     note = f"; {lab.note}" if lab.note else ""
@@ -397,6 +680,110 @@ def _source_value(lab: LaboratoryFinding) -> str:
         f"{date_text}{artificial} | {lab.study_type} | "
         f"{lab.indicator_normalized}: {value}{unit}{note}"
     )
+
+
+TECHNICAL_TEXT_PATTERNS = (
+    r"\(?\s*15[- ]?е\s+число\s+установлено\s+искусственно\s*\)?",
+    r"\bдень\s+15\s+установлен(?:о)?\s+искусственно\b",
+    r"\[\s*единица\s+принята\s+по\s+форме\s+МИС\s*\]",
+    r"\[\s*загружено\s+как[^\]]*\]",
+    r"\[\s*пересчитано[^\]]*\]",
+    r"\[\s*не\s+загружено:[^\]]*\]",
+)
+
+
+def clean_technical_text(value: str | None) -> str:
+    """Удаляет только служебные пометки парсера, не меняя медицинский текст."""
+    text = clean_text(value) or ""
+    for pattern in TECHNICAL_TEXT_PATTERNS:
+        text = re.sub(pattern, " ", text, flags=re.I)
+    text = re.sub(r"\s*;\s*;\s*", "; ", text)
+    text = re.sub(r"\s+([,;:.])", r"\1", text)
+    text = re.sub(r"\s{2,}", " ", text).strip(" ;,|")
+    return text
+
+
+def display_study_date(
+    value: date | None,
+    *,
+    date_precision: str = "",
+    day_is_artificial: bool = False,
+) -> str:
+    """Показывает точную дату, а для искусственного дня — только месяц и год."""
+    if value is None:
+        return "дата не указана"
+    precision = normalize_word(date_precision)
+    if day_is_artificial or precision in {"месяц", "month", "месяцгод"}:
+        return value.strftime("%m.%Y")
+    return value.strftime("%d.%m.%Y")
+
+
+def _clean_lab_note(note: str | None, value: str) -> tuple[str, str]:
+    """Сохраняет клиническую пометку, но переводит знак сравнения к значению."""
+    text = clean_technical_text(note)
+    sign = ""
+    if re.search(r"со\s+знаком\s*>|значение\s+указано\s+со\s+знаком\s*>", text, re.I):
+        sign = ">"
+        text = re.sub(
+            r"(?:значение\s+указано\s+)?со\s+знаком\s*>", " ", text, flags=re.I
+        )
+    elif re.search(r"со\s+знаком\s*<|значение\s+указано\s+со\s+знаком\s*<", text, re.I):
+        sign = "<"
+        text = re.sub(
+            r"(?:значение\s+указано\s+)?со\s+знаком\s*<", " ", text, flags=re.I
+        )
+    text = re.sub(r"\s*;\s*", "; ", text).strip(" ;,")
+    if sign and not value.lstrip().startswith((">", "<")):
+        value = sign + value
+    return value, text
+
+
+def residual_lab_parameter(lab: LaboratoryFinding, display_unit: str = "") -> str:
+    indicator = (
+        clean_text(lab.indicator_normalized)
+        or clean_text(lab.indicator_raw)
+        or "Показатель"
+    )
+    value = clean_text(lab.numeric_value) or clean_text(lab.text_value) or "не указано"
+    value, note = _clean_lab_note(lab.note, value)
+    unit = clean_text(display_unit or lab.unit) or ""
+    parts = [f"{indicator}: {value}{(' ' + unit) if unit else ''}"]
+    if note:
+        parts.append(note)
+    return "; ".join(parts)
+
+
+def format_residual_laboratory(
+    items: Sequence[tuple[LaboratoryFinding, str]],
+) -> list[str]:
+    """Группирует только неподдерживаемые показатели по дате и типу анализа."""
+    groups: dict[tuple[str, str], list[str]] = {}
+    order: list[tuple[str, str]] = []
+    for lab, display_unit in items:
+        date_text = display_study_date(
+            lab.analysis_date,
+            date_precision=lab.date_precision,
+            day_is_artificial=lab.day_is_artificial,
+        )
+        study_type = clean_text(lab.study_type) or "Другие исследования"
+        key = (date_text, study_type)
+        if key not in groups:
+            groups[key] = []
+            order.append(key)
+        parameter = residual_lab_parameter(lab, display_unit)
+        if parameter and parameter not in groups[key]:
+            groups[key].append(parameter)
+    return [
+        f"{date_text}, {study_type}: {'; '.join(groups[(date_text, study_type)])}"
+        for date_text, study_type in order
+        if groups[(date_text, study_type)]
+    ]
+
+
+def record_lab_issue(stats: LabBuildStats, lab: LaboratoryFinding, reason: str) -> None:
+    stats.not_loaded += 1
+    if len(stats.issues) < 100:
+        stats.issues.append(f"{_source_value(lab)} [{reason}]")
 
 
 def _unit_allowed(unit: str, rule: LabRule) -> bool:
@@ -433,93 +820,91 @@ def build_lab_payloads(
     age: int,
     weight: Decimal | None,
     numeric_specs: Mapping[tuple[str, str], NumericSpec] | None = None,
+    stats: LabBuildStats | None = None,
 ) -> tuple[dict[str, list[dict[str, Any]]], list[str], int]:
     """Преобразует распарсенные показатели в строки таблиц МИС.
 
-    Возвращает payload-ы по таблицам, список неразмещённых значений и число
-    успешно сопоставленных показателей.
+    В свободное поле попадают только показатели, для которых в МИС нет
+    отдельной колонки. Служебные пометки парсера туда не записываются.
     """
     grouped: dict[tuple[str, date | None], dict[str, Any]] = {}
-    residual: list[str] = []
+    residual_items: list[tuple[LaboratoryFinding, str]] = []
     mapped = 0
+    stats = stats or LabBuildStats()
 
     for lab in sorted(consultation.laboratory, key=lambda x: x.source_order):
-        rule = LAB_RULES.get((lab.study_type, lab.indicator_normalized))
+        canonical_key = canonical_lab_key(lab)
+        rule = LAB_RULES.get(canonical_key)
         numeric = decimal_value(lab.numeric_value)
-        unit = normalize_unit(lab.unit)
+
+        if is_obvious_lab_artifact(lab, canonical_key, numeric):
+            stats.ignored_as_artifact += 1
+            continue
+
+        unit, inferred_unit = resolved_lab_unit(lab, canonical_key)
+        if inferred_unit:
+            stats.inferred_units += 1
 
         if rule is None:
-            residual.append(_source_value(lab))
+            residual_unit = approved_residual_unit(lab)
+            if residual_unit and not lab.unit:
+                stats.inferred_units += 1
+            residual_items.append((lab, residual_unit))
             continue
+
         if rule.transform == "text":
-            text_result = clean_text(lab.text_value) or clean_text(lab.numeric_value)
+            text_result = clean_technical_text(lab.text_value) or clean_technical_text(lab.numeric_value)
             if not text_result:
-                residual.append(_source_value(lab))
+                record_lab_issue(stats, lab, "пустое значение стандартного показателя")
                 continue
             key = (rule.table, lab.analysis_date)
             if TABLE_DATE_REQUIRED[rule.table] and lab.analysis_date is None:
-                residual.append(_source_value(lab) + " [не загружено: нет даты]")
+                record_lab_issue(stats, lab, "нет даты для стандартной таблицы МИС")
                 continue
             payload = grouped.setdefault(key, {"investigation_date": lab.analysis_date})
             if rule.column in payload and payload[rule.column] != text_result:
-                residual.append(_source_value(lab) + " [не загружено: повторное отличающееся значение]")
+                record_lab_issue(stats, lab, "повторное отличающееся значение")
                 continue
             payload[rule.column] = text_result[:100]
             mapped += 1
             continue
+
         if numeric is None:
-            residual.append(_source_value(lab))
+            record_lab_issue(stats, lab, "значение стандартного показателя не является числом")
             continue
         if TABLE_DATE_REQUIRED[rule.table] and lab.analysis_date is None:
-            residual.append(_source_value(lab) + " [не загружено: нет даты]")
+            record_lab_issue(stats, lab, "нет даты для стандартной таблицы МИС")
             continue
         if not _unit_allowed(unit, rule):
-            residual.append(_source_value(lab) + " [не загружено: единица не соответствует полю МИС]")
+            record_lab_issue(stats, lab, "единица не соответствует стандартному полю МИС")
             continue
         if numeric < 0:
-            residual.append(_source_value(lab) + " [не загружено: отрицательное числовое значение]")
+            record_lab_issue(stats, lab, "отрицательное числовое значение")
             continue
 
-        original_numeric = numeric
         numeric, extras = _transform_lab_value(numeric, unit, rule)
-        if rule.transform == "specific_gravity" and numeric != original_numeric:
-            residual.append(
-                _source_value(lab) + f" [загружено как относительная плотность {numeric}]"
-            )
-        elif rule.transform == "urine_protein" and unit == "мг/л":
-            residual.append(
-                _source_value(lab) + f" [пересчитано в {numeric} г/л для поля МИС]"
-            )
-
         spec = (numeric_specs or {}).get((rule.table, rule.column))
         if spec is not None and not numeric_value_fits(numeric, spec):
-            residual.append(
-                _source_value(lab)
-                + f" [не загружено: значение {numeric} не помещается в "
-                + f"{rule.table}.{rule.column} NUMERIC({spec.precision},{spec.scale})]"
+            record_lab_issue(
+                stats,
+                lab,
+                f"значение {numeric} не помещается в {rule.table}.{rule.column} "
+                f"NUMERIC({spec.precision},{spec.scale})",
             )
             continue
 
         key = (rule.table, lab.analysis_date)
-        payload = grouped.setdefault(
-            key,
-            {"investigation_date": lab.analysis_date},
-        )
+        payload = grouped.setdefault(key, {"investigation_date": lab.analysis_date})
         if rule.column in payload:
             if payload[rule.column] == numeric:
                 continue
-            residual.append(_source_value(lab) + " [не загружено: повторное отличающееся значение]")
+            record_lab_issue(stats, lab, "повторное отличающееся значение")
             continue
         payload[rule.column] = numeric
         payload.update(extras)
-        if lab.day_is_artificial:
-            residual.append(
-                f"{lab.analysis_date.isoformat()} | {lab.study_type}: "
-                "день 15 установлен искусственно"
-            )
-        if not unit and rule.units:
-            residual.append(_source_value(lab) + " [загружено, но единица в источнике не указана]")
         mapped += 1
+        if canonical_key == ("Расчет", "рСКФ CKD-EPI"):
+            stats.egfr_mapped += 1
 
     result: dict[str, list[dict[str, Any]]] = defaultdict(list)
     for (table_name, _), payload in grouped.items():
@@ -531,9 +916,8 @@ def build_lab_payloads(
             payload.setdefault("urine_albumin_unit", "mg_l")
             payload.setdefault("urine_creatinine_unit", "mmol_l")
         result[table_name].append(payload)
-    residual = list(dict.fromkeys(residual))
+    residual = format_residual_laboratory(residual_items)
     return dict(result), residual, mapped
-
 
 def parse_number_with_unit(values: Sequence[str], kind: str) -> Decimal | None:
     for value in values:
@@ -604,7 +988,7 @@ def _require_sqlite_columns(connection: sqlite3.Connection, table: str, required
         )
 
 
-def load_source(path: Path, expected_count: int = DEFAULT_EXPECTED_COUNT) -> list[SourceConsultation]:
+def load_source(path: Path, expected_count: int | None = None) -> list[SourceConsultation]:
     if not path.is_file():
         raise ImportValidationError(f"Не найден файл SQLite: {path}")
 
@@ -613,11 +997,17 @@ def load_source(path: Path, expected_count: int = DEFAULT_EXPECTED_COUNT) -> lis
     try:
         _require_sqlite_columns(
             connection,
+            "source_documents",
+            {"document_id", "relative_path", "sha256"},
+        )
+        _require_sqlite_columns(
+            connection,
             "consultations",
             {
-                "consultation_id", "resolved_name", "birth_date", "appointment_date",
-                "doctor_name", "status", "complaints", "history_of_present_illness",
-                "history_of_life", "diagnosis", "comments", "recommendations",
+                "consultation_id", "document_id", "ordinal", "resolved_name",
+                "birth_date", "appointment_date", "doctor_name", "status",
+                "complaints", "history_of_present_illness", "history_of_life",
+                "diagnosis", "comments", "recommendations",
             },
         )
         _require_sqlite_columns(
@@ -631,7 +1021,7 @@ def load_source(path: Path, expected_count: int = DEFAULT_EXPECTED_COUNT) -> lis
             {
                 "consultation_id", "analysis_date", "date_precision", "day_is_artificial",
                 "study_type", "indicator_raw", "indicator_normalized", "numeric_value",
-                "text_value", "unit", "source_order", "note",
+                "text_value", "unit", "source_order", "note", "source_text",
             },
         )
         _require_sqlite_columns(
@@ -645,20 +1035,24 @@ def load_source(path: Path, expected_count: int = DEFAULT_EXPECTED_COUNT) -> lis
 
         rows = connection.execute(
             """
-            SELECT consultation_id, resolved_name, birth_date, appointment_date,
-                   doctor_name, complaints, history_of_present_illness,
-                   history_of_life, diagnosis, comments, recommendations
-            FROM consultations
-            WHERE status = ?
-            ORDER BY appointment_date, consultation_id
+            SELECT c.consultation_id, c.document_id, c.ordinal, d.sha256, d.relative_path,
+                   c.resolved_name, c.birth_date, c.appointment_date,
+                   c.doctor_name, c.complaints, c.history_of_present_illness,
+                   c.history_of_life, c.diagnosis, c.comments, c.recommendations
+            FROM consultations AS c
+            JOIN source_documents AS d ON d.document_id = c.document_id
+            WHERE c.status = ?
+            ORDER BY c.appointment_date, c.consultation_id
             """,
             (CLEAN_STATUS,),
         ).fetchall()
-        if len(rows) != expected_count:
+        if expected_count is not None and len(rows) != expected_count:
             raise ImportValidationError(
                 f"Ожидалось {expected_count} чистых приёмов, найдено {len(rows)}. "
-                "Импорт остановлен, чтобы не загрузить неполный или другой результат."
+                "Импорт остановлен, потому что задана контрольная численность."
             )
+        if not rows:
+            raise ImportValidationError("В источнике нет чистых приёмов для импорта")
 
         consultations: dict[str, SourceConsultation] = {}
         problems: list[str] = []
@@ -673,6 +1067,9 @@ def load_source(path: Path, expected_count: int = DEFAULT_EXPECTED_COUNT) -> lis
                     raise ImportValidationError("не определено ФИО врача")
                 item = SourceConsultation(
                     consultation_id=consultation_id,
+                    source_sha256=str(row["sha256"]),
+                    source_ordinal=int(row["ordinal"]),
+                    source_relative_path=normalize_source_relative_path(row["relative_path"]),
                     patient_name=name,
                     birth_date=parse_iso_date(row["birth_date"], field_name="дата рождения"),
                     appointment_date=parse_iso_date(row["appointment_date"], field_name="дата приёма"),
@@ -714,7 +1111,7 @@ def load_source(path: Path, expected_count: int = DEFAULT_EXPECTED_COUNT) -> lis
             """
             SELECT consultation_id, analysis_date, date_precision, day_is_artificial,
                    study_type, indicator_raw, indicator_normalized, numeric_value,
-                   text_value, unit, source_order, note
+                   text_value, unit, source_order, note, source_text
             FROM laboratory_results ORDER BY consultation_id, source_order
             """
         ):
@@ -734,6 +1131,7 @@ def load_source(path: Path, expected_count: int = DEFAULT_EXPECTED_COUNT) -> lis
                     unit=clean_text(row["unit"]),
                     source_order=int(row["source_order"]),
                     note=clean_text(row["note"]),
+                    source_text=clean_text(row["source_text"]),
                 )
             )
 
@@ -767,7 +1165,23 @@ def load_source(path: Path, expected_count: int = DEFAULT_EXPECTED_COUNT) -> lis
             item.disease_anamnesis = multiline_text(by_field["анамнез_заболевания"]) or item.disease_anamnesis
             item.life_anamnesis = multiline_text(by_field["анамнез_жизни"]) or item.life_anamnesis
 
-        return list(consultations.values())
+        result = list(consultations.values())
+        stable_keys: dict[str, str] = {}
+        duplicate_keys: list[str] = []
+        for item in result:
+            key = stable_import_key(item)
+            previous = stable_keys.get(key)
+            if previous is not None and previous != item.consultation_id:
+                duplicate_keys.append(
+                    f"{previous} и {item.consultation_id}: {key}"
+                )
+            stable_keys[key] = item.consultation_id
+        if duplicate_keys:
+            raise ImportValidationError(
+                "В источнике повторяются одинаковые файлы и номера консультаций:\n"
+                + "\n".join(duplicate_keys[:30])
+            )
+        return result
     finally:
         connection.close()
 
@@ -858,7 +1272,7 @@ def validate_target_schema(cursor) -> str | None:
             errors.append(f"{table_name}: нет {', '.join(sorted(missing))}")
     if errors:
         raise ImportValidationError(
-            "Схема МИС не готова к импорту. Проверьте миграцию 0016:\n" + "\n".join(errors)
+            "Схема МИС не готова к импорту. Проверьте миграцию 0018:\n" + "\n".join(errors)
         )
     if columns["patients"].get("gender") != "YES":
         raise ImportValidationError("patients.gender всё ещё NOT NULL")
@@ -925,12 +1339,25 @@ def build_examination(item: SourceConsultation) -> dict[str, Any]:
 
 
 def build_instrumental_text(item: SourceConsultation) -> str | None:
+    """Собирает исходные инструментальные исследования без служебных пометок."""
     lines: list[str] = []
     for study in sorted(item.instrumental, key=lambda x: x.source_order):
-        date_text = study.study_date.isoformat() if study.study_date else "дата не указана"
-        artificial = " (15-е число установлено искусственно)" if study.day_is_artificial else ""
-        note = f"; {study.note}" if study.note else ""
-        lines.append(f"{date_text}{artificial} | {study.study_type}: {study.result_text}{note}")
+        result_text = clean_technical_text(study.result_text)
+        note = clean_technical_text(study.note)
+        if not result_text and not note:
+            continue
+        date_text = display_study_date(
+            study.study_date,
+            date_precision=study.date_precision,
+            day_is_artificial=study.day_is_artificial,
+        )
+        study_type = clean_text(study.study_type) or "Инструментальное исследование"
+        details = result_text
+        if note and note not in details:
+            details = f"{details}; {note}" if details else note
+        line = f"{date_text}, {study_type}: {details}"
+        if line not in lines:
+            lines.append(line)
     return multiline_text(lines)
 
 
@@ -1006,15 +1433,40 @@ def prepare_context(cursor, consultations: Sequence[SourceConsultation], report:
     report.patients_reused = sum(1 for key in source_patient_keys if key in existing_patients)
     report.patients_to_create = len(source_patient_keys) - report.patients_reused
 
-    keys = [IMPORT_KEY_PREFIX + item.consultation_id for item in consultations]
+    stable_keys = [stable_import_key(item) for item in consultations]
+    legacy_keys = [legacy_import_key(item) for item in consultations]
+    keys = list(dict.fromkeys([*stable_keys, *legacy_keys]))
     cursor.execute(
-        "SELECT archive_import_key FROM appointments WHERE archive_import_key = ANY(%s)",
+        "SELECT id, archive_import_key, archive_source_relative_path FROM appointments "
+        "WHERE archive_import_key = ANY(%s)",
         (keys,),
     )
-    existing_import_keys = {str(row[0]) for row in cursor.fetchall()}
+    existing_rows = cursor.fetchall()
+    existing_key_to_id = {str(row[1]): int(row[0]) for row in existing_rows}
+    existing_path_by_id = {int(row[0]): row[2] for row in existing_rows}
+    existing_import_keys, key_upgrades = classify_existing_import_keys(
+        consultations, existing_key_to_id
+    )
+    source_path_updates: dict[int, str] = {}
+    for item in consultations:
+        appointment_id = (
+            existing_key_to_id.get(stable_import_key(item))
+            or existing_key_to_id.get(legacy_import_key(item))
+        )
+        if appointment_id is None:
+            continue
+        source_path = normalize_source_relative_path(item.source_relative_path)
+        current_path = existing_path_by_id.get(appointment_id)
+        if current_path != source_path:
+            source_path_updates[appointment_id] = source_path
     report.consultations_already_present = len(existing_import_keys)
     report.consultations_to_insert = len(consultations) - len(existing_import_keys)
-    return doctor_map, existing_patients, existing_import_keys
+    report.import_keys_to_upgrade = len(key_upgrades)
+    report.source_paths_to_backfill = len(source_path_updates)
+    return (
+        doctor_map, existing_patients, existing_import_keys, key_upgrades,
+        source_path_updates,
+    )
 
 
 def run_import(
@@ -1028,15 +1480,39 @@ def run_import(
     try:
         report.database_revision = validate_target_schema(cursor)
         numeric_specs = target_numeric_specs(cursor)
-        doctor_map, patient_map, existing_import_keys = prepare_context(
-            cursor, consultations, report
-        )
+        (
+            doctor_map, patient_map, existing_import_keys, key_upgrades,
+            source_path_updates,
+        ) = prepare_context(cursor, consultations, report)
         if not apply:
             connection.rollback()
             return
 
+        for legacy_key, stable_key in key_upgrades.items():
+            cursor.execute(
+                "UPDATE appointments SET archive_import_key = %s "
+                "WHERE archive_import_key = %s",
+                (stable_key, legacy_key),
+            )
+            if cursor.rowcount != 1:
+                raise ImportValidationError(
+                    f"Не удалось обновить старый ключ импорта {legacy_key}"
+                )
+            report.import_keys_upgraded += 1
+
+        for appointment_id, source_path in source_path_updates.items():
+            cursor.execute(
+                "UPDATE appointments SET archive_source_relative_path = %s WHERE id = %s",
+                (source_path, appointment_id),
+            )
+            if cursor.rowcount != 1:
+                raise ImportValidationError(
+                    f"Не удалось сохранить путь исходного документа для приёма {appointment_id}"
+                )
+            report.source_paths_backfilled += 1
+
         for item in consultations:
-            import_key = IMPORT_KEY_PREFIX + item.consultation_id
+            import_key = stable_import_key(item)
             if import_key in existing_import_keys:
                 continue
 
@@ -1075,6 +1551,9 @@ def run_import(
                     "diagnosis_comment_text": item.diagnosis_comment,
                     "is_archive_import": True,
                     "archive_import_key": import_key,
+                    "archive_source_relative_path": normalize_source_relative_path(
+                        item.source_relative_path
+                    ),
                 },
             )
             report.appointments_inserted += 1
@@ -1112,11 +1591,19 @@ def run_import(
             report.recommendations_inserted += 1
 
             weight = examination.get("weight")
+            lab_stats = LabBuildStats()
             lab_payloads, residual_labs, mapped_count = build_lab_payloads(
-                item, age=age, weight=weight, numeric_specs=numeric_specs
+                item, age=age, weight=weight, numeric_specs=numeric_specs, stats=lab_stats
             )
             report.laboratory_values_mapped += mapped_count
             report.laboratory_values_left_as_other += len(residual_labs)
+            report.laboratory_values_ignored_as_artifact += lab_stats.ignored_as_artifact
+            report.laboratory_values_not_loaded += lab_stats.not_loaded
+            report.laboratory_units_inferred += lab_stats.inferred_units
+            report.egfr_values_mapped += lab_stats.egfr_mapped
+            if lab_stats.issues:
+                free_slots = max(0, 100 - len(report.warnings))
+                report.warnings.extend(lab_stats.issues[:free_slots])
 
             for table_name, rows in lab_payloads.items():
                 for payload in rows:
@@ -1150,14 +1637,16 @@ def run_import(
                 )
                 report.additional_studies_inserted += 1
 
+        current_source_keys = [stable_import_key(item) for item in consultations]
         cursor.execute(
-            "SELECT COUNT(*) FROM appointments WHERE archive_import_key LIKE %s",
-            (IMPORT_KEY_PREFIX + "%",),
+            "SELECT COUNT(*) FROM appointments WHERE archive_import_key = ANY(%s)",
+            (current_source_keys,),
         )
         final_count = int(cursor.fetchone()[0])
-        if final_count != len(consultations):
+        if final_count != len(current_source_keys):
             raise ImportValidationError(
-                f"После импорта найдено {final_count} архивных приёмов вместо {len(consultations)}"
+                f"После импорта для текущего источника найдено {final_count} приёмов "
+                f"вместо {len(current_source_keys)}"
             )
         connection.commit()
     except Exception:
@@ -1165,6 +1654,193 @@ def run_import(
         raise
     finally:
         cursor.close()
+
+
+def source_appointment_ids(
+    cursor,
+    consultations: Sequence[SourceConsultation],
+) -> dict[str, int]:
+    """Сопоставляет консультации источника с уже импортированными приёмами."""
+    stable_keys = [stable_import_key(item) for item in consultations]
+    legacy_keys = [legacy_import_key(item) for item in consultations]
+    all_keys = list(dict.fromkeys([*stable_keys, *legacy_keys]))
+    cursor.execute(
+        "SELECT id, archive_import_key FROM appointments "
+        "WHERE is_archive_import IS TRUE AND archive_import_key = ANY(%s)",
+        (all_keys,),
+    )
+    existing = {str(key): int(appointment_id) for appointment_id, key in cursor.fetchall()}
+
+    result: dict[str, int] = {}
+    missing: list[str] = []
+    conflicts: list[str] = []
+    for item in consultations:
+        stable_key = stable_import_key(item)
+        stable_id = existing.get(stable_key)
+        legacy_id = existing.get(legacy_import_key(item))
+        if stable_id is not None and legacy_id is not None and stable_id != legacy_id:
+            conflicts.append(item.consultation_id)
+            continue
+        appointment_id = stable_id or legacy_id
+        if appointment_id is None:
+            missing.append(item.consultation_id)
+            continue
+        result[stable_key] = appointment_id
+
+    if conflicts:
+        raise ImportValidationError(
+            "Для части консультаций устойчивый и старый ключи принадлежат разным приёмам: "
+            + ", ".join(conflicts[:20])
+        )
+    if missing:
+        raise ImportValidationError(
+            "Исправление лаборатории возможно только для уже импортированных приёмов. "
+            "Не найдены в МИС: " + ", ".join(missing[:20])
+        )
+    return result
+
+
+def _count_lab_rows(cursor, appointment_ids: Sequence[int]) -> int:
+    total = 0
+    for table_name in LAB_TABLES:
+        cursor.execute(
+            f"SELECT COUNT(*) FROM {table_name} WHERE appointment_id = ANY(%s)",
+            (list(appointment_ids),),
+        )
+        total += int(cursor.fetchone()[0])
+    return total
+
+
+def _delete_lab_rows(cursor, appointment_ids: Sequence[int]) -> int:
+    from psycopg2 import sql
+
+    deleted = 0
+    for table_name in LAB_TABLES:
+        query = sql.SQL("DELETE FROM {} WHERE appointment_id = ANY(%s)").format(
+            sql.Identifier(table_name)
+        )
+        cursor.execute(query, (list(appointment_ids),))
+        deleted += max(cursor.rowcount, 0)
+    return deleted
+
+
+def run_laboratory_repair(
+    connection,
+    consultations: Sequence[SourceConsultation],
+    report: ImportReport,
+    *,
+    apply: bool,
+) -> None:
+    """Пересобирает лабораторные таблицы и очищает свободные поля исследований.
+
+    Пациенты, приёмы, анамнезы, осмотр, диагноз и рекомендации не изменяются.
+    Инструментальные исследования не разбираются на поля: из их текста только
+    удаляются служебные пометки парсера.
+    """
+    cursor = connection.cursor()
+    try:
+        report.database_revision = validate_target_schema(cursor)
+        numeric_specs = target_numeric_specs(cursor)
+        appointment_by_key = source_appointment_ids(cursor, consultations)
+        appointment_ids = list(appointment_by_key.values())
+        report.laboratory_appointments_to_repair = len(appointment_ids)
+        report.laboratory_rows_to_delete = _count_lab_rows(cursor, appointment_ids)
+
+        cursor.execute(
+            "SELECT appointment_id, weight FROM examinations WHERE appointment_id = ANY(%s)",
+            (appointment_ids,),
+        )
+        weight_by_appointment = {
+            int(appointment_id): weight for appointment_id, weight in cursor.fetchall()
+        }
+
+        plans: list[tuple[int, dict[str, list[dict[str, Any]]], list[str], str | None]] = []
+        for item in consultations:
+            appointment_id = appointment_by_key[stable_import_key(item)]
+            stats = LabBuildStats()
+            payloads, residual, mapped = build_lab_payloads(
+                item,
+                age=age_on_date(item.birth_date, item.appointment_date),
+                weight=weight_by_appointment.get(appointment_id),
+                numeric_specs=numeric_specs,
+                stats=stats,
+            )
+            instrumental_text = build_instrumental_text(item)
+            plans.append((appointment_id, payloads, residual, instrumental_text))
+            report.laboratory_values_mapped += mapped
+            report.laboratory_values_left_as_other += len(residual)
+            report.laboratory_values_ignored_as_artifact += stats.ignored_as_artifact
+            report.laboratory_values_not_loaded += stats.not_loaded
+            report.laboratory_units_inferred += stats.inferred_units
+            report.egfr_values_mapped += stats.egfr_mapped
+            report.laboratory_rows_to_insert += sum(len(rows) for rows in payloads.values())
+            if stats.issues:
+                free_slots = max(0, 100 - len(report.warnings))
+                report.warnings.extend(stats.issues[:free_slots])
+
+        if not apply:
+            connection.rollback()
+            return
+
+        report.laboratory_rows_deleted = _delete_lab_rows(cursor, appointment_ids)
+        counter_by_table = {
+            "cbc_results": "cbc_rows_inserted",
+            "biochemistry_results": "biochemistry_rows_inserted",
+            "urinalysis_results": "urinalysis_rows_inserted",
+            "albuminuria_results": "albuminuria_rows_inserted",
+            "calculated_metrics": "calculated_metrics_rows_inserted",
+        }
+
+        for appointment_id, payloads, residual, instrumental_text in plans:
+            for table_name, rows in payloads.items():
+                for payload in rows:
+                    _insert_row(
+                        cursor,
+                        table_name,
+                        {"appointment_id": appointment_id, **payload},
+                    )
+                    counter_name = counter_by_table[table_name]
+                    setattr(report, counter_name, getattr(report, counter_name) + 1)
+
+            other_laboratory = multiline_text(residual)
+            cursor.execute(
+                "UPDATE appointment_additional_studies "
+                "SET other_laboratory_studies = %s, other_instrumental_studies = %s "
+                "WHERE appointment_id = %s",
+                (other_laboratory, instrumental_text, appointment_id),
+            )
+            if cursor.rowcount > 1:
+                raise ImportValidationError(
+                    f"У приёма {appointment_id} найдено несколько строк дополнительных исследований"
+                )
+            if cursor.rowcount == 0 and (other_laboratory or instrumental_text):
+                _insert_row(
+                    cursor,
+                    "appointment_additional_studies",
+                    {
+                        "appointment_id": appointment_id,
+                        "other_laboratory_studies": other_laboratory,
+                        "other_instrumental_studies": instrumental_text,
+                    },
+                )
+                report.additional_studies_inserted += 1
+            report.laboratory_appointments_repaired += 1
+            report.instrumental_appointments_cleaned += 1
+
+        connection.commit()
+    except Exception:
+        connection.rollback()
+        raise
+    finally:
+        cursor.close()
+
+
+def resolve_source_path(path: Path) -> Path:
+    """Принимает либо сам приемы.sqlite, либо папку, где он находится."""
+    candidate = path.expanduser()
+    if candidate.is_dir():
+        candidate = candidate / "приемы.sqlite"
+    return candidate.resolve()
 
 
 def default_source_path(project_root: Path) -> Path:
@@ -1178,23 +1854,32 @@ def default_source_path(project_root: Path) -> Path:
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="Импорт 1518 распарсенных консультаций в PostgreSQL МИС"
+        description="Импорт любого количества распарсенных консультаций в PostgreSQL МИС"
     )
     parser.add_argument(
         "--source",
         type=Path,
-        help="Путь к приемы.sqlite; по умолчанию берётся соседний проект парсера",
+        help="Путь к приемы.sqlite или к папке с ним; по умолчанию берётся соседний проект парсера",
     )
     parser.add_argument(
         "--expected-count",
         type=int,
-        default=DEFAULT_EXPECTED_COUNT,
-        help="Ожидаемое число чистых приёмов",
+        default=None,
+        help="Необязательная контрольная численность чистых приёмов",
     )
     parser.add_argument(
         "--apply",
         action="store_true",
         help="Записать данные. Без флага выполняется только проверка.",
+    )
+    parser.add_argument(
+        "--repair-labs",
+        action="store_true",
+        help=(
+            "Пересобрать лабораторные таблицы и очистить свободные поля "
+            "лабораторных и инструментальных исследований уже импортированных "
+            "архивных приёмов. Без --apply показывает план и не изменяет базу."
+        ),
     )
     parser.add_argument(
         "--report",
@@ -1208,11 +1893,12 @@ def build_parser() -> argparse.ArgumentParser:
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
     project_root = Path.cwd()
-    source = (args.source or default_source_path(project_root)).resolve()
-    report = ImportReport(
-        mode="ЗАПИСЬ" if args.apply else "ПРОВЕРКА_БЕЗ_ЗАПИСИ",
-        source_database=str(source),
-    )
+    source = resolve_source_path(args.source or default_source_path(project_root))
+    if args.repair_labs:
+        mode = "ИСПРАВЛЕНИЕ_ИССЛЕДОВАНИЙ" if args.apply else "ПРОВЕРКА_ИССЛЕДОВАНИЙ"
+    else:
+        mode = "ЗАПИСЬ" if args.apply else "ПРОВЕРКА_БЕЗ_ЗАПИСИ"
+    report = ImportReport(mode=mode, source_database=str(source))
 
     try:
         consultations = load_source(source, args.expected_count)
@@ -1229,7 +1915,10 @@ def main(argv: Sequence[str] | None = None) -> int:
 
         connection = connect_postgresql(project_root)
         try:
-            run_import(connection, consultations, report, apply=args.apply)
+            if args.repair_labs:
+                run_laboratory_repair(connection, consultations, report, apply=args.apply)
+            else:
+                run_import(connection, consultations, report, apply=args.apply)
         finally:
             connection.close()
     except Exception as exc:
@@ -1246,17 +1935,49 @@ def main(argv: Sequence[str] | None = None) -> int:
         json.dumps(asdict(report), ensure_ascii=False, indent=2, default=str),
         encoding="utf-8",
     )
-    print("Проверка завершена." if not args.apply else "Импорт завершён.")
-    print(f"Чистых приёмов в источнике: {report.source_clean_consultations}")
-    print(f"Уже были в МИС: {report.consultations_already_present}")
-    print(f"Нужно добавить: {report.consultations_to_insert}")
-    if args.apply:
-        print(f"Добавлено приёмов: {report.appointments_inserted}")
-        print(f"Создано пациентов: {report.patients_created}")
-        print(f"Лабораторных значений в стандартных полях: {report.laboratory_values_mapped}")
-        print(f"Лабораторных значений в поле 'Другие': {report.laboratory_values_left_as_other}")
+    if args.repair_labs:
+        print(
+            "Проверка исследований завершена."
+            if not args.apply
+            else "Лаборатория и свободные поля исследований исправлены."
+        )
+        print(f"Архивных приёмов для исправления: {report.laboratory_appointments_to_repair}")
+        print(f"Существующих лабораторных строк будет удалено: {report.laboratory_rows_to_delete}")
+        print(f"Новых лабораторных строк будет создано: {report.laboratory_rows_to_insert}")
+        print(f"Показателей в стандартных полях: {report.laboratory_values_mapped}")
+        print(f"Единиц принято по форме МИС: {report.laboratory_units_inferred}")
+        print(f"Значений СКФ перенесено в CKD-EPI: {report.egfr_values_mapped}")
+        print(f"Дат и посторонних фрагментов отброшено: {report.laboratory_values_ignored_as_artifact}")
+        print(f"Стандартных показателей не загружено из-за формата: {report.laboratory_values_not_loaded}")
+        print(f"Непредусмотренных показателей осталось в поле 'Другие': {report.laboratory_values_left_as_other}")
+        if args.apply:
+            print(f"Исправлено приёмов: {report.laboratory_appointments_repaired}")
+            print(f"Очищено полей инструментальных исследований: {report.instrumental_appointments_cleaned}")
+            print(f"Удалено старых лабораторных строк: {report.laboratory_rows_deleted}")
+        else:
+            print("База данных не изменялась. Для исправления добавьте --apply")
     else:
-        print("База данных не изменялась. Для записи добавьте --apply")
+        print("Проверка завершена." if not args.apply else "Импорт завершён.")
+        print(f"Чистых приёмов в источнике: {report.source_clean_consultations}")
+        print(f"Уже были в МИС: {report.consultations_already_present}")
+        print(f"Нужно добавить: {report.consultations_to_insert}")
+        print(f"Пути исходных документов нужно заполнить: {report.source_paths_to_backfill}")
+        if report.import_keys_to_upgrade:
+            print(f"Старых ключей импорта нужно обновить: {report.import_keys_to_upgrade}")
+        if args.apply:
+            print(f"Добавлено приёмов: {report.appointments_inserted}")
+            print(f"Пути исходных документов заполнены: {report.source_paths_backfilled}")
+            if report.import_keys_upgraded:
+                print(f"Обновлено старых ключей импорта: {report.import_keys_upgraded}")
+            print(f"Создано пациентов: {report.patients_created}")
+            print(f"Лабораторных значений в стандартных полях: {report.laboratory_values_mapped}")
+            print(f"Лабораторных значений в поле 'Другие': {report.laboratory_values_left_as_other}")
+            print(f"Единиц принято по форме МИС: {report.laboratory_units_inferred}")
+            print(f"Значений СКФ перенесено в CKD-EPI: {report.egfr_values_mapped}")
+            print(f"Дат и посторонних фрагментов отброшено: {report.laboratory_values_ignored_as_artifact}")
+            print(f"Стандартных показателей не загружено из-за формата: {report.laboratory_values_not_loaded}")
+        else:
+            print("База данных не изменялась. Для записи добавьте --apply")
     print(f"Отчёт: {args.report.resolve()}")
     return 0
 

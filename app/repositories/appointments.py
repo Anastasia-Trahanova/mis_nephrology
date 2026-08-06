@@ -228,6 +228,8 @@ def _fetch_appointment_full_data(cur: Any, appointment_id: int):
             a.diagnosis_text,
             a.diagnosis_comment_text,
             a.is_archive_import,
+            a.archive_import_key,
+            a.archive_source_relative_path,
             p.last_name || ' ' || p.first_name || ' ' || COALESCE(p.patronymic, '') AS patient_fio,
             p.birth_date,
             p.phone,
@@ -442,3 +444,28 @@ def get_appointment_diet(appointment_id: int):
     with get_db_connection() as conn:
         with conn.cursor() as cur:
             return _fetch_appointment_diet(cur, appointment_id)
+
+
+def get_archive_source_document_metadata(appointment_id: int):
+    """Возвращает только данные, необходимые для скачивания исходного архива."""
+    with get_db_connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute(
+                """
+                SELECT
+                    a.id AS appointment_id,
+                    a.is_archive_import,
+                    a.archive_import_key,
+                    a.archive_source_relative_path,
+                    p.last_name,
+                    p.first_name,
+                    p.patronymic,
+                    a.appointment_date
+                FROM appointments a
+                JOIN patients p ON p.id = a.patient_id
+                WHERE a.id = %s
+                """,
+                (appointment_id,),
+            )
+            row = cur.fetchone()
+            return dict(row) if row else None
