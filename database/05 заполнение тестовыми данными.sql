@@ -1,67 +1,46 @@
--- ============================================================================
--- Файл: 08_stage1_form_test_data.sql
--- Назначение: полностью перезаполняет тестовые данные верхней части формы
--- медицинского приёма после применения миграции 0009_previsit_form_schema.
---
--- Файл изменяет только:
---   1) appointments.age_at_appointment;
---   2) surveys;
---   3) examinations.
---
--- Не изменяются лабораторные исследования, УЗИ, KDIGO, назначения,
--- расписание и структурированные диагнозы МКБ-10.
---
--- Предусловия:
---   - база обновлена до миграции 0009_previsit_form_schema;
---   - исходный демонстрационный файл 04 уже создал пациентов и приёмы 1–17.
---
--- Файл повторно запускаемый: INSERT ... ON CONFLICT обновляет эталонные строки
--- и не создаёт дубли.
--- ============================================================================
-
+SET client_encoding = 'UTF8';
 BEGIN;
-
--- --------------------------------------------------------------------------
--- 0. Явная проверка предусловий.
--- --------------------------------------------------------------------------
-DO $$
-BEGIN
-    IF (SELECT COUNT(*) FROM appointments WHERE id BETWEEN 1 AND 17) <> 17 THEN
-        RAISE EXCEPTION
-            'Ожидались демонстрационные приёмы с id 1–17. '
-            'Сначала загрузите исходные тестовые данные файла 04.';
-    END IF;
-
-    IF NOT EXISTS (
-        SELECT 1
-        FROM information_schema.columns
-        WHERE table_schema = current_schema()
-          AND table_name = 'appointments'
-          AND column_name = 'age_at_appointment'
-    ) THEN
-        RAISE EXCEPTION
-            'Миграция 0009_previsit_form_schema ещё не применена';
-    END IF;
-END
-$$;
-
--- --------------------------------------------------------------------------
--- 1. ВОЗРАСТ НА ДАТУ ПРИЁМА.
--- Возраст вычисляется, а не копируется из искусственных старых значений.
--- --------------------------------------------------------------------------
-UPDATE appointments AS a
-SET age_at_appointment = EXTRACT(
-    YEAR FROM age(a.appointment_date::date, p.birth_date)
-)::smallint
-FROM patients AS p
-WHERE p.id = a.patient_id
-  AND a.id BETWEEN 1 AND 17;
-
--- --------------------------------------------------------------------------
--- 2. ОПРОС: жалобы, анамнез жизни и анамнез данного заболевания.
--- Русские названия столбцов указаны рядом с техническими именами.
--- --------------------------------------------------------------------------
-INSERT INTO surveys (
+INSERT INTO patients (id, last_name, first_name, patronymic, birth_date, gender, phone, email) VALUES
+(1, 'Иванов', 'Иван', 'Иванович', '1975-03-15', TRUE, '+7 (901) 123-45-67', 'ivanov@mail.ru'),
+(2, 'Петрова', 'Мария', 'Петровна', '1982-07-22', FALSE, '+7 (901) 234-56-78', 'petrova@mail.ru'),
+(3, 'Сидоров', 'Алексей', 'Сидорович', '1990-11-05', TRUE, '+7 (901) 345-67-89', 'sidorov@mail.ru'),
+(4, 'Кузнецова', 'Елена', 'Андреевна', '1978-01-30', FALSE, '+7 (901) 456-78-90', 'kuznetsova@mail.ru'),
+(5, 'Морозов', 'Дмитрий', 'Сергеевич', '1965-09-12', TRUE, '+7 (901) 567-89-01', 'morozov@mail.ru'),
+(6, 'Волкова', 'Татьяна', 'Николаевна', '1988-12-03', FALSE, '+7 (901) 678-90-12', 'volkova@mail.ru'),
+(7, 'Новиков', 'Павел', 'Александрович', '1972-04-25', TRUE, '+7 (901) 789-01-23', 'novikov@mail.ru');
+SELECT setval(pg_get_serial_sequence('patients', 'id'), COALESCE((SELECT MAX(id) FROM patients), 1), true);
+WITH source(id,patient_id,doctor_id,location_id,appointment_date) AS (
+    VALUES (1, 1, 3, 1, '2025-10-15 10:00:00'),
+(2, 1, 3, 1, '2026-01-20 11:00:00'),
+(3, 1, 3, 1, '2026-04-10 09:30:00'),
+(4, 2, 4, 2, '2025-11-05 14:00:00'),
+(5, 2, 4, 2, '2026-02-10 15:00:00'),
+(6, 3, 1, 3, '2025-09-20 09:00:00'),
+(7, 3, 1, 3, '2025-12-15 10:30:00'),
+(8, 3, 1, 3, '2026-03-25 08:45:00'),
+(9, 4, 2, 4, '2025-08-10 11:00:00'),
+(10, 4, 2, 4, '2025-11-20 12:00:00'),
+(11, 5, 5, 5, '2025-10-01 13:30:00'),
+(12, 5, 5, 5, '2026-01-15 14:00:00'),
+(13, 5, 5, 5, '2026-04-05 11:00:00'),
+(14, 6, 3, 1, '2025-11-25 15:30:00'),
+(15, 6, 3, 1, '2026-02-28 09:00:00'),
+(16, 7, 4, 2, '2025-12-10 08:30:00'),
+(17, 7, 4, 2, '2026-03-20 10:00:00')
+)
+INSERT INTO appointments (id,patient_id,doctor_id,location_id,appointment_date,age_at_appointment)
+SELECT s.id,s.patient_id,s.doctor_id,s.location_id,s.appointment_date::timestamp,
+       EXTRACT(YEAR FROM age(s.appointment_date::date,p.birth_date))::smallint
+FROM source s JOIN patients p ON p.id=s.patient_id;
+SELECT setval(pg_get_serial_sequence('appointments', 'id'), COALESCE((SELECT MAX(id) FROM appointments), 1), true);
+CREATE TEMP TABLE _demo_surveys (
+    appointment_id INTEGER PRIMARY KEY, complaints TEXT, education_and_professional_history TEXT,
+    housing_conditions TEXT, past_diseases TEXT, habitual_intoxications TEXT,
+    gynecological_history TEXT, heredity BOOLEAN, heredity_description TEXT,
+    family_life TEXT, allergological_history TEXT, epidemiological_history TEXT,
+    insurance_history TEXT, disease_onset TEXT, disease_course TEXT
+) ON COMMIT DROP;
+INSERT INTO _demo_surveys (
     appointment_id,                         -- Приём
     complaints,                             -- Жалобы
     education_and_professional_history,     -- Образование и профессиональный анамнез
@@ -111,12 +90,13 @@ ON CONFLICT (appointment_id) DO UPDATE SET
     insurance_history = EXCLUDED.insurance_history,
     disease_onset = EXCLUDED.disease_onset,
     disease_course = EXCLUDED.disease_course;
-
--- --------------------------------------------------------------------------
--- 3. ОБЪЕКТИВНЫЙ ОСМОТР.
--- Отёки сохраняются в существующем edema_location без изменения структуры.
--- BMI рассчитывается из роста и веса в SELECT ниже.
--- --------------------------------------------------------------------------
+INSERT INTO surveys (
+ appointment_id,complaints,education_and_professional_history,housing_conditions,past_diseases,
+ habitual_intoxications,gynecological_history,heredity_description,family_life,allergological_history,
+ epidemiological_history,insurance_history,disease_onset,disease_course)
+SELECT appointment_id,complaints,education_and_professional_history,housing_conditions,past_diseases,
+ habitual_intoxications,gynecological_history,heredity_description,family_life,allergological_history,
+ epidemiological_history,insurance_history,disease_onset,disease_course FROM _demo_surveys;
 WITH source (
     appointment_id,                         -- Приём
     general_condition,                      -- Общее состояние
@@ -249,11 +229,587 @@ ON CONFLICT (appointment_id) DO UPDATE SET
     kidney_palpation_details = EXCLUDED.kidney_palpation_details,
     pasternatsky_result = EXCLUDED.pasternatsky_result,
     pasternatsky_side = EXCLUDED.pasternatsky_side;
-
-COMMIT;
-
--- Краткий итог после заполнения.
+-- =====================================================
+-- 11. ОАК
+-- Даты исследования вставляются сразу, без последующего UPDATE.
+-- =====================================================
+WITH src(appointment_id, hemoglobin, erythrocytes, leukocytes, platelets, esr, mcv, hematocrit) AS (
+    VALUES
+    (1, 120, 3.8, 6.5, 220, 25, 85, 38),
+    (2, 118, 3.7, 7.0, 215, 28, 84, 37),
+    (3, 115, 3.6, 7.5, 210, 30, 83, 36),
+    (4, 115, 3.6, 7.2, 210, 30, 82, 36),
+    (5, 112, 3.5, 7.8, 205, 33, 81, 35),
+    (6, 135, 4.2, 5.8, 250, 15, 88, 42),
+    (7, 132, 4.1, 6.2, 245, 18, 87, 41),
+    (8, 128, 4.0, 6.5, 240, 20, 86, 40),
+    (9, 110, 3.5, 8.0, 200, 35, 80, 35),
+    (10, 105, 3.3, 8.5, 190, 40, 78, 33),
+    (11, 100, 3.2, 9.0, 180, 45, 78, 32),
+    (12, 95, 3.0, 9.5, 170, 50, 76, 30),
+    (13, 90, 2.9, 10.0, 160, 55, 75, 28),
+    (14, 128, 4.0, 6.0, 240, 18, 86, 40),
+    (15, 125, 3.9, 6.5, 235, 20, 85, 39),
+    (16, 118, 3.7, 7.5, 215, 28, 83, 37),
+    (17, 115, 3.6, 8.0, 210, 32, 82, 36)
+)
+INSERT INTO cbc_results (appointment_id, investigation_date, hemoglobin, erythrocytes, leukocytes, platelets, esr, mcv, hematocrit)
 SELECT
-    (SELECT COUNT(*) FROM appointments WHERE id BETWEEN 1 AND 17 AND age_at_appointment IS NOT NULL) AS appointments_with_age,
-    (SELECT COUNT(*) FROM surveys WHERE appointment_id BETWEEN 1 AND 17) AS surveys_filled,
-    (SELECT COUNT(*) FROM examinations WHERE appointment_id BETWEEN 1 AND 17) AS examinations_filled;
+    src.appointment_id,
+    a.appointment_date::date - CASE WHEN src.appointment_id IN (2, 4, 6, 8, 10) THEN 1 ELSE 0 END,
+    src.hemoglobin,
+    src.erythrocytes,
+    src.leukocytes,
+    src.platelets,
+    src.esr,
+    src.mcv,
+    src.hematocrit
+FROM src
+JOIN appointments a ON a.id = src.appointment_id;
+
+-- =====================================================
+-- 12. БИОХИМИЯ
+-- Гиперкалиемия у Морозова и Новикова уже внесена в итоговые значения.
+-- =====================================================
+WITH src(appointment_id, creatinine, urea, uric_acid, glucose, total_protein, albumin, potassium, calcium, phosphorus, ferritin, ptg) AS (
+    VALUES
+    (1, 95, 6.5, 380, 5.2, 70, 42, 4.2, 2.3, 1.2, 150, 55),
+    (2, 105, 7.2, 390, 5.3, 69, 41, 4.3, 2.3, 1.2, 145, 58),
+    (3, 115, 8.0, 400, 5.4, 68, 40, 4.4, 2.2, 1.3, 140, 60),
+    (4, 110, 7.8, 400, 7.8, 68, 40, 4.5, 2.2, 1.3, 140, 60),
+    (5, 125, 8.5, 410, 8.0, 66, 39, 4.6, 2.1, 1.3, 135, 63),
+    (6, 130, 9.0, 420, 5.0, 65, 38, 4.8, 2.1, 1.4, 130, 70),
+    (7, 140, 9.8, 430, 5.1, 63, 37, 4.9, 2.0, 1.4, 125, 73),
+    (8, 155, 10.5, 440, 5.2, 61, 36, 5.0, 2.0, 1.5, 120, 76),
+    (9, 85, 5.5, 350, 5.5, 72, 44, 4.0, 2.4, 1.1, 160, 50),
+    (10, 95, 6.0, 360, 5.6, 70, 43, 4.1, 2.3, 1.1, 155, 53),
+    (11, 145, 10.5, 480, 5.8, 62, 35, 5.0, 2.0, 1.5, 120, 80),
+    (12, 160, 11.5, 490, 6.0, 60, 34, 5.1, 1.9, 1.6, 115, 85),
+    (13, 175, 12.5, 500, 6.2, 58, 33, 6.2, 1.9, 1.6, 110, 90),
+    (14, 75, 4.5, 320, 4.8, 74, 45, 4.1, 2.4, 1.1, 170, 45),
+    (15, 80, 5.0, 330, 4.9, 73, 44, 4.2, 2.4, 1.1, 165, 47),
+    (16, 160, 11.2, 550, 5.2, 60, 33, 4.9, 2.1, 1.5, 110, 85),
+    (17, 175, 12.0, 560, 5.3, 58, 32, 5.8, 2.0, 1.5, 105, 88)
+)
+INSERT INTO biochemistry_results (appointment_id, investigation_date, creatinine, urea, uric_acid, glucose, total_protein, albumin, potassium, calcium, phosphorus, ferritin, ptg)
+SELECT
+    src.appointment_id,
+    a.appointment_date::date - CASE
+        WHEN src.appointment_id IN (1, 3, 5, 7, 9) THEN 1
+        WHEN src.appointment_id IN (2, 4, 6, 8, 10) THEN 2
+        ELSE 0
+    END,
+    src.creatinine,
+    src.urea,
+    src.uric_acid,
+    src.glucose,
+    src.total_protein,
+    src.albumin,
+    src.potassium,
+    src.calcium,
+    src.phosphorus,
+    src.ferritin,
+    src.ptg
+FROM src
+JOIN appointments a ON a.id = src.appointment_id;
+
+-- =====================================================
+-- 13. ОАМ
+-- =====================================================
+WITH src(appointment_id, specific_gravity, protein, leukocytes, erythrocytes, bacteria) AS (
+    VALUES
+    (1, 1.015, 0.15, 2, 1, 'отсутствуют'),
+    (2, 1.014, 0.20, 3, 2, 'отсутствуют'),
+    (3, 1.013, 0.25, 4, 3, 'единичные'),
+    (4, 1.012, 0.20, 3, 2, 'отсутствуют'),
+    (5, 1.011, 0.30, 4, 3, 'единичные'),
+    (6, 1.018, 0.30, 5, 3, 'единичные'),
+    (7, 1.017, 0.35, 6, 4, 'единичные'),
+    (8, 1.016, 0.40, 7, 5, '++'),
+    (9, 1.010, 0.10, 1, 0, 'отсутствуют'),
+    (10, 1.009, 0.15, 2, 1, 'отсутствуют'),
+    (11, 1.008, 0.40, 8, 5, '++'),
+    (12, 1.007, 0.50, 10, 7, '+++'),
+    (13, 1.006, 0.60, 12, 10, '+++'),
+    (14, 1.016, 0.12, 2, 1, 'отсутствуют'),
+    (15, 1.015, 0.15, 3, 2, 'отсутствуют'),
+    (16, 1.014, 0.25, 4, 2, 'единичные'),
+    (17, 1.013, 0.30, 5, 3, 'единичные')
+)
+INSERT INTO urinalysis_results (appointment_id, investigation_date, specific_gravity, protein, leukocytes, erythrocytes, bacteria)
+SELECT
+    src.appointment_id,
+    a.appointment_date::date - CASE WHEN src.appointment_id IN (1, 3, 5, 7, 9) THEN 2 ELSE 0 END,
+    src.specific_gravity,
+    src.protein,
+    src.leukocytes,
+    src.erythrocytes,
+    src.bacteria
+FROM src
+JOIN appointments a ON a.id = src.appointment_id;
+
+-- =====================================================
+-- 14. УЗИ ПОЧЕК
+-- =====================================================
+WITH src(appointment_id, left_kidney_size, right_kidney_size, left_parenchyma, right_parenchyma, description) AS (
+    VALUES
+    (1, '110x50', '108x48', 15, 14, 'Контуры ровные, структура однородная.'),
+    (2, '108x49', '106x47', 14, 13, 'Небольшое снижение эхогенности.'),
+    (3, '105x48', '103x46', 13, 12, 'Контуры слегка неровные, эхогенность повышена.'),
+    (4, '105x48', '102x46', 13, 12, 'Небольшое снижение эхогенности коркового слоя.'),
+    (5, '103x47', '100x45', 12, 11, 'Эхогенность повышена, контуры неровные.'),
+    (6, '100x45', '98x44', 11, 10, 'Контуры неровные, структура неоднородная, кисты.'),
+    (7, '98x44', '96x43', 10, 9, 'Размеры уменьшены, паренхима истончена.'),
+    (8, '95x42', '93x41', 9, 8, 'Атрофия коркового слоя.'),
+    (9, '112x52', '110x50', 16, 15, 'Без патологических изменений.'),
+    (10, '110x51', '108x49', 15, 14, 'Без патологических изменений.'),
+    (11, '95x42', '92x40', 9, 8, 'Атрофия коркового слоя, размеры уменьшены.'),
+    (12, '93x41', '90x39', 8, 7, 'Выраженная атрофия.'),
+    (13, '90x40', '88x38', 7, 6, 'Терминальные изменения.'),
+    (14, '108x50', '105x48', 14, 13, 'Контуры ровные, эхогенность повышена.'),
+    (15, '106x49', '103x47', 13, 12, 'Эхогенность повышена.'),
+    (16, '100x46', '98x45', 10, 9, 'Множественные конкременты 3-4 мм в лоханках.'),
+    (17, '98x45', '95x44', 9, 8, 'Множественные конкременты, гидронефроз 1 ст.')
+)
+INSERT INTO ultrasound_results (appointment_id, investigation_date, left_kidney_size, right_kidney_size, left_parenchyma, right_parenchyma, description)
+SELECT
+    src.appointment_id,
+    a.appointment_date::date,
+    src.left_kidney_size,
+    src.right_kidney_size,
+    src.left_parenchyma,
+    src.right_parenchyma,
+    src.description
+FROM src
+JOIN appointments a ON a.id = src.appointment_id;
+
+-- =====================================================
+-- 15. РАСЧЁТНЫЕ ПОКАЗАТЕЛИ
+-- eGFR/CrCl сохранены из твоего тестового файла.
+-- ckd_stage рассчитывается заново по eGFR и записывается в формате G-категорий.
+-- =====================================================
+WITH src(appointment_id, creatinine, age, gender, weight_at_appointment, egfr_ckdepi, crcl_cockcroft_gault) AS (
+    VALUES
+    (1, 95, 50, TRUE, 85, 72, 78),
+    (2, 105, 50, TRUE, 84, 65, 70),
+    (3, 115, 50, TRUE, 83, 58, 63),
+    (4, 110, 43, FALSE, 78, 58, 65),
+    (5, 125, 43, FALSE, 77, 50, 56),
+    (6, 130, 34, TRUE, 75, 45, 52),
+    (7, 140, 34, TRUE, 74, 40, 47),
+    (8, 155, 34, TRUE, 73, 35, 41),
+    (9, 85, 47, FALSE, 70, 85, 88),
+    (10, 95, 47, FALSE, 69, 78, 80),
+    (11, 145, 58, TRUE, 82, 38, 42),
+    (12, 160, 58, TRUE, 81, 33, 37),
+    (13, 175, 58, TRUE, 80, 28, 32),
+    (14, 75, 36, FALSE, 65, 95, 100),
+    (15, 80, 36, FALSE, 65, 90, 95),
+    (16, 160, 52, TRUE, 88, 32, 38),
+    (17, 175, 52, TRUE, 87, 28, 34)
+), calculated AS (
+    SELECT
+        src.*,
+        b.investigation_date,
+        CASE
+            WHEN src.egfr_ckdepi >= 90 THEN 'С1'
+            WHEN src.egfr_ckdepi >= 60 THEN 'С2'
+            WHEN src.egfr_ckdepi >= 45 THEN 'С3а'
+            WHEN src.egfr_ckdepi >= 30 THEN 'С3б'
+            WHEN src.egfr_ckdepi >= 15 THEN 'С4'
+            ELSE 'С5'
+        END AS ckd_stage
+    FROM src
+    LEFT JOIN biochemistry_results b ON b.appointment_id = src.appointment_id
+)
+INSERT INTO calculated_metrics (
+    appointment_id,
+    investigation_date,
+    creatinine,
+    age,
+    gender,
+    weight_at_appointment,
+    egfr_ckdepi,
+    crcl_cockcroft_gault,
+    ckd_stage,
+    calculation_date
+)
+SELECT
+    appointment_id,
+    investigation_date,
+    creatinine,
+    age,
+    gender,
+    weight_at_appointment,
+    egfr_ckdepi,
+    crcl_cockcroft_gault,
+    ckd_stage,
+    CURRENT_TIMESTAMP
+FROM calculated;
+
+-- =====================================================
+-- 16. АЛЬБУМИНУРИЯ
+-- Исходный основной файл не содержал готовых INSERT в albuminuria_results.
+-- Поэтому здесь сохранён расчётный подход из твоего отдельного файла:
+--  ACR задаётся как тестовое клиническое значение,
+--  urine_albumin = ACR × urine_creatinine,
+--  категория A1/A2/A3 считается автоматически.
+-- =====================================================
+WITH generated AS (
+    SELECT
+        a.id AS appointment_id,
+        a.appointment_date::date AS investigation_date,
+        (
+            CASE a.id % 8
+                WHEN 0 THEN 3.8
+                WHEN 1 THEN 4.6
+                WHEN 2 THEN 5.5
+                WHEN 3 THEN 6.7
+                WHEN 4 THEN 8.2
+                WHEN 5 THEN 9.4
+                WHEN 6 THEN 11.0
+                ELSE 13.5
+            END
+        )::numeric AS urine_creatinine,
+        (
+            CASE
+                WHEN a.id % 20 IN (0, 1, 2, 3, 4, 5, 6) THEN
+                    CASE a.id % 7
+                        WHEN 0 THEN 0.6
+                        WHEN 1 THEN 0.9
+                        WHEN 2 THEN 1.2
+                        WHEN 3 THEN 1.6
+                        WHEN 4 THEN 2.0
+                        WHEN 5 THEN 2.4
+                        ELSE 2.8
+                    END
+                WHEN a.id % 20 IN (7, 8, 9, 10, 11, 12, 13, 14) THEN
+                    CASE a.id % 8
+                        WHEN 0 THEN 3.5
+                        WHEN 1 THEN 4.8
+                        WHEN 2 THEN 6.2
+                        WHEN 3 THEN 8.5
+                        WHEN 4 THEN 11.0
+                        WHEN 5 THEN 15.0
+                        WHEN 6 THEN 21.0
+                        ELSE 28.0
+                    END
+                ELSE
+                    CASE a.id % 5
+                        WHEN 0 THEN 35.0
+                        WHEN 1 THEN 48.0
+                        WHEN 2 THEN 75.0
+                        WHEN 3 THEN 120.0
+                        ELSE 180.0
+                    END
+            END
+        )::numeric AS acr
+    FROM appointments a
+)
+INSERT INTO albuminuria_results (
+    appointment_id,
+    investigation_date,
+    urine_albumin,
+    urine_albumin_unit,
+    urine_creatinine,
+    urine_creatinine_unit,
+    albumin_creatinine_ratio,
+    albuminuria_category
+)
+SELECT
+    appointment_id,
+    investigation_date,
+    ROUND((acr * urine_creatinine)::numeric, 2) AS urine_albumin,
+    'mg_l' AS urine_albumin_unit,
+    urine_creatinine,
+    'mmol_l' AS urine_creatinine_unit,
+    ROUND(acr::numeric, 2) AS albumin_creatinine_ratio,
+    CASE
+        WHEN acr < 3 THEN 'A1'
+        WHEN acr <= 30 THEN 'A2'
+        ELSE 'A3'
+    END AS albuminuria_category
+FROM generated;
+
+-- =====================================================
+-- 17. ПРОГНОЗ ХБП ПО KDIGO
+-- =====================================================
+WITH source_data AS (
+    SELECT
+        a.id AS appointment_id,
+        a.appointment_date::date AS assessment_date,
+        cm.ckd_stage AS gfr_category,
+        ar.albuminuria_category AS albuminuria_category
+    FROM appointments a
+    JOIN calculated_metrics cm ON cm.appointment_id = a.id
+    JOIN albuminuria_results ar ON ar.appointment_id = a.id
+), calculated AS (
+    SELECT
+        appointment_id,
+        assessment_date,
+        gfr_category,
+        albuminuria_category,
+        gfr_category || albuminuria_category AS combined_category,
+        CASE
+            WHEN gfr_category IN ('С1', 'С2') AND albuminuria_category = 'A1' THEN 'low'
+            WHEN gfr_category IN ('С1', 'С2') AND albuminuria_category = 'A2' THEN 'moderate'
+            WHEN gfr_category IN ('С1', 'С2') AND albuminuria_category = 'A3' THEN 'high'
+            WHEN gfr_category = 'С3а' AND albuminuria_category = 'A1' THEN 'moderate'
+            WHEN gfr_category = 'С3а' AND albuminuria_category = 'A2' THEN 'high'
+            WHEN gfr_category = 'С3а' AND albuminuria_category = 'A3' THEN 'very_high'
+            WHEN gfr_category = 'С3б' AND albuminuria_category = 'A1' THEN 'high'
+            WHEN gfr_category = 'С3б' AND albuminuria_category IN ('A2', 'A3') THEN 'very_high'
+            WHEN gfr_category IN ('С4', 'С5') THEN 'very_high'
+        END AS prognosis_level,
+        CASE
+            WHEN gfr_category IN ('С1', 'С2') AND albuminuria_category = 'A1' THEN 'низкий'
+            WHEN gfr_category IN ('С1', 'С2') AND albuminuria_category = 'A2' THEN 'умеренно повышенный'
+            WHEN gfr_category IN ('С1', 'С2') AND albuminuria_category = 'A3' THEN 'высокий'
+            WHEN gfr_category = 'С3а' AND albuminuria_category = 'A1' THEN 'умеренно повышенный'
+            WHEN gfr_category = 'С3а' AND albuminuria_category = 'A2' THEN 'высокий'
+            WHEN gfr_category = 'С3а' AND albuminuria_category = 'A3' THEN 'очень высокий'
+            WHEN gfr_category = 'С3б' AND albuminuria_category = 'A1' THEN 'высокий'
+            WHEN gfr_category = 'С3б' AND albuminuria_category IN ('A2', 'A3') THEN 'очень высокий'
+            WHEN gfr_category IN ('С4', 'С5') THEN 'очень высокий'
+        END AS prognosis_text
+    FROM source_data
+)
+INSERT INTO ckd_prognosis_results (
+    appointment_id,
+    assessment_date,
+    gfr_category,
+    albuminuria_category,
+    combined_category,
+    prognosis_level,
+    prognosis_text
+)
+SELECT
+    appointment_id,
+    assessment_date,
+    gfr_category,
+    albuminuria_category,
+    combined_category,
+    prognosis_level,
+    prognosis_text
+FROM calculated
+WHERE prognosis_level IS NOT NULL;
+
+
+-- =====================================================
+-- 19. ДИЕТА, ДАТА КОНТРОЛЯ И ОБЩИЕ РЕКОМЕНДАЦИИ
+-- Диета и дата контроля перенесены из исходного блока prescriptions.
+-- recommendations формируются с учётом KDIGO-прогноза и гиперкалиемии.
+-- =====================================================
+WITH diet_source(appointment_id, diet, next_control_date) AS (
+    VALUES
+    (1, 'Стол №7 с ограничением соли до 5 г/сут', DATE '2025-10-15'),
+    (2, 'Стол №7 с ограничением соли до 5 г/сут', DATE '2026-01-20'),
+    (3, 'Стол №7 с ограничением соли до 5 г/сут', DATE '2026-04-10'),
+    (4, 'Стол №9 с ограничением углеводов', DATE '2025-11-20'),
+    (5, 'Стол №9 с ограничением углеводов', DATE '2026-02-10'),
+    (6, 'Стол №7 с ограничением белка до 0,6 г/кг/сут', DATE '2025-12-15'),
+    (7, 'Стол №7 с ограничением белка до 0,6 г/кг/сут', DATE '2026-03-25'),
+    (8, 'Стол №7 с ограничением белка до 0,6 г/кг/сут', DATE '2026-07-01'),
+    (9, 'Стол №9 с ограничением углеводов', DATE '2025-11-20'),
+    (10, 'Стол №9 с ограничением углеводов', DATE '2026-02-28'),
+    (11, 'Стол №7 с ограничением белка до 0,6 г/кг/сут, жидкости до 1000 мл/сут', DATE '2025-12-01'),
+    (12, 'Стол №7 с ограничением белка до 0,6 г/кг/сут, жидкости до 1000 мл/сут', DATE '2026-01-15'),
+    (13, 'Стол №7 с ограничением белка до 0,6 г/кг/сут, жидкости до 1000 мл/сут', DATE '2026-04-05'),
+    (14, 'Стол №10 с ограничением соли до 5 г/сут', DATE '2025-10-20'),
+    (15, 'Стол №10 с ограничением соли до 5 г/сут', DATE '2026-02-28'),
+    (16, 'Стол №6 с ограничением пуринов', DATE '2025-11-05'),
+    (17, 'Стол №6 с ограничением пуринов', DATE '2026-03-20')
+)
+INSERT INTO appointment_diets (appointment_id, diet, next_control_date, recommendations)
+SELECT
+    ds.appointment_id,
+    ds.diet,
+    ds.next_control_date,
+    'Категория ХБП: ' || cpr.combined_category || '. Прогноз по KDIGO: ' || cpr.prognosis_text || '. '
+    || 'Контроль АД, креатинина, мочевины, калия, ОАК, ОАМ и альбумин/креатинин мочи к следующему визиту.'
+    || CASE
+        WHEN cpr.prognosis_level = 'very_high' THEN ' Учитывая очень высокий риск — динамическое наблюдение нефролога, контроль осложнений ХБП и оценка показаний к подготовке к заместительной почечной терапии.'
+        WHEN cpr.prognosis_level = 'high' THEN ' Учитывая высокий риск — усилить контроль факторов прогрессирования ХБП.'
+        WHEN cpr.prognosis_level = 'moderate' THEN ' Учитывая умеренно повышенный риск — плановый контроль функции почек и альбуминурии.'
+        ELSE ' Учитывая низкий риск — продолжить плановое наблюдение.'
+    END
+    || CASE
+        WHEN EXISTS (
+            SELECT 1
+            FROM biochemistry_results b
+            WHERE b.appointment_id = ds.appointment_id
+              AND b.potassium >= 5.5
+        ) THEN ' В связи с гиперкалиемией — внеплановый контроль калия и коррекция калийсберегающих факторов по решению врача.'
+        ELSE ''
+    END AS recommendations
+FROM diet_source ds
+JOIN ckd_prognosis_results cpr ON cpr.appointment_id = ds.appointment_id;
+
+
+
+INSERT INTO icd10_diagnoses (diagnosis,is_active)
+VALUES
+('N18.1 — Хроническая болезнь почек, стадия 1',TRUE),
+('N18.2 — Хроническая болезнь почек, стадия 2',TRUE),
+('N18.3 — Хроническая болезнь почек, стадия 3',TRUE),
+('N18.4 — Хроническая болезнь почек, стадия 4',TRUE),
+('N18.5 — Хроническая болезнь почек, стадия 5',TRUE),
+('D63.8 — Анемия при других хронических болезнях, классифицированных в других рубриках',TRUE),
+('I12.9 — Гипертензивная болезнь с поражением почек без почечной недостаточности',TRUE),
+('E11.2 — Инсулиннезависимый сахарный диабет с поражением почек',TRUE),
+('N25.0 — Почечная остеодистрофия',TRUE),
+('E78.5 — Гиперлипидемия неуточненная',TRUE),
+('N39.0 — Инфекция мочевыводящих путей без установленной локализации',TRUE),
+('R80 — Изолированная протеинурия',TRUE),
+('E79.0 — Гиперурикемия без признаков воспалительного артрита и подагрических узлов',TRUE),
+('M10.3 — Подагра, обусловленная нарушением почечной функции',TRUE),
+('I15.1 — Гипертензия вторичная по отношению к другим поражениям почек',TRUE)
+ON CONFLICT (diagnosis) DO NOTHING;
+
+WITH ordered AS (
+ SELECT a.id appointment_id, row_number() OVER (ORDER BY a.id) rn,
+        COALESCE((SELECT cm.ckd_stage FROM calculated_metrics cm WHERE cm.appointment_id=a.id AND cm.ckd_stage IS NOT NULL ORDER BY cm.investigation_date DESC NULLS LAST,cm.id DESC LIMIT 1),'С1') stage
+ FROM appointments a
+), codes AS (
+ SELECT *, CASE stage WHEN 'С1' THEN 'N18.1' WHEN 'С2' THEN 'N18.2' WHEN 'С3а' THEN 'N18.3' WHEN 'С3б' THEN 'N18.3' WHEN 'С4' THEN 'N18.4' WHEN 'С5' THEN 'N18.5' ELSE 'N18.1' END main_code,
+        CASE mod((rn-1),5) WHEN 0 THEN ARRAY['D63.8']::text[] WHEN 1 THEN ARRAY['I15.1']::text[] WHEN 2 THEN ARRAY['D63.8','N25.0']::text[] WHEN 3 THEN ARRAY['R80','E79.0']::text[] WHEN 4 THEN ARRAY['D63.8','N25.0','R80']::text[] END complication_codes,
+        CASE mod((rn-1),5) WHEN 0 THEN ARRAY['I12.9']::text[] WHEN 1 THEN ARRAY['M10.3']::text[] WHEN 2 THEN ARRAY['E11.2','E78.5']::text[] WHEN 3 THEN ARRAY['I12.9','N39.0']::text[] WHEN 4 THEN ARRAY['I12.9','E11.2','E78.5']::text[] END comorbidity_codes
+ FROM ordered
+)
+INSERT INTO appointment_icd10_diagnoses (appointment_id,diagnosis_type,icd10_diagnosis_id,doctor_note,sort_order)
+SELECT c.appointment_id,'main',i.id,NULL,1
+FROM codes c
+JOIN LATERAL (
+    SELECT d.id
+    FROM icd10_diagnoses d
+    WHERE d.diagnosis LIKE c.main_code || ' — %'
+    ORDER BY d.id
+    LIMIT 1
+) i ON TRUE;
+
+WITH ordered AS (SELECT id appointment_id,row_number() OVER(ORDER BY id) rn FROM appointments), codes AS (
+ SELECT *, CASE mod((rn-1),5) WHEN 0 THEN ARRAY['D63.8']::text[] WHEN 1 THEN ARRAY['I15.1']::text[] WHEN 2 THEN ARRAY['D63.8','N25.0']::text[] WHEN 3 THEN ARRAY['R80','E79.0']::text[] WHEN 4 THEN ARRAY['D63.8','N25.0','R80']::text[] END vals FROM ordered)
+INSERT INTO appointment_icd10_diagnoses (appointment_id,diagnosis_type,icd10_diagnosis_id,doctor_note,sort_order)
+SELECT c.appointment_id,'complication',i.id,NULL,u.ord::int
+FROM codes c
+CROSS JOIN LATERAL unnest(c.vals) WITH ORDINALITY u(code,ord)
+JOIN LATERAL (
+    SELECT d.id
+    FROM icd10_diagnoses d
+    WHERE d.diagnosis LIKE u.code || ' — %'
+    ORDER BY d.id
+    LIMIT 1
+) i ON TRUE;
+
+WITH ordered AS (SELECT id appointment_id,row_number() OVER(ORDER BY id) rn FROM appointments), codes AS (
+ SELECT *, CASE mod((rn-1),5) WHEN 0 THEN ARRAY['I12.9']::text[] WHEN 1 THEN ARRAY['M10.3']::text[] WHEN 2 THEN ARRAY['E11.2','E78.5']::text[] WHEN 3 THEN ARRAY['I12.9','N39.0']::text[] WHEN 4 THEN ARRAY['I12.9','E11.2','E78.5']::text[] END vals FROM ordered)
+INSERT INTO appointment_icd10_diagnoses (appointment_id,diagnosis_type,icd10_diagnosis_id,doctor_note,sort_order)
+SELECT c.appointment_id,'comorbidity',i.id,NULL,u.ord::int
+FROM codes c
+CROSS JOIN LATERAL unnest(c.vals) WITH ORDINALITY u(code,ord)
+JOIN LATERAL (
+    SELECT d.id
+    FROM icd10_diagnoses d
+    WHERE d.diagnosis LIKE u.code || ' — %'
+    ORDER BY d.id
+    LIMIT 1
+) i ON TRUE;
+
+UPDATE appointment_diets ad
+SET recommendations = CASE
+    (SELECT cm.ckd_stage FROM calculated_metrics cm WHERE cm.appointment_id=ad.appointment_id ORDER BY cm.investigation_date DESC NULLS LAST,cm.id DESC LIMIT 1)
+    WHEN 'С1' THEN 'Контроль артериального давления ежедневно с ведением дневника. Контроль креатинина, мочевины, калия, общего анализа крови, общего анализа мочи и альбумин/креатинин мочи к следующему визиту. Соблюдать питьевой режим, избегать самостоятельного приема НПВП.'
+    WHEN 'С2' THEN 'Контроль артериального давления ежедневно с ведением дневника. Контроль креатинина, мочевины, калия, общего анализа крови, общего анализа мочи и альбумин/креатинин мочи к следующему визиту. Соблюдать питьевой режим, избегать самостоятельного приема НПВП.'
+    WHEN 'С3а' THEN 'Контроль артериального давления ежедневно. Контроль креатинина, мочевины, калия, общего анализа крови, общего анализа мочи и альбумин/креатинин мочи к следующему визиту. Ограничить соль до 5 г/сут, избегать нефротоксичных препаратов.'
+    WHEN 'С3б' THEN 'Контроль артериального давления ежедневно. Контроль креатинина, мочевины, калия, общего анализа крови, общего анализа мочи и альбумин/креатинин мочи к следующему визиту. Ограничить соль до 5 г/сут, избегать нефротоксичных препаратов.'
+    WHEN 'С4' THEN 'Наблюдение нефролога в динамике. Контроль креатинина, мочевины, калия, кальция, фосфора, ПТГ, общего анализа крови, общего анализа мочи и альбумин/креатинин мочи к следующему визиту. Контроль артериального давления с дневником самоконтроля.'
+    ELSE 'Регулярное наблюдение нефролога. Контроль креатинина, мочевины, калия, натрия, кальция, фосфора, ПТГ, общего анализа крови и общего анализа мочи к следующему визиту. При ухудшении самочувствия, отеках или повышении артериального давления обратиться внепланово.'
+END;
+
+INSERT INTO prescriptions (appointment_id,therapy_group,medication,dosage,schedule) VALUES
+    (1,'Коррекция АД, ЧСС','Лозартан','50 мг','1 раз утром'),
+    (1,'Нефропротекция','Эмпаглифлозин','10 мг','1 раз утром'),
+    (1,'Коррекция гиперлипидемии','Питавастатин','2 мг','1 раз вечером'),
+    (1,'Коррекция анемии','Эпоэтин бета','4000 МЕ','2 раза в неделю'),
+    (1,'Другие препараты','Аллопуринол','100 мг','1 раз в день после еды'),
+    (2,'Коррекция АД, ЧСС','Бисопролол','5 мг','1 раз утром'),
+    (2,'Нефропротекция','Финеренон','10 мг','1 раз в день'),
+    (2,'Коррекция гиперлипидемии','Эзетимиб','10 мг','1 раз в день'),
+    (2,'Коррекция анемии','Метоксиполиэтиленгликоль-эпоэтин бета','50 мкг','1 раз в месяц'),
+    (2,'Другие препараты','Фебуксостат','40 мг','1 раз в день'),
+    (3,'Коррекция АД, ЧСС','Амлодипин','5 мг','1 раз вечером'),
+    (3,'Нефропротекция','Лозартан','50 мг','1 раз вечером'),
+    (3,'Коррекция гиперлипидемии','Аторвастатин','20 мг','1 раз вечером'),
+    (3,'Коррекция анемии','Железа III гидроксид полимальтозат','100 мг','1 раз в день после еды'),
+    (3,'Другие препараты','Аллопуринол','100 мг','1 раз в день после еды'),
+    (4,'Коррекция АД, ЧСС','Карведилол','12,5 мг','2 раза в день'),
+    (4,'Нефропротекция','Дапаглифлозин','10 мг','1 раз утром'),
+    (4,'Коррекция гиперлипидемии','Розувастатин','10 мг','1 раз вечером'),
+    (4,'Коррекция анемии','Железа III гидроксид полисахарозный комплекс','100 мг','по индивидуальной схеме'),
+    (4,'Другие препараты','Фебуксостат','40 мг','1 раз в день'),
+    (5,'Коррекция АД, ЧСС','Торасемид','10 мг','1 раз утром'),
+    (5,'Нефропротекция','Эмпаглифлозин','10 мг','1 раз утром'),
+    (5,'Коррекция гиперлипидемии','Питавастатин','2 мг','1 раз вечером'),
+    (5,'Коррекция анемии','Эпоэтин альфа','4000 МЕ','3 раза в неделю'),
+    (5,'Другие препараты','Аллопуринол','100 мг','1 раз в день после еды'),
+    (6,'Коррекция АД, ЧСС','Моксонидин','0,2 мг','1 раз вечером'),
+    (6,'Нефропротекция','Финеренон','10 мг','1 раз в день'),
+    (6,'Коррекция гиперлипидемии','Эзетимиб','10 мг','1 раз в день'),
+    (6,'Коррекция анемии','Эпоэтин бета','4000 МЕ','2 раза в неделю'),
+    (6,'Другие препараты','Фебуксостат','40 мг','1 раз в день'),
+    (7,'Коррекция АД, ЧСС','Лозартан','50 мг','1 раз утром'),
+    (7,'Нефропротекция','Лозартан','50 мг','1 раз вечером'),
+    (7,'Коррекция гиперлипидемии','Аторвастатин','20 мг','1 раз вечером'),
+    (7,'Коррекция анемии','Метоксиполиэтиленгликоль-эпоэтин бета','50 мкг','1 раз в месяц'),
+    (7,'Другие препараты','Аллопуринол','100 мг','1 раз в день после еды'),
+    (8,'Коррекция АД, ЧСС','Бисопролол','5 мг','1 раз утром'),
+    (8,'Нефропротекция','Дапаглифлозин','10 мг','1 раз утром'),
+    (8,'Коррекция гиперлипидемии','Розувастатин','10 мг','1 раз вечером'),
+    (8,'Коррекция анемии','Железа III гидроксид полимальтозат','100 мг','1 раз в день после еды'),
+    (8,'Другие препараты','Фебуксостат','40 мг','1 раз в день'),
+    (9,'Коррекция АД, ЧСС','Амлодипин','5 мг','1 раз вечером'),
+    (9,'Нефропротекция','Эмпаглифлозин','10 мг','1 раз утром'),
+    (9,'Коррекция гиперлипидемии','Питавастатин','2 мг','1 раз вечером'),
+    (9,'Коррекция анемии','Железа III гидроксид полисахарозный комплекс','100 мг','по индивидуальной схеме'),
+    (9,'Другие препараты','Аллопуринол','100 мг','1 раз в день после еды'),
+    (10,'Коррекция АД, ЧСС','Карведилол','12,5 мг','2 раза в день'),
+    (10,'Нефропротекция','Финеренон','10 мг','1 раз в день'),
+    (10,'Коррекция гиперлипидемии','Эзетимиб','10 мг','1 раз в день'),
+    (10,'Коррекция анемии','Эпоэтин альфа','4000 МЕ','3 раза в неделю'),
+    (10,'Другие препараты','Фебуксостат','40 мг','1 раз в день'),
+    (11,'Коррекция АД, ЧСС','Торасемид','10 мг','1 раз утром'),
+    (11,'Нефропротекция','Лозартан','50 мг','1 раз вечером'),
+    (11,'Коррекция гиперлипидемии','Аторвастатин','20 мг','1 раз вечером'),
+    (11,'Коррекция анемии','Эпоэтин бета','4000 МЕ','2 раза в неделю'),
+    (11,'Другие препараты','Аллопуринол','100 мг','1 раз в день после еды'),
+    (12,'Коррекция АД, ЧСС','Моксонидин','0,2 мг','1 раз вечером'),
+    (12,'Нефропротекция','Дапаглифлозин','10 мг','1 раз утром'),
+    (12,'Коррекция гиперлипидемии','Розувастатин','10 мг','1 раз вечером'),
+    (12,'Коррекция анемии','Метоксиполиэтиленгликоль-эпоэтин бета','50 мкг','1 раз в месяц'),
+    (12,'Другие препараты','Фебуксостат','40 мг','1 раз в день'),
+    (13,'Коррекция АД, ЧСС','Лозартан','50 мг','1 раз утром'),
+    (13,'Нефропротекция','Эмпаглифлозин','10 мг','1 раз утром'),
+    (13,'Коррекция гиперлипидемии','Питавастатин','2 мг','1 раз вечером'),
+    (13,'Коррекция анемии','Железа III гидроксид полимальтозат','100 мг','1 раз в день после еды'),
+    (13,'Другие препараты','Аллопуринол','100 мг','1 раз в день после еды'),
+    (14,'Коррекция АД, ЧСС','Бисопролол','5 мг','1 раз утром'),
+    (14,'Нефропротекция','Финеренон','10 мг','1 раз в день'),
+    (14,'Коррекция гиперлипидемии','Эзетимиб','10 мг','1 раз в день'),
+    (14,'Коррекция анемии','Железа III гидроксид полисахарозный комплекс','100 мг','по индивидуальной схеме'),
+    (14,'Другие препараты','Фебуксостат','40 мг','1 раз в день'),
+    (15,'Коррекция АД, ЧСС','Амлодипин','5 мг','1 раз вечером'),
+    (15,'Нефропротекция','Лозартан','50 мг','1 раз вечером'),
+    (15,'Коррекция гиперлипидемии','Аторвастатин','20 мг','1 раз вечером'),
+    (15,'Коррекция анемии','Эпоэтин альфа','4000 МЕ','3 раза в неделю'),
+    (15,'Другие препараты','Аллопуринол','100 мг','1 раз в день после еды'),
+    (16,'Коррекция АД, ЧСС','Карведилол','12,5 мг','2 раза в день'),
+    (16,'Нефропротекция','Дапаглифлозин','10 мг','1 раз утром'),
+    (16,'Коррекция гиперлипидемии','Розувастатин','10 мг','1 раз вечером'),
+    (16,'Коррекция анемии','Эпоэтин бета','4000 МЕ','2 раза в неделю'),
+    (16,'Другие препараты','Фебуксостат','40 мг','1 раз в день'),
+    (17,'Коррекция АД, ЧСС','Торасемид','10 мг','1 раз утром'),
+    (17,'Нефропротекция','Эмпаглифлозин','10 мг','1 раз утром'),
+    (17,'Коррекция гиперлипидемии','Питавастатин','2 мг','1 раз вечером'),
+    (17,'Коррекция анемии','Метоксиполиэтиленгликоль-эпоэтин бета','50 мкг','1 раз в месяц'),
+    (17,'Другие препараты','Аллопуринол','100 мг','1 раз в день после еды');
+COMMIT;

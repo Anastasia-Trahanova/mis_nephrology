@@ -46,4 +46,12 @@ Thumbs.db
 dist/
 build/
 *.egg-info/
+.venv-upgrade/archive_import_report.json
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.log
+archive_import_report.json
 .venv-upgrade/

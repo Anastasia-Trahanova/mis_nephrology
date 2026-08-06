@@ -1,79 +1,4 @@
--- ЛЕГЕНДА
--- Файл: 03 создание и заполнение таблиц МКБ.sql
--- Назначение: создаёт справочник МКБ-10 для нефрологического приема, таблицу диагнозов приема и view для чтения диагнозов.
--- Важно: диагноз хранится одной полной статичной строкой в поле diagnosis.
--- Пример: 'N18.4 — Хроническая болезнь почек, стадия 4'.
--- Код и название НЕ разделяются на отдельные поля, потому что врач выбирает готовую строку из справочника.
--- Запускать после 01 и 02, до тестовых данных.
-
-CREATE TABLE IF NOT EXISTS icd10_diagnoses (
-    id SERIAL PRIMARY KEY,
-    diagnosis TEXT NOT NULL,
-    is_active BOOLEAN NOT NULL DEFAULT TRUE,
-    sort_order INTEGER,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-CREATE TABLE IF NOT EXISTS appointment_icd10_diagnoses (
-    id SERIAL PRIMARY KEY,
-    appointment_id INTEGER NOT NULL,
-    diagnosis_type VARCHAR(20) NOT NULL,
-    icd10_diagnosis_id INTEGER NOT NULL,
-    doctor_note TEXT,
-    sort_order INTEGER NOT NULL DEFAULT 1,
-    created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-);
-
-ALTER TABLE icd10_diagnoses DROP CONSTRAINT IF EXISTS uq_icd10_diagnoses_diagnosis;
-ALTER TABLE icd10_diagnoses
-    ADD CONSTRAINT uq_icd10_diagnoses_diagnosis UNIQUE (diagnosis);
-
-ALTER TABLE appointment_icd10_diagnoses DROP CONSTRAINT IF EXISTS fk_appointment_icd10_diagnoses_appointment;
-ALTER TABLE appointment_icd10_diagnoses
-    ADD CONSTRAINT fk_appointment_icd10_diagnoses_appointment
-    FOREIGN KEY (appointment_id) REFERENCES appointments(id) ON DELETE CASCADE;
-
-ALTER TABLE appointment_icd10_diagnoses DROP CONSTRAINT IF EXISTS fk_appointment_icd10_diagnoses_icd10;
-ALTER TABLE appointment_icd10_diagnoses
-    ADD CONSTRAINT fk_appointment_icd10_diagnoses_icd10
-    FOREIGN KEY (icd10_diagnosis_id) REFERENCES icd10_diagnoses(id) ON DELETE RESTRICT;
-
-ALTER TABLE appointment_icd10_diagnoses DROP CONSTRAINT IF EXISTS chk_appointment_icd10_diagnoses_type;
-ALTER TABLE appointment_icd10_diagnoses
-    ADD CONSTRAINT chk_appointment_icd10_diagnoses_type
-    CHECK (diagnosis_type IN ('main', 'complication', 'comorbidity'));
-
-ALTER TABLE appointment_icd10_diagnoses DROP CONSTRAINT IF EXISTS uq_appointment_icd10_diagnoses_position;
-ALTER TABLE appointment_icd10_diagnoses
-    ADD CONSTRAINT uq_appointment_icd10_diagnoses_position
-    UNIQUE (appointment_id, diagnosis_type, sort_order);
-
-CREATE INDEX IF NOT EXISTS idx_icd10_diagnoses_sort_order ON icd10_diagnoses(sort_order);
-CREATE INDEX IF NOT EXISTS idx_icd10_diagnoses_active ON icd10_diagnoses(is_active);
-CREATE INDEX IF NOT EXISTS idx_icd10_diagnoses_text
-    ON icd10_diagnoses USING gin (to_tsvector('russian', diagnosis));
-CREATE INDEX IF NOT EXISTS idx_appointment_icd10_diagnoses_appointment_id
-    ON appointment_icd10_diagnoses(appointment_id);
-CREATE INDEX IF NOT EXISTS idx_appointment_icd10_diagnoses_icd10_id
-    ON appointment_icd10_diagnoses(icd10_diagnosis_id);
-CREATE INDEX IF NOT EXISTS idx_appointment_icd10_diagnoses_type
-    ON appointment_icd10_diagnoses(diagnosis_type);
-
-CREATE OR REPLACE VIEW appointment_icd10_diagnoses_view AS
-SELECT
-    aid.id,
-    aid.appointment_id,
-    aid.diagnosis_type,
-    aid.icd10_diagnosis_id,
-    d.diagnosis AS icd10_diagnosis,
-    aid.doctor_note,
-    aid.sort_order,
-    aid.created_at,
-    aid.updated_at
-FROM appointment_icd10_diagnoses aid
-JOIN icd10_diagnoses d ON d.id = aid.icd10_diagnosis_id;
+SET client_encoding = 'UTF8';
 
 INSERT INTO icd10_diagnoses (diagnosis, sort_order, is_active)
 VALUES
@@ -236,3 +161,35 @@ ON CONFLICT (diagnosis) DO UPDATE SET
     sort_order = EXCLUDED.sort_order,
     is_active = EXCLUDED.is_active,
     updated_at = CURRENT_TIMESTAMP;
+SELECT setval(pg_get_serial_sequence('icd10_diagnoses','id'),COALESCE((SELECT MAX(id) FROM icd10_diagnoses),1),true);
+
+TRUNCATE TABLE medications RESTART IDENTITY;
+INSERT INTO medications (display_name,trade_name,active_substance,drug_group,sort_order,is_active)
+VALUES
+    ('Лозартан',NULL,'лозартан',NULL,10,TRUE),
+    ('Бисопролол',NULL,'бисопролол',NULL,20,TRUE),
+    ('Метопролол',NULL,'метопролол',NULL,30,TRUE),
+    ('Карведилол',NULL,'карведилол',NULL,40,TRUE),
+    ('Амлодипин',NULL,'амлодипин',NULL,50,TRUE),
+    ('Лерканидипин',NULL,'лерканидипин',NULL,60,TRUE),
+    ('Нифедипин',NULL,'нифедипин',NULL,70,TRUE),
+    ('Нифедипин с модифицированным высвобождением',NULL,'нифедипин',NULL,80,TRUE),
+    ('Спиронолактон',NULL,'спиронолактон',NULL,90,TRUE),
+    ('Индапамид',NULL,'индапамид',NULL,100,TRUE),
+    ('Торасемид',NULL,'торасемид',NULL,110,TRUE),
+    ('Фуросемид',NULL,'фуросемид',NULL,120,TRUE),
+    ('Моксонидин',NULL,'моксонидин',NULL,130,TRUE),
+    ('Дапаглифлозин',NULL,'дапаглифлозин',NULL,140,TRUE),
+    ('Эмпаглифлозин',NULL,'эмпаглифлозин',NULL,150,TRUE),
+    ('Финеренон',NULL,'финеренон',NULL,160,TRUE),
+    ('Аторвастатин',NULL,'аторвастатин',NULL,170,TRUE),
+    ('Розувастатин',NULL,'розувастатин',NULL,180,TRUE),
+    ('Питавастатин',NULL,'питавастатин',NULL,190,TRUE),
+    ('Эзетимиб',NULL,'эзетимиб',NULL,200,TRUE),
+    ('Железа III гидроксид полимальтозат',NULL,'железа III гидроксид полимальтозат',NULL,210,TRUE),
+    ('Железа III гидроксид полисахарозный комплекс',NULL,'железа III гидроксид полисахарозный комплекс',NULL,220,TRUE),
+    ('Эпоэтин альфа',NULL,'эпоэтин альфа',NULL,230,TRUE),
+    ('Эпоэтин бета',NULL,'эпоэтин бета',NULL,240,TRUE),
+    ('Метоксиполиэтиленгликоль-эпоэтин бета',NULL,'метоксиполиэтиленгликоль-эпоэтин бета',NULL,250,TRUE),
+    ('Аллопуринол',NULL,'аллопуринол',NULL,260,TRUE),
+    ('Фебуксостат',NULL,'фебуксостат',NULL,270,TRUE);
