@@ -1,13 +1,20 @@
-{# Нижняя панель экспорта карточки приёма. #}
+{#
+Назначение файла:
+Нижняя панель экспорта карточки приёма.
 
+Для любого приёма доступно сформированное заключение DOCX.
+Для архивного приёма с сохранённым путём дополнительно доступен
+исходный DOC, DOCX или PDF из папки медицинского архива.
+#}
 <div class="card-footer d-flex flex-wrap gap-2">
   <a href="/export/{{ selected_appointment.id }}/docx" class="btn btn-primary">
     Скачать Word
   </a>
 
   {% if selected_appointment.is_archive_import and selected_appointment.archive_source_relative_path %}
-  <a href="/export/{{ selected_appointment.id }}/archive-source" class="btn btn-outline-primary">
-    Скачать исходный документ
+  <a href="/export/{{ selected_appointment.id }}/archive-source"
+     class="btn btn-outline-secondary">
+    Скачать исходное заключение
   </a>
   {% endif %}
 </div>

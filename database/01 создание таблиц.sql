@@ -26,7 +26,7 @@ CREATE TABLE IF NOT EXISTS locations (
     factual_address TEXT,
     phone VARCHAR(50),
     email VARCHAR(255),
-    fax VARCHAR(50)
+    fax VARCHAR(50) 
 );
 
 CREATE TABLE IF NOT EXISTS doctors (

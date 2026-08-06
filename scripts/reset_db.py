@@ -47,7 +47,7 @@ def recreate(a):
 def alembic(a):
  env=os.environ.copy(); env.update(DB_HOST=str(a.host),DB_PORT=str(a.port),DB_USER=str(a.user),DB_PASSWORD=str(a.password),DB_NAME=str(a.db_name),DATABASE_URL=f'postgresql://{quote(str(a.user), safe="")}:{quote(str(a.password), safe="")}@{a.host}:{a.port}/{quote(str(a.db_name), safe="")}',PYTHONUTF8='1')
  files=sorted(p for p in (ROOT/'migrations'/'versions').glob('*.py') if p.name!='__init__.py')
- if [p.name for p in files]!=['0018_archive_source_document_path.py']: raise RuntimeError('В migrations/versions должен остаться только 0018_archive_source_document_path.py')
+ if [p.name for p in files]!=['0018_archive_integration.py']: raise RuntimeError('В migrations/versions должен остаться только 0018_archive_integration.py')
  subprocess.run([sys.executable,'-m','alembic','upgrade','head'],cwd=ROOT,env=env,check=True)
 
 def main():
