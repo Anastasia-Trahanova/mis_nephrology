@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from .formatting import add_centered_paragraph, has_value
-from app.location_display import build_location_full_name
 
 
 def _first(location_info, *keys) -> str:
@@ -24,15 +23,19 @@ def _join_unique(parts, separator=", ") -> str:
 
 
 def _location_name(location_info) -> str:
-    """Организация, филиал и отделение — как в карточке приёма."""
-    return build_location_full_name(
-        {
-            "company_name": location_info.get("company_name"),
-            "branch_name": location_info.get("branch_name"),
-            "location_name": location_info.get("location_name"),
-        }
-    )
+    """Отделение, затем филиал, затем юридическое лицо."""
+    location_name = _first(location_info, "location_name", "name")
+    branch_name = _first(location_info, "branch_name")
+    company_name = _first(location_info, "company_name")
 
+    branch_display = f"Филиал «{branch_name}»" if branch_name else ""
+    return _join_unique(
+        [
+            location_name,
+            branch_display,
+            company_name,
+        ]
+    )
 
 def _location_address(location_info) -> str:
     postal_code = _first(
@@ -74,31 +77,55 @@ def _location_address(location_info) -> str:
 
 
 def add_clinic_header(doc, location_info):
-    """Три строки: место приёма, адрес, телефон и электронная почта."""
+    """Единая строка: отделение, филиал, компания, адрес и контакты."""
     location_info = location_info or {}
 
     name = _location_name(location_info)
     address = _location_address(location_info)
 
-    phone = _first(location_info, "branch_phone", "company_phone", "phone")
-    email = _first(location_info, "branch_email", "company_email", "email")
+    phone = _first(
+        location_info,
+        "location_phone",
+        "branch_phone",
+        "company_phone",
+        "phone",
+    )
+    fax = _first(
+        location_info,
+        "location_fax",
+        "branch_fax",
+        "fax",
+    )
+    email = _first(
+        location_info,
+        "location_email",
+        "branch_email",
+        "company_email",
+        "email",
+    )
+
+    organization_and_address = _join_unique([name, address])
+    if organization_and_address and not organization_and_address.endswith("."):
+        organization_and_address += "."
 
     contacts = []
     if phone:
         contacts.append(f"Тел.: {phone}")
+    if fax:
+        contacts.append(f"факс: {fax}")
     if email:
-        contacts.append(f"E-mail: {email}")
+        contacts.append(email)
 
-    add_centered_paragraph(doc, name, size=9, bold=False, space_after=0)
-    add_centered_paragraph(doc, address, size=9, bold=False, space_after=0)
+    header_text = " ".join(
+        part for part in (organization_and_address, "; ".join(contacts)) if part
+    )
     add_centered_paragraph(
         doc,
-        "; ".join(contacts),
+        header_text,
         size=9,
         bold=False,
         space_after=4,
     )
-
 
 def add_document_title(doc, visit_kind: str = "повторный"):
     """Добавляет заголовок в том же виде, что и в ЭМК."""

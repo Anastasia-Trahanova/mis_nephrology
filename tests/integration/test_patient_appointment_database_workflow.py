@@ -7,7 +7,7 @@
 - сохранение surveys, examinations, cbc_results, biochemistry_results;
 - сохранение calculated_metrics по креатинину;
 - сохранение urinalysis_results, albuminuria_results, ultrasound_results;
-- сохранение diagnoses, appointment_diets, prescriptions;
+- сохранение appointment_icd10_diagnoses, appointment_diets, prescriptions;
 - возможность прочитать созданные данные обратно SQL-запросами.
 
 Зачем:
@@ -62,12 +62,22 @@ def _skip_if_db_tests_disabled():
         pytest.skip("DB integration test is disabled. Set RUN_DB_LAYER_TESTS=1 to run it.")
 
 
-def _fetch_one_id(cur, sql: str) -> int:
-    cur.execute(sql)
+def _fetch_doctor_location(cur) -> tuple[int, int]:
+    cur.execute(
+        """
+        SELECT doctor_id, location_id
+        FROM doctor_locations
+        ORDER BY id
+        LIMIT 1
+        """
+    )
     row = cur.fetchone()
     if not row:
-        raise AssertionError(f"Не найдены обязательные справочные данные для теста: {sql}")
-    return row["id"]
+        raise AssertionError(
+            "В тестовой БД нет ни одной связи doctor_locations; "
+            "невозможно проверить создание приёма от имени врача"
+        )
+    return int(row["doctor_id"]), int(row["location_id"])
 
 
 def _count(cur, table: str, appointment_id: int) -> int:
@@ -88,10 +98,10 @@ def _cleanup_patient(cur, patient_id: int) -> None:
     if appointment_ids:
         for table in [
             "appointment_icd10_diagnoses",
-            "ckd_prognosis",
+            "ckd_prognosis_results",
             "prescriptions",
             "appointment_diets",
-            "diagnoses",
+            "appointment_additional_studies",
             "ultrasound_results",
             "albuminuria_results",
             "urinalysis_results",
@@ -122,8 +132,7 @@ def test_create_patient_first_appointment_and_read_saved_data_from_db():
 
     with get_db_connection() as conn:
         with conn.cursor() as cur:
-            doctor_id = _fetch_one_id(cur, "SELECT id FROM doctors ORDER BY id LIMIT 1")
-            location_id = _fetch_one_id(cur, "SELECT id FROM locations ORDER BY id LIMIT 1")
+            doctor_id, location_id = _fetch_doctor_location(cur)
 
     form = FakeForm(
         {
@@ -132,19 +141,15 @@ def test_create_patient_first_appointment_and_read_saved_data_from_db():
             "patronymic": "Интеграционный",
             "birth_date": "1980-01-15",
             "gender": "true",
-            "doctor_id": str(doctor_id),
             "location_id": str(location_id),
             "appointment_date": "2026-07-04",
             "appointment_time": "10:30",
-            "life_anamnesis": "Анамнез жизни интеграционного теста",
-            "disease_anamnesis": "Анамнез заболевания интеграционного теста",
             "complaints": "Жалобы интеграционного теста",
-            "heredity": "true",
+            "past_diseases": "Анамнез жизни интеграционного теста",
             "heredity_description": "Наследственность тест",
-            "comorbidities": "АГ",
-            "skin_color": ["обычная"],
-            "skin_moisture": ["нормальная"],
-            "skin_rash": "нет",
+            "disease_onset": "Начало заболевания интеграционного теста",
+            "disease_course": "Течение заболевания интеграционного теста",
+            "skin_and_mucous_membranes": "Обычная окраска, нормальная влажность, без сыпи",
             "edema_peripheral": ["голени"],
             "edema_serositis": ["нет"],
             "systolic_pressure": "130",
@@ -189,11 +194,8 @@ def test_create_patient_first_appointment_and_read_saved_data_from_db():
             "left_parenchyma": ["16"],
             "right_parenchyma": ["15"],
             "ultrasound_desc": ["Интеграционный тест УЗИ"],
-            "main_diagnosis": "Хроническая болезнь почек",
-            "complications": "Нет",
-            "comorbidities_diag": "АГ",
-            "icd10_main_diagnosis": "",
-            "icd10_main_note": "",
+            "icd10_main_diagnosis": "N18 — Хроническая болезнь почек",
+            "icd10_main_note": "Интеграционный тест",
             "icd10_complication_diagnosis": [""],
             "icd10_complication_note": [""],
             "icd10_comorbidity_diagnosis": [""],
@@ -201,6 +203,7 @@ def test_create_patient_first_appointment_and_read_saved_data_from_db():
             "diet": "Ограничение соли",
             "next_control_date": "2026-10-04",
             "recommendations": "Контроль креатинина и ACR",
+            "therapy_group": ["Коррекция АД, ЧСС"],
             "medication": ["Лозартан"],
             "dosage": ["50 мг"],
             "schedule": ["1 раз в день"],
@@ -208,7 +211,10 @@ def test_create_patient_first_appointment_and_read_saved_data_from_db():
     )
 
     try:
-        result = create_patient_with_first_appointment(form)
+        result = create_patient_with_first_appointment(
+            form,
+            current_doctor_id=doctor_id,
+        )
         patient_id = result.patient_id
         appointment_id = result.appointment_id
 
@@ -225,9 +231,25 @@ def test_create_patient_first_appointment_and_read_saved_data_from_db():
                 assert _count(cur, "urinalysis_results", appointment_id) == 1
                 assert _count(cur, "albuminuria_results", appointment_id) == 1
                 assert _count(cur, "ultrasound_results", appointment_id) == 1
-                assert _count(cur, "diagnoses", appointment_id) == 1
+                assert _count(cur, "appointment_icd10_diagnoses", appointment_id) == 1
                 assert _count(cur, "appointment_diets", appointment_id) == 1
                 assert _count(cur, "prescriptions", appointment_id) == 1
+
+                cur.execute(
+                    "SELECT doctor_id, location_id FROM appointments WHERE id = %s",
+                    (appointment_id,),
+                )
+                appointment = cur.fetchone()
+                assert appointment["doctor_id"] == doctor_id
+                assert appointment["location_id"] == location_id
+
+                cur.execute(
+                    "SELECT medication, therapy_group FROM prescriptions WHERE appointment_id = %s",
+                    (appointment_id,),
+                )
+                prescription = cur.fetchone()
+                assert prescription["medication"] == "Лозартан"
+                assert prescription["therapy_group"] == "Коррекция АД, ЧСС"
 
                 cur.execute("SELECT bmi FROM examinations WHERE appointment_id = %s", (appointment_id,))
                 assert round(float(cur.fetchone()["bmi"]), 2) == 24.22
