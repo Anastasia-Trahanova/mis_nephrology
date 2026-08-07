@@ -1,0 +1,8 @@
+# Локальные секреты и результаты сборки
+private/pilot_credentials.env
+private/vc_redist.x64.exe
+work/
+output/
+*.backup
+*.exe
+*.log

@@ -1,0 +1,103 @@
+#define AppVersion "__APP_VERSION__"
+#define RuntimeSource "__RUNTIME_SOURCE__"
+#define PostgresSource "__POSTGRES_SOURCE__"
+#define PayloadSource "__PAYLOAD_SOURCE__"
+#define OutputDir "__OUTPUT_DIR__"
+
+[Setup]
+AppId={{A9FAE289-5CE4-4E3C-9BC7-6D77077554E7}
+AppName=МИС Нефрология — пилот
+AppVersion={#AppVersion}
+AppPublisher=МИС Нефрология
+DefaultDirName={autopf}\MIS Nephrology Pilot
+DefaultGroupName=МИС Нефрология — пилот
+DisableProgramGroupPage=yes
+OutputDir={#OutputDir}
+OutputBaseFilename=MIS_Nephrology_Pilot_Setup
+Compression=lzma2/max
+SolidCompression=yes
+WizardStyle=modern
+PrivilegesRequired=admin
+ArchitecturesAllowed=x64compatible
+ArchitecturesInstallIn64BitMode=x64compatible
+SetupLogging=yes
+UninstallDisplayName=МИС Нефрология — пилот
+RestartIfNeededByRun=no
+
+[Languages]
+Name: "russian"; MessagesFile: "compiler:Languages\Russian.isl"
+
+[Dirs]
+Name: "{commonappdata}\MIS Nephrology Pilot"; Permissions: users-modify
+Name: "{commonappdata}\MIS Nephrology Pilot\logs"; Permissions: users-modify
+Name: "{commonappdata}\MIS Nephrology Pilot\exports"; Permissions: users-modify
+
+[Files]
+Source: "{#RuntimeSource}\*"; DestDir: "{app}\runtime"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PostgresSource}\*"; DestDir: "{app}\postgres"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "{#PayloadSource}\pilot_database.backup"; DestDir: "{app}\payload"; Flags: ignoreversion nocompression
+Source: "{#PayloadSource}\pilot_passwords.sql"; DestDir: "{app}\payload"; Flags: ignoreversion
+Source: "{#PayloadSource}\Памятка_тестировщика_МИС.html"; DestDir: "{app}\payload"; Flags: ignoreversion
+Source: "{#PayloadSource}\medical_archive\*"; DestDir: "{app}\payload\medical_archive"; Flags: ignoreversion recursesubdirs createallsubdirs nocompression
+Source: "{#PayloadSource}\vc_redist.x64.exe"; DestDir: "{app}\payload"; Flags: ignoreversion nocompression
+
+[Icons]
+Name: "{autodesktop}\МИС Нефрология"; Filename: "{app}\runtime\MIS_Nephrology_Runtime.exe"; Parameters: "run"; WorkingDir: "{app}\runtime"
+Name: "{group}\Запустить МИС Нефрология"; Filename: "{app}\runtime\MIS_Nephrology_Runtime.exe"; Parameters: "run"; WorkingDir: "{app}\runtime"
+Name: "{group}\Остановить МИС Нефрология"; Filename: "{app}\runtime\MIS_Nephrology_Runtime.exe"; Parameters: "stop"; WorkingDir: "{app}\runtime"
+Name: "{group}\Выгрузить данные тестирования"; Filename: "{app}\runtime\MIS_Nephrology_Runtime.exe"; Parameters: "export"; WorkingDir: "{app}\runtime"
+Name: "{group}\Выгрузить данные и архивные документы"; Filename: "{app}\runtime\MIS_Nephrology_Runtime.exe"; Parameters: "export --include-archive"; WorkingDir: "{app}\runtime"
+Name: "{group}\Памятка тестировщика"; Filename: "{app}\runtime\MIS_Nephrology_Runtime.exe"; Parameters: "guide"; WorkingDir: "{app}\runtime"
+Name: "{group}\Состояние приложения"; Filename: "{app}\runtime\MIS_Nephrology_Runtime.exe"; Parameters: "status"; WorkingDir: "{app}\runtime"
+Name: "{commondesktop}\Памятка тестировщика МИС"; Filename: "{app}\payload\Памятка_тестировщика_МИС.html"
+
+[Run]
+Filename: "{app}\runtime\MIS_Nephrology_Runtime.exe"; Parameters: "run"; Description: "Запустить МИС Нефрология"; Flags: postinstall nowait skipifsilent runasoriginaluser
+Filename: "{app}\runtime\MIS_Nephrology_Runtime.exe"; Parameters: "guide"; Description: "Открыть памятку тестировщика"; Flags: postinstall nowait skipifsilent runasoriginaluser
+
+[UninstallRun]
+Filename: "{app}\runtime\MIS_Nephrology_Runtime.exe"; Parameters: "stop"; RunOnceId: "StopMIS"; Flags: runhidden waituntilterminated skipifdoesntexist
+
+[Code]
+procedure CurStepChanged(CurStep: TSetupStep);
+var
+  ResultCode: Integer;
+  RuntimeExe: String;
+  DataDir: String;
+  VCRedist: String;
+begin
+  if CurStep = ssInstall then
+  begin
+    RuntimeExe := ExpandConstant('{app}\runtime\MIS_Nephrology_Runtime.exe');
+    if FileExists(RuntimeExe) then
+      Exec(RuntimeExe, 'stop', ExpandConstant('{app}\runtime'), SW_HIDE,
+        ewWaitUntilTerminated, ResultCode);
+  end;
+
+  if CurStep = ssPostInstall then
+  begin
+    RuntimeExe := ExpandConstant('{app}\runtime\MIS_Nephrology_Runtime.exe');
+    DataDir := ExpandConstant('{commonappdata}\MIS Nephrology Pilot');
+    VCRedist := ExpandConstant('{app}\payload\vc_redist.x64.exe');
+
+    if FileExists(VCRedist) then
+    begin
+      if not Exec(VCRedist, '/install /quiet /norestart', '', SW_HIDE,
+        ewWaitUntilTerminated, ResultCode) then
+        RaiseException('Не удалось запустить установку Microsoft Visual C++ Runtime.');
+      if (ResultCode <> 0) and (ResultCode <> 1638) and (ResultCode <> 3010) then
+        RaiseException('Microsoft Visual C++ Runtime завершился с кодом ' + IntToStr(ResultCode) + '.');
+    end;
+
+    if not Exec(RuntimeExe,
+      'initialize --data-dir "' + DataDir + '" --app-port 8000 --db-port 55432',
+      ExpandConstant('{app}\runtime'), SW_HIDE, ewWaitUntilTerminated, ResultCode) then
+      RaiseException('Не удалось запустить инициализацию МИС.');
+
+    if ResultCode <> 0 then
+      RaiseException(
+        'Инициализация МИС завершилась с ошибкой. Код: ' + IntToStr(ResultCode) +
+        '. Подробности находятся в журнале ' + DataDir + '\logs\runtime.log.'
+      );
+  end;
+end;
