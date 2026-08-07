@@ -630,7 +630,7 @@ BEGIN
     SELECT md5(string_agg(diagnosis||E'\t'||sort_order::text||E'\t'||is_active::text,E'\n' ORDER BY sort_order,diagnosis)) INTO actual_hash FROM icd10_diagnoses;
     IF actual_hash<>'4e22e7697991d229dfa549663337d4fd' THEN RAISE EXCEPTION 'Изменён справочник МКБ: %',actual_hash; END IF;
 
-    IF (SELECT count(*) FROM companies)<>1 OR (SELECT count(*) FROM branches)<>2 OR (SELECT count(*) FROM locations)<>6 OR (SELECT count(*) FROM doctors)<>12
+    IF (SELECT count(*) FROM companies)<>2 OR (SELECT count(*) FROM branches)<>3 OR (SELECT count(*) FROM locations)<>7 OR (SELECT count(*) FROM doctors)<>12
     THEN RAISE EXCEPTION 'Неверно загружен справочник больницы'; END IF;
     SELECT count(*) INTO bad FROM users WHERE role='registrar' AND login='registrar' AND doctor_id IS NULL AND patient_id IS NULL;
     IF bad<>1 THEN RAISE EXCEPTION 'Не создан регистратор'; END IF;
