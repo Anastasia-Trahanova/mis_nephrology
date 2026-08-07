@@ -25,6 +25,7 @@ from app.repositories.appointments import (
 from app.repositories.diagnoses import get_appointment_icd10_diagnoses
 from app.repositories.audit_log import log_audit_changes, log_audit_event
 from app.security.permissions import require_doctor_with_id
+from app.services.active_location_service import remember_location_if_allowed
 from app.services.audit_details import build_appointment_medical_audit_changes
 from app.services.patient_appointment_service import create_appointment_for_existing_patient
 
@@ -103,7 +104,14 @@ async def create_new_appointment_for_existing_patient(patient_id: int, request: 
         ),
     )
 
-    return RedirectResponse(
+    response = RedirectResponse(
         url=f"/patient/{result.patient_id}?appointment_id={result.appointment_id}",
         status_code=303,
     )
+    remember_location_if_allowed(
+        request,
+        response,
+        current_doctor_id,
+        form.get("location_id"),
+    )
+    return response

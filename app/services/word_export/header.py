@@ -28,7 +28,14 @@ def _location_name(location_info) -> str:
     branch_name = _first(location_info, "branch_name")
     company_name = _first(location_info, "company_name")
 
-    branch_display = f"Филиал «{branch_name}»" if branch_name else ""
+    same_as_company = (
+        bool(branch_name)
+        and bool(company_name)
+        and branch_name.casefold() == company_name.casefold()
+    )
+    branch_display = (
+        "" if same_as_company else (f"Филиал «{branch_name}»" if branch_name else "")
+    )
     return _join_unique(
         [
             location_name,

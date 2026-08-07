@@ -841,6 +841,7 @@ def create_walk_in_schedule_entry(
     patient_id: int,
     doctor_id: int,
     created_by_user_id: int | None,
+    preferred_location_id: int | None = None,
     cancel_entry_id: int | None = None,
     now: datetime | None = None,
 ) -> dict[str, Any]:
@@ -881,8 +882,16 @@ def create_walk_in_schedule_entry(
                 existing = cur.fetchone()
                 if existing:
                     entry_id = int(existing["id"])
+                    if (
+                        preferred_location_id is not None
+                        and _doctor_location_allowed(cur, doctor_id, int(preferred_location_id))
+                    ):
+                        cur.execute(
+                            "UPDATE schedule_entries SET location_id = %s, updated_at = CURRENT_TIMESTAMP WHERE id = %s",
+                            (int(preferred_location_id), entry_id),
+                        )
                 else:
-                    preferred_location_id: int | None = None
+                    scheduled_location_id: int | None = None
                     if cancel_entry_id is not None:
                         cur.execute(
                             """
@@ -915,7 +924,7 @@ def create_walk_in_schedule_entry(
                                 status_code=409,
                                 detail="Запланированная запись уже завершилась",
                             )
-                        preferred_location_id = int(scheduled["location_id"])
+                        scheduled_location_id = int(scheduled["location_id"])
                         # Для выбранного сценария старая запись должна исчезнуть из расписания.
                         cur.execute("DELETE FROM schedule_entries WHERE id = %s", (cancel_entry_id,))
 
@@ -923,7 +932,11 @@ def create_walk_in_schedule_entry(
                         cur,
                         doctor_id=doctor_id,
                         now=current,
-                        preferred_location_id=preferred_location_id,
+                        preferred_location_id=(
+                            preferred_location_id
+                            if preferred_location_id is not None
+                            else scheduled_location_id
+                        ),
                     )
                     appointment_type = (
                         "repeat" if _patient_has_appointments(cur, patient_id) else "primary"

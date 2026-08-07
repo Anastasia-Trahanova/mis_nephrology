@@ -32,6 +32,7 @@ from app.security.permissions import (
     require_doctor_with_id,
     require_roles,
 )
+from app.services.active_location_service import get_session_active_location
 
 router = APIRouter(tags=["schedule"])
 templates = Jinja2Templates(directory="app/templates")
@@ -382,10 +383,13 @@ def patient_create_walk_in(
         raise HTTPException(status_code=400, detail="Некорректное действие")
     if payload.action == "cancel_and_create" and not payload.scheduled_entry_id:
         raise HTTPException(status_code=400, detail="Не указана отменяемая запись")
+    doctor_locations = get_schedule_locations_for_doctor(doctor_id)
+    active_location_id = get_session_active_location(request, doctor_locations)
     item = create_walk_in_schedule_entry(
         patient_id=patient_id,
         doctor_id=doctor_id,
         created_by_user_id=request.session.get("user_id"),
+        preferred_location_id=active_location_id,
         cancel_entry_id=(
             payload.scheduled_entry_id
             if payload.action == "cancel_and_create"

@@ -21,6 +21,11 @@ from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.templating import Jinja2Templates
 from app.db.connection import get_db_connection
 from app.repositories.audit_log import log_audit_event
+from app.repositories.reference_data import get_doctor_locations
+from app.services.active_location_service import (
+    choose_active_location_on_login,
+    set_active_location_preference,
+)
 from app.settings import settings
 
 
@@ -346,7 +351,143 @@ async def login_submit(
         details="успешный вход в систему",
         status_code=303,
     )
+
+    doctor_id = user.get("doctor_id")
+    if doctor_id:
+        locations = get_doctor_locations(int(doctor_id))
+        active_location_id = choose_active_location_on_login(
+            request,
+            int(doctor_id),
+            locations,
+        )
+        if active_location_id is None and len(locations) > 1:
+            select_url = f"/select-location?next={quote(next_url, safe='')}"
+            return RedirectResponse(url=select_url, status_code=303)
+        if active_location_id is not None:
+            response = RedirectResponse(url=next_url, status_code=303)
+            set_active_location_preference(
+                request,
+                response,
+                int(doctor_id),
+                active_location_id,
+            )
+            return response
+
     return RedirectResponse(url=next_url, status_code=303)
+
+
+@router.get(
+    "/select-location",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_authenticated_user)],
+)
+def select_location_form(request: Request, next: str = "/"):
+    """Просит врача выбрать рабочее место, если к нему привязано несколько мест."""
+    next_url = safe_next_url(next)
+    doctor_id = request.session.get("doctor_id")
+    if not doctor_id:
+        return RedirectResponse(url=next_url, status_code=303)
+
+    locations = get_doctor_locations(int(doctor_id))
+    if not locations:
+        return RedirectResponse(url=next_url, status_code=303)
+    if len(locations) == 1:
+        response = RedirectResponse(url=next_url, status_code=303)
+        set_active_location_preference(
+            request, response, int(doctor_id), int(locations[0]["id"])
+        )
+        return response
+
+    return templates.TemplateResponse(
+        request=request,
+        name="select_location.html",
+        context={
+            "request": request,
+            "next": next_url,
+            "locations": locations,
+            "error": None,
+        },
+    )
+
+
+@router.post(
+    "/select-location",
+    response_class=HTMLResponse,
+    dependencies=[Depends(require_authenticated_user)],
+)
+async def select_location_submit(
+    request: Request,
+    location_id: int = Form(...),
+    next: str = Form("/"),
+):
+    """Сохраняет выбор места только для текущего врача и этого браузера."""
+    next_url = safe_next_url(next)
+    doctor_id = request.session.get("doctor_id")
+    if not doctor_id:
+        return RedirectResponse(url=next_url, status_code=303)
+
+    locations = get_doctor_locations(int(doctor_id))
+    allowed_ids = {int(item["id"]) for item in locations}
+    if int(location_id) not in allowed_ids:
+        return templates.TemplateResponse(
+            request=request,
+            name="select_location.html",
+            context={
+                "request": request,
+                "next": next_url,
+                "locations": locations,
+                "error": "Выбранное место приёма не привязано к вашей учётной записи",
+            },
+            status_code=400,
+        )
+
+    response = RedirectResponse(url=next_url, status_code=303)
+    set_active_location_preference(
+        request,
+        response,
+        int(doctor_id),
+        int(location_id),
+    )
+    log_audit_event(
+        request,
+        "active_location_changed",
+        entity_type="location",
+        entity_id=int(location_id),
+        details="врач выбрал активное место приёма на текущем компьютере",
+        status_code=303,
+    )
+    return response
+
+
+@router.post(
+    "/api/active-location",
+    dependencies=[Depends(require_authenticated_user)],
+)
+async def active_location_api(
+    request: Request,
+    location_id: int = Form(...),
+):
+    """Меняет предпочтительное место текущего компьютера без ухода со страницы приёма."""
+    doctor_id = request.session.get("doctor_id")
+    if not doctor_id:
+        return JSONResponse({"detail": "Для пользователя не указан врач"}, status_code=403)
+
+    locations = get_doctor_locations(int(doctor_id))
+    allowed_ids = {int(item["id"]) for item in locations}
+    if int(location_id) not in allowed_ids:
+        return JSONResponse(
+            {"detail": "Выбранное место приёма не привязано к вашей учётной записи"},
+            status_code=403,
+        )
+
+    response = JSONResponse({"ok": True, "location_id": int(location_id)})
+    set_active_location_preference(
+        request,
+        response,
+        int(doctor_id),
+        int(location_id),
+    )
+    return response
 
 
 @router.get(

@@ -18,6 +18,7 @@ from fastapi.responses import RedirectResponse
 
 from app.repositories.audit_log import log_audit_changes, log_audit_event
 from app.security.permissions import require_doctor_with_id
+from app.services.active_location_service import remember_location_if_allowed
 from app.services.audit_details import build_patient_creation_audit_changes
 from app.services.patient_appointment_service import create_patient_with_first_appointment
 
@@ -77,7 +78,14 @@ async def create_new_patient(request: Request):
         ),
     )
 
-    return RedirectResponse(
+    response = RedirectResponse(
         url=f"/patient/{result.patient_id}?appointment_id={result.appointment_id}",
         status_code=303,
     )
+    remember_location_if_allowed(
+        request,
+        response,
+        current_doctor_id,
+        form.get("location_id"),
+    )
+    return response

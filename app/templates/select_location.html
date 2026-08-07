@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="row justify-content-center mt-4">
+  <div class="col-lg-7 col-xl-6">
+    <div class="card shadow-sm">
+      <div class="card-header bg-success text-white">
+        <h4 class="mb-0">Выберите место приёма</h4>
+      </div>
+      <div class="card-body">
+        <p class="mb-3">
+          Выбор запомнится на этом компьютере. При необходимости его можно изменить
+          позже в форме приёма — после сохранения нового выбора следующие приёмы
+          будут открываться уже с ним.
+        </p>
+        {% if error %}
+        <div class="alert alert-danger">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="/select-location">
+          <input type="hidden" name="next" value="{{ next }}">
+          <div class="vstack gap-2 mb-3">
+            {% for location in locations %}
+            <label class="border rounded p-3 d-flex gap-2 align-items-start">
+              <input class="form-check-input mt-1" type="radio" name="location_id" value="{{ location.id }}" required>
+              <span>
+                <strong>{{ location.name }}</strong>
+                {% if location.full_name %}
+                <br><span class="text-muted">{{ location.full_name }}</span>
+                {% endif %}
+              </span>
+            </label>
+            {% endfor %}
+          </div>
+          <button type="submit" class="btn btn-success">Использовать это место</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

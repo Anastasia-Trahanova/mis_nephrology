@@ -117,9 +117,10 @@
               <select name="location_id" id="locationSelect" class="form-select" required>
                 <option value="">Выберите место приёма</option>
                 {% for location in doctor_locations %}
-                  <option value="{{ location.id }}" {% if schedule_entry and schedule_entry.location_id|int == location.id|int %}selected{% endif %}>{{ location.full_name or location.name }}{% if not location.full_name and location.branch_name %} ({{ location.branch_name }}){% endif %}</option>
+                  <option value="{{ location.id }}" {% if (schedule_entry and schedule_entry.location_id|int == location.id|int) or (not schedule_entry and active_location_id and active_location_id|int == location.id|int) %}selected{% endif %}>{{ location.full_name or location.name }}{% if not location.full_name and location.branch_name %} ({{ location.branch_name }}){% endif %}</option>
                 {% endfor %}
               </select>
+              <div class="form-text">Изменение места сразу запоминается на этом компьютере и остаётся доступным для следующих приёмов.</div>
             </div>
           </div>
           <div class="row mt-3">
@@ -156,4 +157,5 @@
 <script src="/static/js/history_studies_form.js"></script>
 {% include "appointment_form/_bmi.html" %}
 {% include "_clinical_validation.html" %}
+<script src="/static/js/active_location.js?v=1"></script>
 {% endblock %}

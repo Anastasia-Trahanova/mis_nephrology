@@ -453,18 +453,25 @@
                 return;
             }
 
+            // requestSubmit() нельзя вызывать синхронно из обработчика текущего
+            // submit: Chrome может подавить реентерабельную отправку формы.
+            // Переносим повторную отправку в следующий task, когда исходное
+            // submit-событие уже полностью завершилось.
+            const submitter = event.submitter || null;
             resubmittingAfterPreview = true;
-            try {
-                if (event.submitter && typeof form.requestSubmit === "function") {
-                    form.requestSubmit(event.submitter);
-                } else if (typeof form.requestSubmit === "function") {
-                    form.requestSubmit();
-                } else {
-                    form.submit();
+            window.setTimeout(function () {
+                try {
+                    if (submitter && typeof form.requestSubmit === "function") {
+                        form.requestSubmit(submitter);
+                    } else if (typeof form.requestSubmit === "function") {
+                        form.requestSubmit();
+                    } else {
+                        HTMLFormElement.prototype.submit.call(form);
+                    }
+                } finally {
+                    resubmittingAfterPreview = false;
                 }
-            } finally {
-                resubmittingAfterPreview = false;
-            }
+            }, 0);
         });
     }
 

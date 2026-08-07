@@ -10,12 +10,10 @@
     .conditional-required-message { color: #dc3545; font-size: 0.875rem; margin-top: 0.25rem; }
     .schedule-prefilled { background-color: #fff8d6 !important; }
 </style>
-
 <form method="post" action="{% if scheduled_primary %}/api/patients/{{ patient.id }}/appointments/new{% else %}/api/patients/new{% endif %}">
     {% if scheduled_primary %}
     <input type="hidden" name="schedule_entry_id" value="{{ schedule_entry.id }}">
     {% endif %}
-
     <div class="appointment-passport">
         <h2 class="appointment-page-title">Консультативный приём (первичный)</h2>
         <div class="row">
@@ -67,7 +65,6 @@
             </div>
         </div>
     </div>
-
     <div class="card mb-4">
         <div class="card-header bg-success text-white">
             <h5 class="mb-0">Данные первого приёма</h5>
@@ -84,11 +81,12 @@
                     <select name="location_id" id="locationSelect" class="form-select" required>
                         <option value="">Выберите место приёма</option>
                         {% for location in doctor_locations %}
-                        <option value="{{ location.id }}"{% if scheduled_primary and schedule_entry.location_id|int == location.id|int %} selected{% endif %}>
+                        <option value="{{ location.id }}"{% if (scheduled_primary and schedule_entry.location_id|int == location.id|int) or (not scheduled_primary and active_location_id and active_location_id|int == location.id|int) %} selected{% endif %}>
                             {{ location.full_name or location.name }}{% if not location.full_name and location.branch_name %} ({{ location.branch_name }}){% endif %}
                         </option>
                         {% endfor %}
                     </select>
+                    <div class="form-text">Изменение места сразу запоминается на этом компьютере и остаётся доступным для следующих приёмов.</div>
                 </div>
             </div>
             <div class="row mt-3">
@@ -117,12 +115,11 @@
         </div>
     </div>
 </form>
-
 {% include "appointment_form/_scripts.html" %}
 <script src="/static/js/history_studies_form.js"></script>
 {% include "appointment_form/_bmi.html" %}
 {% include "_clinical_validation.html" %}
-
+<script src="/static/js/active_location.js?v=1"></script>
 <script>
 (function () {
     const form = document.querySelector('form[action="/api/patients/new"], form[action^="/api/patients/"][action$="/appointments/new"]');

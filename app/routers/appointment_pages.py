@@ -16,10 +16,20 @@ from app.services.appointment_form_context_service import (
     get_new_appointment_context,
     get_new_patient_context,
 )
+from app.services.active_location_service import get_session_active_location
 
 router = APIRouter(tags=["pages"])
 templates = Jinja2Templates(directory="app/templates")
 
+
+
+
+def _add_active_location(context: dict, request: Request) -> None:
+    """Добавляет в форму предпочтительное место этого компьютера, если оно разрешено врачу."""
+    context["active_location_id"] = get_session_active_location(
+        request,
+        context.get("doctor_locations") or [],
+    )
 
 def _add_scheduled_location(context: dict, schedule_entry: dict) -> None:
     scheduled_location = get_schedule_location_by_id(int(schedule_entry["location_id"]))
@@ -39,6 +49,7 @@ def new_patient_form(request: Request, schedule_entry_id: int | None = None):
 
     if schedule_entry_id is None:
         context = get_new_patient_context(current_doctor_id)
+        _add_active_location(context, request)
         context.update(
             {
                 "request": request,
@@ -67,6 +78,7 @@ def new_patient_form(request: Request, schedule_entry_id: int | None = None):
     if not context:
         raise HTTPException(status_code=404, detail="Пациент не найден")
     _add_scheduled_location(context, schedule_entry)
+    _add_active_location(context, request)
     context.update(
         {
             "request": request,
@@ -101,6 +113,7 @@ def new_appointment_form(
             )
         _add_scheduled_location(context, schedule_entry)
 
+    _add_active_location(context, request)
     now = datetime.now()
     context.update(
         {
