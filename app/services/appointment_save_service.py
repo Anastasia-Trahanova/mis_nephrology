@@ -16,6 +16,8 @@ from __future__ import annotations
 
 from typing import Any
 
+from fastapi import HTTPException
+
 from ..calculations import (
     calculate_age,
     calculate_albuminuria_metrics,
@@ -23,7 +25,10 @@ from ..calculations import (
 )
 from ..medical_algorithms.albuminuria import get_daily_albumin_excretion_category
 from app.medication_therapy import normalize_therapy_group
-from app.repositories.ckd_prognosis import save_ckd_prognosis_for_appointment
+from app.repositories.ckd_prognosis import (
+    build_kdigo_assessments_for_appointment,
+    save_ckd_prognosis_for_appointment,
+)
 from ..repositories.additional_studies import upsert_appointment_additional_studies
 from ..repositories.examinations import insert_examination
 from ..repositories.labs import (
@@ -459,9 +464,57 @@ def save_appointment_details(
     save_appointment_icd10_diagnoses(cur, appointment_id, appointment_data["icd10"])
     save_diet_and_recommendations(cur, appointment_id, appointment_data["diet"])
     save_prescriptions(cur, appointment_id, appointment_data["prescriptions"])
-    # Пересчитываем прогноз после сохранения метрик и альбуминурии.
-    save_ckd_prognosis_for_appointment(
-        appointment_id,
-        cur=cur,
-        excluded_pairs=appointment_data.get("kdigo_excluded_pairs", []),
-    )
+    # Прогноз строится только после серверного сохранения и пересчёта всех
+    # источников. Браузер передаёт лишь ключ выбранной комбинации, а не готовый
+    # медицинский результат.
+    kdigo_assessments = build_kdigo_assessments_for_appointment(cur, appointment_id)
+    selected_pair = appointment_data.get("kdigo_selected_pair")
+    selected_pair_key = appointment_data.get("kdigo_selected_pair_key")
+
+    # Один серверный кандидат всегда однозначен. При нескольких вариантах сначала
+    # ищем точный source-key, а затем — как безопасный fallback — серверный
+    # медицинский pair_key (даты + категории). Последнее нужно для архивных данных,
+    # где порядок/ID физических источников может отличаться между preview и save.
+    if len(kdigo_assessments) == 1:
+        selected_pair = kdigo_assessments[0].get("selection_key")
+    elif len(kdigo_assessments) > 1:
+        if not selected_pair and not selected_pair_key:
+            raise HTTPException(
+                status_code=400,
+                detail="Выберите один вариант прогноза KDIGO перед сохранением приёма.",
+            )
+
+        exact_match = next(
+            (item for item in kdigo_assessments if item.get("selection_key") == selected_pair),
+            None,
+        )
+        if exact_match is None and selected_pair_key:
+            pair_matches = [
+                item for item in kdigo_assessments
+                if item.get("pair_key") == selected_pair_key
+            ]
+            if pair_matches:
+                # pair_key уже сформирован серверным preview из дат и
+                # нормализованных G/A-категорий. Если несколько физических
+                # строк дают один и тот же pair_key, для KDIGO они клинически
+                # эквивалентны; выбираем первую в стабильном server-order.
+                exact_match = pair_matches[0]
+                selected_pair = exact_match.get("selection_key")
+
+        if exact_match is None:
+            raise HTTPException(
+                status_code=400,
+                detail=(
+                    "Выбранный вариант KDIGO не соответствует текущим анализам. "
+                    "Дождитесь обновления прогноза и выберите вариант повторно."
+                ),
+            )
+
+    try:
+        save_ckd_prognosis_for_appointment(
+            appointment_id,
+            cur=cur,
+            selected_pair=selected_pair,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=400, detail=str(error)) from error

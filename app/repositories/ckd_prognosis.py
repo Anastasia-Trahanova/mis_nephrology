@@ -155,6 +155,33 @@ def _fetch_latest_previous_albuminuria_source(
     return dict(row) if row else None
 
 
+def _source_ref(source: dict[str, Any], kind: str) -> str:
+    """Build the stable selection identifier used by the live preview."""
+    explicit = source.get("selection_ref")
+    if explicit:
+        return str(explicit)
+
+    source_type = str(source.get("source_type") or "previous_appointment")
+    source_id = source.get("id")
+    if source_type == "previous_appointment" and source_id is not None:
+        return f"{kind}:previous:{source_id}"
+
+    investigation_date = source.get("investigation_date")
+    date_text = investigation_date.isoformat() if investigation_date else ""
+    if kind == "gfr":
+        category = normalize_ckd_stage_for_storage(source.get("category")) or ""
+    else:
+        category = normalize_albuminuria_category(source.get("category")) or ""
+    return f"{kind}:{source_type}:{date_text}:{category}"
+
+
+def _selection_key(
+    gfr_source: dict[str, Any],
+    albuminuria_source: dict[str, Any],
+) -> str:
+    return f"{_source_ref(gfr_source, 'gfr')}||{_source_ref(albuminuria_source, 'albuminuria')}"
+
+
 def _build_pair_assessment(
     appointment_id: int,
     appointment_date: date,
@@ -201,25 +228,26 @@ def _build_pair_assessment(
         assessment["albuminuria_investigation_date"],
         assessment["albuminuria_category"],
     )
-    assessment["row_key"] = f"row|{display_order}|{assessment['pair_key']}"
+    assessment["selection_key"] = _selection_key(gfr_source, albuminuria_source)
+    assessment["row_key"] = f"row|{display_order}|{assessment['selection_key']}"
     return assessment
 
 
 def _deduplicate_assessments(assessments: Iterable[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Убирает только полностью одинаковые пары источников, не схлопывая разные анализы одной категории."""
+    """Убирает только полностью одинаковые пары источников."""
     result: list[dict[str, Any]] = []
     seen: set[tuple[Any, Any, str]] = set()
     for assessment in assessments:
         key = (
             assessment.get("gfr_metric_id"),
             assessment.get("albuminuria_result_id"),
-            assessment.get("pair_key") or "",
+            assessment.get("selection_key") or assessment.get("pair_key") or "",
         )
         if key in seen:
             continue
         seen.add(key)
         assessment["display_order"] = len(result)
-        assessment["row_key"] = f"row|{assessment['display_order']}|{assessment.get('pair_key', '')}"
+        assessment["row_key"] = f"row|{assessment['display_order']}|{assessment.get('selection_key', '')}"
         result.append(assessment)
     return result
 
@@ -229,24 +257,13 @@ def build_kdigo_assessments_for_appointment(
     appointment_id: int,
     excluded_pairs: Iterable[str] | None = None,
 ) -> list[dict[str, Any]]:
-    """
-    Строит рассчитанные KDIGO-пары для приёма.
+    """Строит все допустимые KDIGO-комбинации для текущего приёма.
 
-    Правила синхронизированы с live-блоком формы:
-    - если в текущем приёме есть и СКФ, и альбуминурия — считаем построчные пары:
-      первая СКФ с первой альбуминурией, вторая СКФ со второй альбуминурией;
-    - если врач добавил второй показатель только одного типа, создаём вторую строку
-      с первой доступной парой второго типа;
-    - если для новой СКФ ещё нет своей альбуминурии, временно берём первую
-      текущую альбуминурию, чтобы строка прогноза обновлялась, а не плодила
-      декартовы комбинации;
-    - если для новой альбуминурии ещё нет своей СКФ, временно берём первую
-      текущую СКФ;
-    - если текущая СКФ есть, а альбуминурии нет — берём последнюю подходящую
-      альбуминурию из предыдущих приёмов;
-    - если текущая альбуминурия есть, а СКФ нет — берём последнюю подходящую
-      СКФ из предыдущих приёмов;
-    - если оба показателя отсутствуют в текущем приёме — ничего не сохраняем.
+    Если в приёме есть и новые СКФ, и новые результаты альбуминурии, строится
+    декартово произведение этих источников. Если новый показатель только одного
+    типа, для каждого нового результата берётся последний подходящий сохранённый
+    показатель второго типа. Если в приёме нет новых почечных показателей, новый
+    прогноз не создаётся.
     """
     meta = _fetch_appointment_patient_and_date(cur, appointment_id)
     if not meta:
@@ -258,40 +275,35 @@ def build_kdigo_assessments_for_appointment(
     current_albuminuria_sources = _fetch_current_albuminuria_sources(cur, appointment_id)
     excluded_pairs_set = {str(item) for item in (excluded_pairs or []) if item}
 
+    # Rows are inserted in form order; ids therefore give us the same stable
+    # current-source ordinals that the live preview uses.
+    current_gfr_sources.sort(key=lambda item: item.get("id") or 0)
+    current_albuminuria_sources.sort(key=lambda item: item.get("id") or 0)
+    for index, source in enumerate(current_gfr_sources):
+        source["selection_ref"] = f"gfr:current:{index}"
+    for index, source in enumerate(current_albuminuria_sources):
+        source["selection_ref"] = f"albuminuria:current:{index}"
+
     raw_assessments: list[dict[str, Any]] = []
 
     if current_gfr_sources and current_albuminuria_sources:
-        row_count = max(len(current_gfr_sources), len(current_albuminuria_sources))
-        for index in range(row_count):
-            gfr_source = (
-                current_gfr_sources[index]
-                if index < len(current_gfr_sources)
-                else current_gfr_sources[0]
-            )
-            albuminuria_source = (
-                current_albuminuria_sources[index]
-                if index < len(current_albuminuria_sources)
-                else current_albuminuria_sources[0]
-            )
+        for gfr_source in current_gfr_sources:
+            for albuminuria_source in current_albuminuria_sources:
+                assessment = _build_pair_assessment(
+                    appointment_id,
+                    appointment_date,
+                    gfr_source,
+                    albuminuria_source,
+                    display_order=len(raw_assessments),
+                )
+                if assessment:
+                    raw_assessments.append(assessment)
 
-            assessment = _build_pair_assessment(
-                appointment_id,
-                appointment_date,
-                gfr_source,
-                albuminuria_source,
-                display_order=len(raw_assessments),
-            )
-            if assessment:
-                raw_assessments.append(assessment)
-
-    elif current_gfr_sources and not current_albuminuria_sources:
+    elif current_gfr_sources:
         for gfr_source in current_gfr_sources:
             gfr_date = gfr_source.get("investigation_date") or appointment_date
             albuminuria_source = _fetch_latest_previous_albuminuria_source(
-                cur,
-                patient_id,
-                gfr_date,
-                appointment_id,
+                cur, patient_id, gfr_date, appointment_id
             )
             if not albuminuria_source:
                 continue
@@ -305,14 +317,11 @@ def build_kdigo_assessments_for_appointment(
             if assessment:
                 raw_assessments.append(assessment)
 
-    elif current_albuminuria_sources and not current_gfr_sources:
+    elif current_albuminuria_sources:
         for albuminuria_source in current_albuminuria_sources:
             albuminuria_date = albuminuria_source.get("investigation_date") or appointment_date
             gfr_source = _fetch_latest_previous_gfr_source(
-                cur,
-                patient_id,
-                albuminuria_date,
-                appointment_id,
+                cur, patient_id, albuminuria_date, appointment_id
             )
             if not gfr_source:
                 continue
@@ -329,13 +338,15 @@ def build_kdigo_assessments_for_appointment(
     assessments = _deduplicate_assessments(raw_assessments)
     if excluded_pairs_set:
         assessments = [
-            item for item in assessments
+            item
+            for item in assessments
             if item.get("row_key") not in excluded_pairs_set
             and item.get("pair_key") not in excluded_pairs_set
+            and item.get("selection_key") not in excluded_pairs_set
         ]
         for index, item in enumerate(assessments):
             item["display_order"] = index
-            item["row_key"] = f"row|{index}|{item.get('pair_key', '')}"
+            item["row_key"] = f"row|{index}|{item.get('selection_key', '')}"
     return assessments
 
 
@@ -411,21 +422,30 @@ def save_ckd_prognosis_for_appointment(
     appointment_id: int,
     cur: Any | None = None,
     excluded_pairs: Iterable[str] | None = None,
+    selected_pair: str | None = None,
 ):
-    """
-    Пересчитывает и сохраняет KDIGO-риск для приёма.
+    """Пересчитывает KDIGO и сохраняет выбранную врачом комбинацию.
 
-    Возвращает список сохранённых строк. Если данных недостаточно или второй
-    показатель устарел, список будет пустым: в базе не создаётся фиктивный
-    риск без строгих источников.
+    ``selected_pair`` — стабильный ключ пары, сформированный live-preview. Для
+    обратной совместимости вызовы без ``selected_pair`` сохраняют все рассчитанные
+    строки как раньше; форма приёма передаёт выбранную пару явно.
     """
-
     def _save(cursor: Any):
         assessments = build_kdigo_assessments_for_appointment(
             cursor,
             appointment_id,
             excluded_pairs=excluded_pairs,
         )
+
+        if selected_pair:
+            assessments = [
+                item
+                for item in assessments
+                if item.get("selection_key") == selected_pair
+            ]
+            if not assessments:
+                raise ValueError("Выбранный вариант KDIGO больше не соответствует сохранённым анализам.")
+            assessments = assessments[:1]
 
         cursor.execute(
             """

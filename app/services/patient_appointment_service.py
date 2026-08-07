@@ -22,7 +22,11 @@ from fastapi import HTTPException
 
 from app.db.connection import get_db_connection
 from ..repositories.appointments import create_appointment
-from ..repositories.patients import create_patient, get_patient_for_appointment
+from ..repositories.patients import (
+    create_patient,
+    get_patient_for_appointment,
+    set_patient_gender_if_missing,
+)
 from ..repositories.reference_data import doctor_can_work_in_location
 from ..repositories.schedule import (
     link_schedule_entry_to_appointment,
@@ -84,6 +88,22 @@ def _ensure_doctor_location_allowed(cur: Any, doctor_id: int, location_id: int) 
             status_code=403,
             detail="Выбранное отделение не привязано к текущему врачу",
         )
+
+
+def _parse_existing_patient_gender(value: Any) -> bool | None:
+    """Строго разбирает пол, выбранный врачом для архивного пациента.
+
+    Пустое или неизвестное значение нельзя молча превращать в женский пол,
+    потому что пол участвует в расчётах CKD-EPI и Cockcroft–Gault.
+    """
+    if value is None:
+        return None
+    normalized = str(value).strip().lower()
+    if normalized in {"true", "1", "male", "мужской"}:
+        return True
+    if normalized in {"false", "0", "female", "женский"}:
+        return False
+    return None
 
 
 def _calculate_age_at_appointment(birth_date: Any, appointment_date: Any) -> int:
@@ -200,6 +220,22 @@ def create_appointment_for_existing_patient(
                 if not patient:
                     raise HTTPException(status_code=404, detail="Пациент не найден")
 
+                patient_gender = patient["gender"]
+                if patient_gender is None:
+                    patient_gender = _parse_existing_patient_gender(normalized_form.get("gender"))
+                    if patient_gender is None:
+                        raise HTTPException(
+                            status_code=400,
+                            detail=(
+                                "Для расчёта СКФ у архивного пациента необходимо указать пол. "
+                                "Выберите мужской или женский пол в форме приёма."
+                            ),
+                        )
+                    # Пол уже существует в patients: миграция не нужна.
+                    # Записываем только явный выбор врача и только вместо NULL.
+                    set_patient_gender_if_missing(cur, patient_id, patient_gender)
+
+
                 age_at_appointment = _calculate_age_at_appointment(
                     patient["birth_date"], appointment_datetime.date()
                 )
@@ -234,7 +270,7 @@ def create_appointment_for_existing_patient(
                     appointment_id=appointment_id,
                     appointment_data=appointment_data,
                     patient_birth_date=patient["birth_date"],
-                    patient_gender=patient["gender"],
+                    patient_gender=patient_gender,
                 )
                 if schedule_entry_id is not None:
                     link_schedule_entry_to_appointment(

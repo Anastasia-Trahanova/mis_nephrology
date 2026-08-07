@@ -6,24 +6,26 @@
 - что по креатинину создаётся calculated_metric;
 - что по альбумину/креатинину мочи сохраняется ACR и категория;
 - что диагнозы сохраняются только через МКБ-10;
-- что после сохранения вызывается пересчёт прогноза ХБП.
+- что KDIGO после серверного сохранения источников валидирует выбранную пару.
 """
 
 from __future__ import annotations
 
 from datetime import date
 
+import pytest
+from fastapi import HTTPException
+
 import app.services.appointment_save_service as svc
 
 from .factories import FakeCursor, minimal_appointment_data
 
 
-def test_save_appointment_details_saves_all_sections_and_skips_empty_rows(monkeypatch):
-    calls: list[tuple[str, object]] = []
-
+def _patch_common_sections(monkeypatch, calls):
     def record(name):
         def _inner(*args, **kwargs):
             calls.append((name, {"args": args, "kwargs": kwargs}))
+            return None
 
         return _inner
 
@@ -38,7 +40,6 @@ def test_save_appointment_details_saves_all_sections_and_skips_empty_rows(monkey
     monkeypatch.setattr(svc, "save_appointment_icd10_diagnoses", record("icd10"))
     monkeypatch.setattr(svc, "insert_diet_and_recommendations", record("diet"))
     monkeypatch.setattr(svc, "insert_prescription", record("prescription"))
-    monkeypatch.setattr(svc, "save_ckd_prognosis_for_appointment", record("prognosis"))
     monkeypatch.setattr(
         svc,
         "calculate_all_metrics",
@@ -57,6 +58,14 @@ def test_save_appointment_details_saves_all_sections_and_skips_empty_rows(monkey
             "albuminuria_category": "A1",
         },
     )
+    return record
+
+
+def test_save_appointment_details_saves_all_sections_and_skips_empty_rows(monkeypatch):
+    calls: list[tuple[str, object]] = []
+    record = _patch_common_sections(monkeypatch, calls)
+    monkeypatch.setattr(svc, "build_kdigo_assessments_for_appointment", lambda cur, appointment_id: [])
+    monkeypatch.setattr(svc, "save_ckd_prognosis_for_appointment", record("prognosis"))
 
     appointment_data = minimal_appointment_data()
     appointment_data.pop("diagnoses", None)
@@ -70,7 +79,6 @@ def test_save_appointment_details_saves_all_sections_and_skips_empty_rows(monkey
     )
 
     call_names = [name for name, _payload in calls]
-
     assert call_names.count("survey") == 1
     assert call_names.count("examination") == 1
     assert call_names.count("cbc") == 1
@@ -86,9 +94,102 @@ def test_save_appointment_details_saves_all_sections_and_skips_empty_rows(monkey
     assert call_names.count("prognosis") == 1
 
 
+def test_save_auto_selects_the_only_kdigo_candidate(monkeypatch):
+    calls: list[tuple[str, object]] = []
+    record = _patch_common_sections(monkeypatch, calls)
+    monkeypatch.setattr(
+        svc,
+        "build_kdigo_assessments_for_appointment",
+        lambda cur, appointment_id: [{"selection_key": "only-pair"}],
+    )
+    saved = []
+    monkeypatch.setattr(
+        svc,
+        "save_ckd_prognosis_for_appointment",
+        lambda appointment_id, *, cur, selected_pair=None, **kwargs: saved.append(selected_pair),
+    )
+
+    appointment_data = minimal_appointment_data()
+    appointment_data["kdigo_selected_pair"] = None
+    svc.save_appointment_details(
+        cur=FakeCursor(),
+        appointment_id=202,
+        appointment_data=appointment_data,
+        patient_birth_date=date(1980, 1, 15),
+        patient_gender=True,
+    )
+
+    assert saved == ["only-pair"]
+
+
+def test_save_requires_explicit_kdigo_choice_when_multiple_candidates_exist(monkeypatch):
+    calls: list[tuple[str, object]] = []
+    _patch_common_sections(monkeypatch, calls)
+    monkeypatch.setattr(
+        svc,
+        "build_kdigo_assessments_for_appointment",
+        lambda cur, appointment_id: [
+            {"selection_key": "pair-a"},
+            {"selection_key": "pair-b"},
+        ],
+    )
+    monkeypatch.setattr(
+        svc,
+        "save_ckd_prognosis_for_appointment",
+        lambda *args, **kwargs: pytest.fail("KDIGO save must not run before the doctor selects a pair"),
+    )
+
+    appointment_data = minimal_appointment_data()
+    appointment_data["kdigo_selected_pair"] = None
+    with pytest.raises(HTTPException) as error:
+        svc.save_appointment_details(
+            cur=FakeCursor(),
+            appointment_id=202,
+            appointment_data=appointment_data,
+            patient_birth_date=date(1980, 1, 15),
+            patient_gender=True,
+        )
+
+    assert error.value.status_code == 400
+    assert "Выберите один вариант" in str(error.value.detail)
+
+
+def test_save_rejects_selected_pair_that_no_longer_matches_sources(monkeypatch):
+    calls: list[tuple[str, object]] = []
+    _patch_common_sections(monkeypatch, calls)
+    monkeypatch.setattr(
+        svc,
+        "build_kdigo_assessments_for_appointment",
+        lambda cur, appointment_id: [{"selection_key": "actual-pair"}],
+    )
+    monkeypatch.setattr(
+        svc,
+        "save_ckd_prognosis_for_appointment",
+        lambda *args, **kwargs: pytest.fail("Tampered KDIGO selection must be rejected before save"),
+    )
+
+    appointment_data = minimal_appointment_data()
+    appointment_data["kdigo_selected_pair"] = "tampered-pair"
+    with pytest.raises(HTTPException) as error:
+        svc.save_appointment_details(
+            cur=FakeCursor(),
+            appointment_id=202,
+            appointment_data=appointment_data,
+            patient_birth_date=date(1980, 1, 15),
+            patient_gender=True,
+        )
+
+    assert error.value.status_code == 400
+    assert "не соответствует текущим анализам" in str(error.value.detail)
+
+
 def test_save_prescriptions_skips_empty_rows(monkeypatch):
     calls: list[tuple[str, object]] = []
-    monkeypatch.setattr(svc, "insert_prescription", lambda *args, **kwargs: calls.append(("prescription", kwargs)))
+    monkeypatch.setattr(
+        svc,
+        "insert_prescription",
+        lambda *args, **kwargs: calls.append(("prescription", kwargs)),
+    )
 
     svc.save_prescriptions(
         cur=FakeCursor(),

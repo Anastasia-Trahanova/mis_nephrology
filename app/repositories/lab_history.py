@@ -154,6 +154,7 @@ def _fetch_patient_metrics_history(cur: Any, patient_id: int, until_date: date |
     cur.execute(
         f"""
         SELECT
+            cm.id AS source_id,
             COALESCE(cm.investigation_date, a.appointment_date::date) AS investigation_date,
             cm.creatinine,
             cm.egfr_ckdepi,
@@ -163,7 +164,7 @@ def _fetch_patient_metrics_history(cur: Any, patient_id: int, until_date: date |
         JOIN appointments a ON cm.appointment_id = a.id
         WHERE a.patient_id = %s
           {date_filter}
-        ORDER BY COALESCE(cm.investigation_date, a.appointment_date::date) ASC
+        ORDER BY COALESCE(cm.investigation_date, a.appointment_date::date) ASC, cm.id ASC
         """,
         params,
     )
@@ -249,6 +250,7 @@ def _fetch_patient_albuminuria_history(cur: Any, patient_id: int, until_date: da
     cur.execute(
         f"""
         SELECT
+            ar.id AS source_id,
             ar.investigation_date,
             ar.urine_albumin,
             ar.urine_albumin_unit,

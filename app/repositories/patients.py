@@ -54,6 +54,26 @@ def get_patient_for_appointment(cur: Any, patient_id: int) -> dict[str, Any] | N
     return cur.fetchone()
 
 
+
+def set_patient_gender_if_missing(cur: Any, patient_id: int, gender: bool) -> bool:
+    """Сохраняет явно выбранный врачом пол только если он отсутствовал.
+
+    Нужен для архивных пациентов: массово пол не угадываем и не мигрируем.
+    При первом новом приёме врач выбирает пол, после чего он становится обычным
+    паспортным полем пациента и используется всеми следующими расчётами.
+    """
+    cur.execute(
+        """
+        UPDATE patients
+        SET gender = %s
+        WHERE id = %s
+          AND gender IS NULL
+        RETURNING id
+        """,
+        (gender, patient_id),
+    )
+    return cur.fetchone() is not None
+
 def get_all_patients(search: str | None = None, limit: int = 500, offset: int = 0):
     """Возвращает список пациентов для страницы /patients."""
     limit = max(1, min(int(limit or 500), 1000))
@@ -117,6 +137,7 @@ def _fetch_patient_by_id(cur: Any, patient_id: int):
             first_name,
             patronymic,
             birth_date,
+            gender,
             phone,
             CASE
                 WHEN gender IS TRUE THEN 'Мужской'

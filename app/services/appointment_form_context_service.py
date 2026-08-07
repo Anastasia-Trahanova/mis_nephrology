@@ -83,38 +83,49 @@ def _date_to_iso(value: Any) -> str | None:
     return text[:10] if text else None
 
 
-def _prepare_kdigo_previous_gfr_data(metrics_history) -> list[dict[str, str]]:
-    """Готовит историю СКФ для fallback-расчёта KDIGO в форме повторного приёма."""
-    result: list[dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
+def _prepare_kdigo_previous_gfr_data(metrics_history) -> list[dict[str, Any]]:
+    """Готовит историю СКФ для fallback-расчёта KDIGO в форме повторного приёма.
+
+    ID строки передаётся в preview намеренно: в архивной истории на одну дату
+    может приходиться несколько расчётов. Preview и сохранение должны ссылаться
+    на один и тот же физический источник, а не угадывать его только по дате.
+    """
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
     for item in metrics_history or []:
+        source_id = _row_get(item, "source_id")
         current_date = _date_to_iso(_row_get(item, "investigation_date"))
         category = _row_get(item, "ckd_stage")
         if not current_date or not category:
             continue
-        key = (current_date, str(category))
+        key = ("id", source_id) if source_id is not None else ("value", current_date, str(category))
         if key in seen:
             continue
         seen.add(key)
-        result.append({"date": current_date, "category": str(category)})
+        result.append({"id": source_id, "date": current_date, "category": str(category)})
 
     return result
 
 
-def _prepare_kdigo_previous_albuminuria_data(albuminuria_history) -> list[dict[str, str]]:
-    """Готовит историю альбуминурии для fallback-расчёта KDIGO в форме повторного приёма."""
-    result: list[dict[str, str]] = []
-    seen: set[tuple[str, str]] = set()
+def _prepare_kdigo_previous_albuminuria_data(albuminuria_history) -> list[dict[str, Any]]:
+    """Готовит историю альбуминурии для fallback-расчёта KDIGO в форме повторного приёма.
+
+    Сохраняем ID исторической строки по той же причине, что и для СКФ: записи
+    с одинаковой датой должны однозначно совпадать в preview и при сохранении.
+    """
+    result: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
     for item in albuminuria_history or []:
+        source_id = _row_get(item, "source_id")
         current_date = _date_to_iso(_row_get(item, "investigation_date"))
         category = _row_get(item, "albuminuria_category")
         if not current_date or not category:
             continue
-        key = (current_date, str(category))
+        key = ("id", source_id) if source_id is not None else ("value", current_date, str(category))
         if key in seen:
             continue
         seen.add(key)
-        result.append({"date": current_date, "category": str(category)})
+        result.append({"id": source_id, "date": current_date, "category": str(category)})
 
     return result
 

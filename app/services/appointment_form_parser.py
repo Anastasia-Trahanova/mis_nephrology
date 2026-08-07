@@ -215,4 +215,6 @@ def parse_appointment_form(form: Any, appointment_datetime: datetime) -> dict[st
         },
         "appointment_date_default": appointment_datetime.date(),
         "kdigo_excluded_pairs": form.getlist("kdigo_excluded_pair"),
+        "kdigo_selected_pair": empty_to_none(form.get("kdigo_selected_pair")),
+        "kdigo_selected_pair_key": empty_to_none(form.get("kdigo_selected_pair_key")),
     }

@@ -2,18 +2,20 @@
 Live-блок KDIGO. Все медицинские вычисления выполняет серверный endpoint
 /api/kidney-preview; JavaScript только собирает исходные значения и рисует ответ.
 #}
-<link rel="stylesheet" href="{{ url_for('static', path='css/04_kdigo_risk.css') }}?v=kdigo-server-v1">
+<link rel="stylesheet" href="{{ url_for('static', path='css/04_kdigo_risk.css') }}?v=kdigo-server-v2">
 {% set kdigo_birth_date_value = '' %}
 {% set kdigo_gender_value = '' %}
 {% if patient is defined and patient %}
     {% if patient.birth_date is defined and patient.birth_date %}
         {% set kdigo_birth_date_value = patient.birth_date.isoformat() if patient.birth_date.isoformat is defined else patient.birth_date|string %}
     {% endif %}
-    {# False = женский пол в текущей модели; False нельзя терять проверкой truthy. #}
+    {# False = женский пол в текущей модели; неизвестный пол оставляем пустым. #}
     {% if patient.gender is defined and patient.gender is not none %}
-        {% set kdigo_gender_value = patient.gender|string %}
-    {% elif patient.gender_str is defined and patient.gender_str %}
-        {% set kdigo_gender_value = patient.gender_str|string %}
+        {% set kdigo_gender_value = 'true' if patient.gender else 'false' %}
+    {% elif patient.gender_str is defined and patient.gender_str == 'Мужской' %}
+        {% set kdigo_gender_value = 'true' %}
+    {% elif patient.gender_str is defined and patient.gender_str == 'Женский' %}
+        {% set kdigo_gender_value = 'false' %}
     {% endif %}
 {% endif %}
 {% set previous_gfr_data = kdigo_previous_gfr_data|default([], true) %}
@@ -28,22 +30,34 @@ Live-блок KDIGO. Все медицинские вычисления выпо
     data-patient-gender="{{ kdigo_gender_value|e }}"
 >
     <div class="kdigo-live-title">Оценка риска по KDIGO</div>
-    <div class="kdigo-live-subtitle">Текущий прогноз пересчитывается автоматически. Выбранный кружочком вариант будет сохранён.</div>
-
+    <div class="kdigo-live-subtitle">
+        Текущий прогноз появляется после ввода новых почечных показателей и пересчитывается автоматически.
+        Если вариантов несколько, выберите один вариант для сохранения.
+    </div>
     <div id="kdigoCurrentVisitOptions" class="kdigo-current-options" aria-live="polite"></div>
     <input
         type="hidden"
         id="kdigoSelectedConclusionText"
         name="kdigo_selected_conclusion_text"
-        value="Невозможно оценить риск прогрессирования ХБП и развития ХПН, данные по альбуминурии и СКФ не предоставлены."
+        value=""
     >
-
+    <input
+        type="hidden"
+        id="kdigoSelectedPair"
+        name="kdigo_selected_pair"
+        value=""
+    >
+    <input
+        type="hidden"
+        id="kdigoSelectedPairKey"
+        name="kdigo_selected_pair_key"
+        value=""
+    >
     <div id="kdigoExcludedPairsContainer"></div>
     {% if form_mode == 'new_appointment' %}
         <button type="button" id="kdigoToggleHistoryButton" class="btn btn-outline-secondary btn-sm mt-2">
             Посмотреть историю прогнозов по KDIGO
         </button>
-
         <div id="kdigoHistoryPanel" class="kdigo-history-panel mt-2" hidden>
             <div class="kdigo-history-title">История прогнозов по KDIGO</div>
             {% if history_matrix and history_matrix.has_values %}
@@ -99,6 +113,7 @@ Live-блок KDIGO. Все медицинские вычисления выпо
 [
 {% for item in previous_gfr_data %}
     {
+        "id": {{ item.id|default('null', true) }},
         "date": "{{ item.date|default(item.investigation_date|default('', true), true) }}",
         "category": "{{ item.category|default(item.gfr_category|default('', true), true) }}"
     }{% if not loop.last %},{% endif %}
@@ -109,11 +124,11 @@ Live-блок KDIGO. Все медицинские вычисления выпо
 [
 {% for item in previous_albuminuria_data %}
     {
+        "id": {{ item.id|default('null', true) }},
         "date": "{{ item.date|default(item.investigation_date|default('', true), true) }}",
         "category": "{{ item.category|default(item.albuminuria_category|default('', true), true) }}"
     }{% if not loop.last %},{% endif %}
 {% endfor %}
 ]
 </script>
-
-<script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}?v=kdigo-server-v1"></script>
+<script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}?v=kdigo-server-v4"></script>
