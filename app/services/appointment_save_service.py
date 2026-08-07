@@ -161,12 +161,17 @@ def save_calculated_metrics(
     cur: Any,
     appointment_id: int,
     birth_date: Any,
-    gender: bool,
+    gender: bool | None,
     weight: Any,
     metric_sources: list[dict[str, Any]],
     appointment_date_default: Any,
-) -> None:
-    """Сохраняет расчётные показатели по всем новым креатининам."""
+) -> int:
+    """Сохраняет eGFR/стадию по каждому новому креатинину и возвращает число строк.
+
+    Для пациента с известными датой рождения и полом введённый креатинин не может
+    молча остаться без CKD-EPI/категории: это считается ошибкой транзакции.
+    """
+    saved_count = 0
     for metric_source in metric_sources:
         metric_date = parse_date_or_default(
             metric_source.get("investigation_date"),
@@ -180,10 +185,18 @@ def save_calculated_metrics(
             gender=gender,
             weight_kg=weight,
         )
+        egfr = metrics.get("egfr_ckdepi")
+        stage = metrics.get("ckd_stage")
+        if birth_date is not None and gender is not None and current_creatinine is not None:
+            if egfr is None or stage is None:
+                raise RuntimeError(
+                    "Не удалось рассчитать СКФ CKD-EPI и категорию СКФ "
+                    f"для креатинина {current_creatinine} от {metric_date}."
+                )
         if not (
-            metrics.get("egfr_ckdepi") is not None
+            egfr is not None
             or metrics.get("crcl_cockcroft_gault") is not None
-            or metrics.get("ckd_stage") is not None
+            or stage is not None
         ):
             continue
         insert_calculated_metric(
@@ -194,10 +207,12 @@ def save_calculated_metrics(
             age=calculate_age(birth_date, metric_date),
             gender=gender,
             weight_at_appointment=weight,
-            egfr_ckdepi=metrics.get("egfr_ckdepi"),
+            egfr_ckdepi=egfr,
             crcl_cockcroft_gault=metrics.get("crcl_cockcroft_gault"),
-            ckd_stage=metrics.get("ckd_stage"),
+            ckd_stage=stage,
         )
+        saved_count += 1
+    return saved_count
 
 
 def save_urinalysis_results(
@@ -404,7 +419,7 @@ def save_appointment_details(
         appointment_date_default,
         appointment_data["biochemistry"],
     )
-    save_calculated_metrics(
+    saved_metric_count = save_calculated_metrics(
         cur=cur,
         appointment_id=appointment_id,
         birth_date=patient_birth_date,
@@ -413,6 +428,10 @@ def save_appointment_details(
         metric_sources=metric_sources,
         appointment_date_default=appointment_date_default,
     )
+    if patient_birth_date is not None and patient_gender is not None and saved_metric_count != len(metric_sources):
+        raise RuntimeError(
+            "Не все введённые значения креатинина получили сохранённый расчёт СКФ."
+        )
     save_urinalysis_results(
         cur,
         appointment_id,

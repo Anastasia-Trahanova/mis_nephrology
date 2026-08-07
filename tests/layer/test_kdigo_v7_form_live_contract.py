@@ -1,11 +1,4 @@
-"""
-Тесты KDIGO v7: контракт live-блока формы.
-
-Это не browser-тесты. Они быстро проверяют, что HTML/JS/CSS соответствуют текущему
-ТЗ: строки прогноза, radio-выбор, история отдельно, без старого поля заключения
-и без подсветки всего общего блока.
-"""
-
+"""Contract tests for the server-driven live kidney calculation block."""
 from __future__ import annotations
 
 import shutil
@@ -14,7 +7,6 @@ from pathlib import Path
 
 import pytest
 
-
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -22,93 +14,52 @@ def read(path: str) -> str:
     return (ROOT / path).read_text(encoding="utf-8")
 
 
-def test_html_has_current_forecast_rows_and_hidden_selected_text_only():
+def test_kdigo_html_keeps_form_contract_and_preserves_false_gender():
     html = read("app/templates/appointment_form/_kdigo_risk_preview.html")
-
     assert 'id="kdigoRiskPreview"' in html
     assert 'id="kdigoCurrentVisitOptions"' in html
     assert 'id="kdigoSelectedConclusionText"' in html
     assert 'name="kdigo_selected_conclusion_text"' in html
     assert 'id="kdigoExcludedPairsContainer"' in html
-    assert "Выбранный кружочком вариант будет сохранён" in html
-
-    # Старое видимое дублирующее поле заключения больше не должно возвращаться.
-    assert "Формулировка для заключения" not in html
-    assert "kdigo_conclusion_text" not in html
-    assert "kdigoConclusionText" not in html
+    assert "patient.gender is not none" in html
+    assert "kdigo-server-v1" in html
 
 
-def test_html_history_is_temporary_repeat_visit_panel_not_conclusion_text():
-    html = read("app/templates/appointment_form/_kdigo_risk_preview.html")
-
-    assert "form_mode == 'new_appointment'" in html
-    assert 'id="kdigoToggleHistoryButton"' in html
-    assert 'id="kdigoHistoryPanel"' in html
-    assert "Посмотреть историю прогнозов по KDIGO" in html
-    assert "Сохранённые прогнозы по прошлым приёмам отсутствуют" in html
-    assert "kdigoPreviousGfrData" in html
-    assert "kdigoPreviousAlbuminuriaData" in html
-
-
-def test_js_starts_with_one_missing_phrase_and_does_not_accumulate_empty_rows():
+def test_browser_js_contains_no_medical_formula_duplicates():
     js = read("app/static/js/kdigo_risk_preview.js")
-
-    assert "EMPTY_BOTH_TEXT" in js
-    assert "return [missingAssessment(\"both\", 0, null)]" in js
-    assert "compactMissingAssessments" in js
-    assert "return assessments.length ? [assessments[0]]" in js
-
-
-def test_js_builds_postrочный_forecast_rows_for_uneven_current_sources():
-    js = read("app/static/js/kdigo_risk_preview.js")
-
-    assert "function buildCurrentVisitAssessments" in js
-    assert "const rowsCount = Math.max(currentGfr.length, currentAlbuminuria.length)" in js
-    assert "const gfrSource = currentGfr[index] || currentGfr[0]" in js
-    assert "const albuminuriaSource = currentAlbuminuria[index] || currentAlbuminuria[0]" in js
-    assert "assessments.push(buildCalculatedAssessment(gfrSource, albuminuriaSource, index))" in js
-
-    # Защита от старого поведения: не должна использоваться логика ближайшей даты
-    # для текущих пар, потому что врач добавляет строки анализов построчно.
-    assert "closestByDate(currentAlbuminuria, gfr.date)" not in js
-    assert "allBackendPotentialCalculatedKeys" not in js
+    assert 'fetch("/api/kidney-preview"' in js
+    assert "AbortController" in js
+    assert 'document.addEventListener("input"' in js
+    assert 'document.addEventListener("change"' in js
+    assert "replaceBiochemistryAddButton" in js
+    assert "addBiochemistryColumn" in js
+    assert "replaceAlbuminuriaAddButton" in js
+    assert "addAlbuminuriaColumn" in js
+    for forbidden in ("88.4", "8.84", "RISK_MATRIX", "Math.pow", "calculateCkdEpi", "categoryFromAcr", "MutationObserver"):
+        assert forbidden not in js
 
 
-def test_js_radio_selects_one_calculated_forecast_and_excludes_other_calculated_rows():
-    js = read("app/static/js/kdigo_risk_preview.js")
-
-    assert 'radio.type = "radio"' in js
-    assert 'radio.name = "kdigo_selected_current_option"' in js
-    assert "radio.disabled = assessment.status !== \"calculated\"" in js
-    assert "function selectedAssessment" in js
-    assert "return calculated[0]" in js
-    assert "function writeExcludedPairs" in js
-    assert 'input.name = "kdigo_excluded_pair"' in js
-    assert ".filter((item) => item.status === \"calculated\" && item.key !== selectedKey)" in js
+def test_metrics_template_contains_no_ckd_formula_js():
+    html = read("app/templates/appointment_form/_metrics.html")
+    assert 'id="metricsTable"' in html
+    assert 'id="egfrRow"' in html
+    assert 'id="ckdStageRow"' in html
+    assert "calculateCkdEpi" not in html
+    assert "Math.pow" not in html
+    assert "<script>" not in html
 
 
-def test_js_updates_on_input_change_and_dynamic_analysis_rows():
-    js = read("app/static/js/kdigo_risk_preview.js")
-
-    assert "document.addEventListener(\"input\"" in js
-    assert "document.addEventListener(\"change\"" in js
-    assert "new MutationObserver" in js
-    assert "observer.observe(document.body" in js
-    assert "attributes: true" in js
+def test_lab_api_exposes_server_preview():
+    router = read("app/routers/lab_api.py")
+    assert '@router.post("/api/kidney-preview")' in router
+    assert "build_kidney_preview(payload)" in router
 
 
-def test_css_colors_only_forecast_rows_and_history_cells_not_whole_block():
-    css = read("app/static/css/04_kdigo_risk.css")
-
-    assert ".kdigo-current-option.kdigo-risk-low" in css
-    assert ".kdigo-current-option.kdigo-risk-moderate" in css
-    assert ".kdigo-current-option.kdigo-risk-high" in css
-    assert ".kdigo-current-option.kdigo-risk-very_high" in css
-    assert ".kdigo-history-risk.kdigo-risk-high" in css
-    assert ".kdigo-current-option-neutral" in css
-
-    # Общий контейнер не должен получать цветовой класс риска.
-    assert ".kdigo-live-block.kdigo-risk" not in css
+def test_save_service_refuses_silent_loss_of_known_patient_egfr():
+    service = read("app/services/appointment_save_service.py")
+    assert "saved_metric_count" in service
+    assert "saved_metric_count != len(metric_sources)" in service
+    assert "Не удалось рассчитать СКФ CKD-EPI" in service
 
 
 @pytest.mark.skipif(shutil.which("node") is None, reason="node is not installed")

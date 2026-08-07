@@ -1,55 +1,25 @@
 {#
-Назначение файла: live-блок KDIGO внутри блока «Заключение» в форме первого и повторного приёма.
-
-Что делает файл:
-- показывает только прогнозы текущего заполняемого приёма;
-- при открытии формы показывает одну нейтральную фразу о невозможности оценки, если в текущем приёме ещё нет СКФ и альбуминурии;
-- даёт выбрать radio-кружочком один вариант прогноза, который попадёт в сохранённые результаты;
-- показывает историю прошлых прогнозов по KDIGO только в повторном приёме и только по кнопке;
-- не подставляет старые прогнозы и историю в заключение автоматически;
-- передаёт JavaScript безопасные данные пациента и прошлых анализов для fallback-расчёта.
-
-Как это работает:
-- HTML создаёт контейнер для строк прогноза, скрытое поле выбранной формулировки и блок истории;
-- текущий прогноз пересчитывается в app/static/js/kdigo_risk_preview.js без сохранения формы;
-- цветовая подсветка задаётся только отдельным строкам прогноза в app/static/css/04_kdigo_risk.css;
-- данные пациента передаются через data-атрибуты, а не через tojson, чтобы Jinja не падал на Undefined.
-
-Что редактировать:
-- заголовок блока;
-- подпись radio-выбора;
-- текст кнопки истории;
-- расположение блока внутри заключения.
-
-Что не редактировать без синхронной правки JS/backend:
-- id="kdigoRiskPreview";
-- id="kdigoCurrentVisitOptions";
-- id="kdigoSelectedConclusionText";
-- id="kdigoExcludedPairsContainer";
-- id="kdigoPreviousGfrData";
-- id="kdigoPreviousAlbuminuriaData".
+Live-блок KDIGO. Все медицинские вычисления выполняет серверный endpoint
+/api/kidney-preview; JavaScript только собирает исходные значения и рисует ответ.
 #}
-
-<link rel="stylesheet" href="{{ url_for('static', path='css/04_kdigo_risk.css') }}?v=kdigo-live-v7">
-
+<link rel="stylesheet" href="{{ url_for('static', path='css/04_kdigo_risk.css') }}?v=kdigo-server-v1">
 {% set kdigo_birth_date_value = '' %}
 {% set kdigo_gender_value = '' %}
 {% if patient is defined and patient %}
     {% if patient.birth_date is defined and patient.birth_date %}
         {% set kdigo_birth_date_value = patient.birth_date.isoformat() if patient.birth_date.isoformat is defined else patient.birth_date|string %}
     {% endif %}
-    {% if patient.gender is defined and patient.gender %}
+    {# False = женский пол в текущей модели; False нельзя терять проверкой truthy. #}
+    {% if patient.gender is defined and patient.gender is not none %}
         {% set kdigo_gender_value = patient.gender|string %}
     {% elif patient.gender_str is defined and patient.gender_str %}
         {% set kdigo_gender_value = patient.gender_str|string %}
     {% endif %}
 {% endif %}
-
 {% set previous_gfr_data = kdigo_previous_gfr_data|default([], true) %}
 {% set previous_albuminuria_data = kdigo_previous_albuminuria_data|default([], true) %}
 {% set history_matrix = kdigo_previous_history_matrix|default(None, true) %}
 {% set form_mode = appointment_form_mode|default('', true) %}
-
 <div
     id="kdigoRiskPreview"
     class="kdigo-live-block mt-3"
@@ -61,8 +31,6 @@
     <div class="kdigo-live-subtitle">Текущий прогноз пересчитывается автоматически. Выбранный кружочком вариант будет сохранён.</div>
 
     <div id="kdigoCurrentVisitOptions" class="kdigo-current-options" aria-live="polite"></div>
-
-    {# Скрытое поле оставлено как технический контракт формы. Видимое дублирующее поле заключения больше не показываем. #}
     <input
         type="hidden"
         id="kdigoSelectedConclusionText"
@@ -71,7 +39,6 @@
     >
 
     <div id="kdigoExcludedPairsContainer"></div>
-
     {% if form_mode == 'new_appointment' %}
         <button type="button" id="kdigoToggleHistoryButton" class="btn btn-outline-secondary btn-sm mt-2">
             Посмотреть историю прогнозов по KDIGO
@@ -79,7 +46,6 @@
 
         <div id="kdigoHistoryPanel" class="kdigo-history-panel mt-2" hidden>
             <div class="kdigo-history-title">История прогнозов по KDIGO</div>
-
             {% if history_matrix and history_matrix.has_values %}
                 <div class="table-responsive">
                     <table class="table table-sm table-bordered align-middle kdigo-history-table">
@@ -129,7 +95,6 @@
         </div>
     {% endif %}
 </div>
-
 <script id="kdigoPreviousGfrData" type="application/json">
 [
 {% for item in previous_gfr_data %}
@@ -140,7 +105,6 @@
 {% endfor %}
 ]
 </script>
-
 <script id="kdigoPreviousAlbuminuriaData" type="application/json">
 [
 {% for item in previous_albuminuria_data %}
@@ -152,4 +116,4 @@
 ]
 </script>
 
-<script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}?v=kdigo-live-v7"></script>
+<script src="{{ url_for('static', path='js/kdigo_risk_preview.js') }}?v=kdigo-server-v1"></script>
